@@ -727,3 +727,52 @@ async def usb_reconnect() -> dict:
     rc, _, err = await run(script, timeout=40)
     info = dac_info()
     return {"ok": rc == 0, "error": err.strip(), "present": info.get("present", False), "speed": info.get("usb_speed")}
+
+
+# --------------------------------------------------------------------------- source switch: Spotify | Roon
+# One player owns the DAC at a time. Spotify = the soloist user's PipeWire stack + Soloist;
+# Roon = Roon Bridge talking to ALSA directly (needed for DSD). The socket is stopped too, or
+# the panel's own pw-dump/pw-top calls would re-activate PipeWire and grab the DAC again.
+SPOTIFY_UNITS = ["pipewire.socket", "pipewire.service", "wireplumber.service", "soloist.service", "soloist-rt.service"]
+ROON_UNIT = "roonbridge.service"
+
+
+def pcm_closed() -> bool:
+    c = _usb_card()
+    return not c or read(f"{c[0]}/pcm0p/sub0/status").strip() in ("", "closed")
+
+
+async def _wait_released(secs: float = 6) -> bool:
+    for _ in range(int(secs / 0.2)):
+        if pcm_closed():
+            return True
+        await asyncio.sleep(0.2)
+    return pcm_closed()
+
+
+async def roon_installed() -> bool:
+    return os.path.exists("/opt/RoonBridge/start.sh") and os.path.exists(f"/etc/systemd/system/{ROON_UNIT}")
+
+
+async def roon_active() -> bool:
+    rc, out, _ = await run(["systemctl", "is-active", ROON_UNIT], timeout=5)
+    return out.strip() == "active"
+
+
+async def set_source(src: str) -> dict:
+    """Hand the DAC to Spotify or to Roon. Returns what is running afterwards."""
+    if src == "roon":
+        if not await roon_installed():
+            raise RuntimeError("Roon Bridge är inte installerat")
+        rc, _, err = await run(["systemctl", "--user", "stop", *reversed(SPOTIFY_UNITS)], as_user=True, timeout=60)
+        released = await _wait_released()
+        rc2, _, err2 = await run(["systemctl", "start", ROON_UNIT], timeout=60)
+        ok_ = rc2 == 0
+        detail = (err + err2).strip()
+    else:
+        rc, _, err = await run(["systemctl", "stop", ROON_UNIT], timeout=60)
+        released = await _wait_released()
+        rc2, _, err2 = await run(["systemctl", "--user", "start", *SPOTIFY_UNITS], as_user=True, timeout=60)
+        ok_ = rc2 == 0
+        detail = (err + err2).strip()
+    return {"ok": ok_, "source": src, "dac_released": released, "roon_active": await roon_active(), "error": detail[:300]}

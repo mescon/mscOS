@@ -89,7 +89,8 @@ class Hub:
         self.settings: dict = {"auto_verify": True, "alerts": True, "leds": True, "net_speed": 100,
                                # Mark Levinson 585.5: address ("" = find it), wake + USB on play,
                                # standby after N idle minutes (0 = never), panel volume ceiling
-                               "ml_host": "", "ml_auto_on": True, "ml_auto_off_min": 0, "ml_max_db": 40.0}
+                               "ml_host": "", "ml_auto_on": True, "ml_auto_off_min": 0, "ml_max_db": 40.0,
+                               "source": "spotify"}  # who owns the DAC: spotify | roon
         # 30 s samples, 24 h: the DAC's measured clock and the supply rail
         self.clock = collections.deque(maxlen=24 * 60 * 2)
         self.supply = collections.deque(maxlen=24 * 60 * 2)
@@ -104,6 +105,8 @@ class Hub:
         self._ml_woke_t = 0.0       # when we last woke it (auto standby only undoes our own wake)
         self._idle_since = time.time()
         self._ml_seen_t = time.time()  # last time the amplifier answered (or was found)
+        self._dac_running = False
+        self.source_lock = asyncio.Lock()
 
     # ---- persistence of small stats (rarely written, SD-friendly)
     def _load(self):
@@ -210,6 +213,8 @@ class Hub:
                 if n % 6 == 0:
                     await self.sample_xruns()
                 await self.maybe_auto_verify()
+                if self.settings.get("source") == "roon":
+                    self._set_playing(collect.dac_info().get("state") == "RUNNING")
                 if n % 720 == 0 and n:  # hourly: keep SD-card writes rare
                     await asyncio.get_running_loop().run_in_executor(None, self.save)
             except Exception:  # keep sampling no matter what
@@ -230,6 +235,8 @@ class Hub:
             "soloist": solo,
             "usb_errors": self._usb_err,
             "supply": collect.supply(),
+            "source": self.settings.get("source", "spotify"),
+            "roon": {"installed": await collect.roon_installed(), "active": await collect.roon_active()},
             "leds": collect.leds_state(),
             "pw_top": self.last_err,
         }
@@ -299,7 +306,8 @@ class Hub:
         if self._held("dac", not dac.get("present"), 60):
             await self.alert("dac", "DAC:en hittas inte",
                              "Mark Levinson 585.5 syns inte längre på USB. Kontrollera kabeln och att förstärkaren är på.")
-        if self._held("soloist", solo.get("service") not in (None, "active"), 120):
+        if self._held("soloist", self.settings.get("source") == "spotify"
+                      and solo.get("service") not in (None, "active"), 120):
             await self.alert("soloist", "Soloist har stannat",
                              f"Spotify-tjänsten är {solo.get('service')}. Starta om den under System i panelen.")
         days = solo.get("days_left")
@@ -387,7 +395,10 @@ class Hub:
 
     # ---- Mark Levinson 585.5
     def _on_playback_change(self):
-        playing = self.playback.get("status") == "playing"
+        if self.settings.get("source") == "spotify":
+            self._set_playing(self.playback.get("status") == "playing")
+
+    def _set_playing(self, playing: bool):
         if playing and not self._was_playing:
             asyncio.ensure_future(self.ml_on_play())
         if not playing and self._was_playing:
@@ -658,6 +669,32 @@ async def audio_test(request):
         raise web.HTTPConflict(text="En verifiering pågår redan")
     await hub.run_audio_test(secs)
     return ok(seconds=secs)
+
+
+# ---- Source switch: Spotify | Roon
+@routes.post("/api/source")
+async def set_source(request):
+    src = (await body(request)).get("source")
+    if src not in ("spotify", "roon"):
+        raise web.HTTPBadRequest(text="Välj spotify eller roon")
+    if hub.source_lock.locked():
+        raise web.HTTPConflict(text="Byter redan källa")
+    async with hub.source_lock:
+        try:
+            r = await collect.set_source(src)
+        except RuntimeError as e:
+            raise web.HTTPConflict(text=str(e))
+        if not r["ok"]:
+            raise web.HTTPInternalServerError(text=f"Bytet misslyckades: {r['error']}")
+        hub.settings["source"] = src
+        await asyncio.get_running_loop().run_in_executor(None, hub.save_settings)
+        hub._was_playing = False
+        hub._idle_since = time.time()
+        if src == "roon":
+            hub.playback, hub.queue = {}, {}
+    await hub.broadcast({"type": "settings", "settings": hub.settings})
+    await hub.refresh_status()
+    return ok(**r)
 
 
 # ---- DAC detail (Eunhasu's /dacinfo/, interpreted)
@@ -980,6 +1017,13 @@ async def cache_headers(request, handler):
 
 async def on_startup(app):
     collect.apply_leds(hub.settings.get("leds", True))
+    if hub.settings.get("source") == "roon":
+        async def restore():
+            await asyncio.sleep(5)  # let the user session come up first
+            async with hub.source_lock:
+                r = await collect.set_source("roon")
+                log.info("source at startup: %s", r)
+        asyncio.ensure_future(restore())
     app["tasks"] = [asyncio.create_task(c) for c in (hub.soloist_loop(), hub.sample_loop(), hub.arcam_loop(), hub.levinson_loop())]
 
 

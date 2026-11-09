@@ -33,6 +33,7 @@
     <span class="rd"><b id="r-gain">–,–</b><small>dB</small></span>
   </div>
   <ol class="strip" id="strip" aria-label="Signalväg">
+    <li data-k="roon" hidden><i></i>Roon</li>
     <li data-k="spotify"><i></i>Spotify</li>
     <li data-k="soloist"><i></i>Soloist</li>
     <li data-k="pipewire"><i></i>PipeWire</li>
@@ -57,6 +58,13 @@
   <!-- ===================================================== Spelar -->
   <section class="view" id="v-play" aria-labelledby="h-play">
     <h2 id="h-play" class="vh">Spelar</h2>
+    <div class="source-row">
+      <div class="seg source" role="radiogroup" aria-label="Källa" id="source">
+        <button role="radio" data-v="spotify" aria-checked="true">Spotify</button>
+        <button role="radio" data-v="roon" aria-checked="false">Roon</button>
+      </div>
+      <p class="fine" id="source-note"></p>
+    </div>
     <figure class="sleeve">
       <div class="cover"><img id="np-cover" alt="" hidden><span class="cover-empty" id="cover-empty" aria-hidden="true"></span></div>
       <figcaption>
@@ -65,11 +73,11 @@
         <p class="np-album" id="np-album"></p>
       </figcaption>
     </figure>
-    <div class="scrub" id="scrub" role="slider" aria-label="Position i låten" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
+    <div class="scrub spotify-only" id="scrub" role="slider" aria-label="Position i låten" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
       <div class="scrub-track"><div class="scrub-fill" id="np-bar"></div></div>
       <div class="times"><span id="np-pos">0:00</span><span id="np-dur">0:00</span></div>
     </div>
-    <div class="transport">
+    <div class="transport spotify-only">
       <button class="t-aux" data-cmd="shuffle" id="b-shuffle" aria-pressed="false" aria-label="Blanda">
         <svg viewBox="0 0 24 24"><path d="M3 7h3.5c2 0 3 1 4.2 2.8l2.6 4.4C14.5 16 15.5 17 17.5 17H21M18 4.5 21 7l-3 2.5M3 17h3.5c1.4 0 2.3-.5 3.1-1.4M14 8.4c.8-.9 1.7-1.4 3.5-1.4M18 14.5l3 2.5-3 2.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
@@ -108,7 +116,7 @@
       <p>Spotify-volymen står på <b id="vol-val"></b> %. Under 100 % räknas varje sampel om. Styr volymen med förstärkarens reglage ovan.</p>
       <button class="btn" id="vol-reset">Återställ till 100 %</button>
     </div>
-    <section class="sect">
+    <section class="sect spotify-only">
       <h3>Härnäst</h3>
       <ol class="queue" id="queue"><li class="empty">Kön visas när något spelas.</li></ol>
     </section>
@@ -127,7 +135,8 @@
       <h3>Verifiering</h3>
       <p class="lead">Spelar in exakt det som går till DAC:en och kontrollerar varje sampel mot Spotifys FLAC-raster, och att inga avbrott finns.</p>
       <div class="verify" id="test-result"></div>
-      <div class="verify-run">
+      <p class="notice roon-only">Verifieringen spelar in PipeWires utgång och fungerar därför bara med Spotify än. I Roon-läge äger Roon Bridge DAC:en direkt.</p>
+      <div class="verify-run spotify-only">
         <div class="seg" role="radiogroup" aria-label="Testlängd" id="test-secs">
           <button role="radio" data-v="15" aria-checked="false">15 s</button>
           <button role="radio" data-v="30" aria-checked="true">30 s</button>

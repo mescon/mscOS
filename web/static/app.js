@@ -60,13 +60,13 @@ function handle(m) {
       Object.assign(S, { status: m.status || {}, playback: m.playback || {}, auth: m.auth || {}, queue: m.queue || {}, xruns: m.xruns || [], lastTest: m.last_test, arcam: m.arcam || {}, sources: m.arcam_sources || [], tests: m.tests || [], settings: m.settings || {} });
       ML.state = m.levinson || {}; ML.inputs = m.ml_inputs || [];
       renderAll(); break;
-    case "status": S.status = m.status; renderStatus(); renderSignal(); break;
+    case "status": S.status = m.status; renderStatus(); renderSignal(); if (roonMode()) renderPlay(); else renderSource(); break;
     case "soloist": soloistEvent(m.event); break;
     case "xrun": S.xruns.push(m.point); if (S.xruns.length > 2880) S.xruns.shift(); renderSpark(); renderSignal(); break;
     case "arcam": S.arcam = m.arcam; renderArcam(); break;
     case "levinson": ML.state = m.levinson; renderLevinson(); break;
     case "job": jobEvent(m); break;
-    case "settings": S.settings = { ...S.settings, ...m.settings }; renderSettings(); break;
+    case "settings": S.settings = { ...S.settings, ...m.settings }; renderSettings(); renderPlay(); renderSignal(); break;
     case "history_cleared": S.xruns = []; S.tests = []; renderSpark(); renderVlog(); renderSignal(); break;
   }
 }
@@ -93,7 +93,26 @@ const nameOf = (e) => deco(e).identity?.name || "";
 const coverOf = (e, size = "large") => { const c = deco(e).visual_identity?.cover || []; return (c.find((x) => x.size === size) || c[c.length - 1] || {}).url; };
 const artistsOf = (e) => (deco(e).creators || []).map((c) => nameOf(c.entity)).filter(Boolean).join(", ");
 const devName = () => S.status.soloist?.device_name || "Mark Levinson 585.5";
+function renderSource() {
+  const roon = roonMode(), r = S.status.roon || {};
+  document.body.classList.toggle("src-roon", roon);
+  $$("#source button").forEach((b) => b.setAttribute("aria-checked", b.dataset.v === (roon ? "roon" : "spotify")));
+  const rb = $("#source button[data-v=roon]");
+  rb.disabled = r.installed === false;
+  $("#source-note").textContent = roon
+    ? "Spotify är avstängt. Roon Bridge äger DAC:en."
+    : r.installed === false ? "Roon Bridge är inte installerat." : "Roon är avstängt. Spotify äger DAC:en.";
+}
 function renderPlay() {
+  renderSource();
+  if (roonMode()) {
+    const d = S.status.dac || {}, running = d.state === "RUNNING";
+    $("#np-title").textContent = running ? "Spelar via Roon" : "Roon";
+    $("#np-artist").textContent = running ? `${d.hw_params?.format || ""}, ${khz(parseInt(d.hw_params?.rate) || 44100)} kHz till 585.5` : "Välj Mark Levinson 585.5 i Roon-appen";
+    $("#np-album").textContent = "";
+    $("#np-cover").hidden = true; $("#cover-empty").hidden = false; $("#vol-warn").hidden = true;
+    return;
+  }
   const p = S.playback, it = p.item, playing = p.status === "playing";
   $("#np-title").textContent = it ? nameOf(it) : "Inget spelas";
   $("#np-artist").textContent = it ? artistsOf(it) : (S.auth.logged_in ? "Starta musik i Spotify-appen" : `Välj ${devName()} i Spotify-appen`);
@@ -159,7 +178,26 @@ scrub.addEventListener("keydown", (e) => {
 $("#vol-reset").addEventListener("click", () => cmd("set_volume", { volume: 100 }));
 
 // ------------------------------------------------------------------ signal: the chain, readout, seal
+const roonMode = () => (S.settings?.source || S.status.source) === "roon";
+function chainRoon() {
+  const st = S.status, dac = st.dac || {}, roon = st.roon || {};
+  const running = dac.state === "RUNNING", rate = running ? parseInt(dac.hw_params?.rate) || null : null;
+  const stages = [
+    { k: "roon", name: "Roon", tag: "RAAT", state: !roon.active ? "bad" : running ? "ok" : "idle",
+      facts: roon.active ? "Roon Bridge är igång" : "Roon Bridge kör inte",
+      note: roon.active ? (running ? "Spelar" : "Välj Mark Levinson 585.5 i Roon-appen") : "Byt källa igen eller starta om enheten" },
+    { k: "usb", name: "USB", tag: dac.usb_speed === "high" ? "high speed" : dac.present ? "full speed" : "",
+      state: !dac.present ? "bad" : running ? "ok" : "idle",
+      facts: dac.present ? `Asynkron överföring, ${dac.usb_speed === "high" ? "USB 2.0" : "USB 1.1"}` : "Ingen DAC ansluten",
+      note: dac.present ? (dac.usb_speed === "high" ? "Upp till 192 kHz och DSD64 via DoP." : `Upp till ${khz(dac.max_rate || 48000)} kHz. Roon räknar om högre upplösningar.`) : "Kontrollera USB-kabeln" },
+    { k: "dac", name: "585.5", tag: "Mark Levinson", state: !dac.present ? "bad" : running ? "ok" : "idle",
+      facts: running ? `${dac.hw_params.format || ""}, ${khz(rate)} kHz` : dac.present ? "Ansluten, vilar" : "Inte ansluten",
+      note: running ? "Tar emot signalen direkt från Roon Bridge" : "Väntar på Roon" },
+  ];
+  return { stages, running, playing: running, rate, issues: [], t: null, dac, xrunHour: 0, roon };
+}
 function chain() {
+  if (roonMode()) return chainRoon();
   const st = S.status, dac = st.dac || {}, pw = st.pipewire || {}, solo = st.soloist || {}, p = S.playback;
   const sink = pw.sink || {}, stream = (pw.streams || []).find((s) => (s.app || "").toLowerCase() === "spotify");
   const running = dac.state === "RUNNING", playing = p.status === "playing";
@@ -206,7 +244,8 @@ function renderSignal() {
   // strip in the display
   $$("#strip li").forEach((li) => {
     const s = c.stages.find((x) => x.k === li.dataset.k);
-    li.className = s.state === "ok" ? "ok" : s.state === "bad" ? "bad" : "";
+    li.hidden = !s;
+    if (s) li.className = s.state === "ok" ? "ok" : s.state === "bad" ? "bad" : "";
   });
   // readout
   $(".display").classList.toggle("idle", !c.running);
@@ -218,6 +257,11 @@ function renderSignal() {
   // seal
   const seal = $("#seal"); let head, sub, cls = "";
   if (!c.dac.present) { head = "Ingen DAC"; sub = "Kontrollera USB-kabeln till 585.5."; cls = "warn"; }
+  else if (c.roon) {
+    head = c.roon.active ? (c.running ? "Roon spelar" : "Roon, redo") : "Roon Bridge kör inte";
+    sub = c.running ? `Roon Bridge äger DAC:en: ${c.dac.hw_params?.format || ""}, ${khz(c.rate)} kHz.` : "Välj Mark Levinson 585.5 i Roon-appen.";
+    cls = c.roon.active ? "" : "warn";
+  }
   else if (c.issues.length) { head = "Signalen ändras"; sub = c.issues.join(", ").replace(/^./, (x) => x.toUpperCase()) + "."; cls = "warn"; }
   else if (c.t && c.t.verdict === "bitperfect" && !c.t.gaps.length) {
     head = "Bit-perfekt"; cls = "verified";
@@ -745,6 +789,21 @@ $("#ml-max-form").addEventListener("submit", (e) => {
 $("#ml-host-form").addEventListener("submit", (e) => {
   e.preventDefault();
   mlSetting({ ml_host: $("#ml-host").value }, (s) => s.ml_host ? `Använder ${s.ml_host}` : "Söker förstärkaren automatiskt");
+});
+
+// ------------------------------------------------------------------ source switch
+$("#source").addEventListener("click", async (e) => {
+  const b = e.target.closest("button"); if (!b || b.getAttribute("aria-checked") === "true") return;
+  const src = b.dataset.v, seg = $("#source");
+  seg.classList.add("busy");
+  toast(src === "roon" ? "Stänger av Spotify och startar Roon…" : "Stänger av Roon och startar Spotify…");
+  try {
+    const r = await post("/api/source", { source: src });
+    S.settings = { ...S.settings, source: r.source };
+    toast(src === "roon" ? "Roon är aktivt. Välj Mark Levinson 585.5 i Roon-appen." : "Spotify är aktivt. Välj Mark Levinson 585.5 i Spotify-appen.");
+  } catch {}
+  seg.classList.remove("busy");
+  renderPlay(); renderSignal();
 });
 
 // ------------------------------------------------------------------ boot

@@ -1,0 +1,22 @@
+[Unit]
+Description=Roon Bridge (RAAT endpoint for the USB DAC)
+After=network-online.target sotm-tuning.service
+Wants=network-online.target
+# Not enabled: the panel's source switch starts it in Roon mode and stops it for Spotify,
+# so that only one player at a time owns the DAC (Roon needs it directly for DSD).
+Conflicts=shutdown.target
+
+[Service]
+Type=simple
+User=root
+Environment=ROON_DATAROOT=/var/roon
+Environment=ROON_ID_DIR=/var/roon
+ExecStart=/opt/RoonBridge/start.sh
+Restart=on-failure
+RestartSec=5
+# Both cores: .NET's JIT needs them at startup. On one core RAATServer takes longer than the
+# ~6 s RoonBridge waits for it, and RoonBridge kills and restarts it in a loop.
+CPUAffinity=0 1
+
+[Install]
+WantedBy=multi-user.target
