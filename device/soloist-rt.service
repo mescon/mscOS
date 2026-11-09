@@ -1,0 +1,11 @@
+[Unit]
+Description=Keep Spotify Soloist audio threads at realtime priority
+PartOf=soloist.service
+After=soloist.service
+
+[Service]
+ExecStart=/usr/local/bin/soloist-rt
+Restart=always
+
+[Install]
+WantedBy=soloist.service

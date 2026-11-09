@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2d31"/><stop offset="1" stop-color="#1a1c1f"/></linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#14161a"/><stop offset=".6" stop-color="#0a0b0d"/></linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="7"/></filter>
+  </defs>
+  <rect width="512" height="512" rx="104" fill="url(#g)"/>
+  <rect x="72" y="168" width="368" height="176" rx="8" fill="url(#glass)" stroke="#000" stroke-opacity=".6" stroke-width="2"/>
+  <path d="M110 256H402" stroke="#cfccc4" stroke-opacity=".16" stroke-width="3"/>
+  <g filter="url(#glow)" opacity=".85"><path d="M110 256H402" stroke="#e3262f" stroke-width="5"/></g>
+  <path d="M110 256H402" stroke="#e3262f" stroke-width="3.5"/>
+  <g fill="#e3262f">
+    <circle cx="110" cy="256" r="11"/><circle cx="183" cy="256" r="11"/><circle cx="256" cy="256" r="11"/><circle cx="329" cy="256" r="11"/>
+  </g>
+  <circle cx="402" cy="256" r="17" fill="none" stroke="#cfccc4" stroke-width="3.5"/>
+  <circle cx="402" cy="256" r="7" fill="#cfccc4"/>
+</svg>

@@ -1,0 +1,22 @@
+[Unit]
+Description=sMS-200Ultra control panel (web/PWA)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 -I /opt/sotm-web/backend/app.py
+Environment=SOTM_STATIC=/opt/sotm-web/static
+Environment=SOTM_STATE=/var/lib/sotm-web
+Environment=ARCAM_HOST=192.168.1.176
+# Only the reverse proxy may reach :80 directly; everyone else is redirected to HTTPS.
+Environment=SOTM_TRUSTED_PEERS=192.168.1.42
+# HA_WEBHOOK_URL (secret webhook id) lives here, root-only.
+EnvironmentFile=-/etc/sotm-web.env
+Restart=always
+RestartSec=3
+# Lowest CPU priority: the panel must never compete with audio.
+Nice=15
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

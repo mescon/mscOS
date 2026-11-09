@@ -1,0 +1,40 @@
+#!/bin/sh
+# Boot-time audio tuning for SOtM sMS-200Ultra (A20, 2 cores). Run by sotm-tuning.service.
+#
+# CPU split:  CPU0 = everything else (network IRQ, SD card, panel, sshd, kworkers)
+#             CPU1 = audio: USB host controller IRQs + the soloist user's services
+#                    (PipeWire, WirePlumber, Soloist) via user@<uid>.service.d CPUAffinity=1
+# The kernel default is already irqaffinity=0 (boot arg); here the USB controllers move
+# to CPU1, so the 1 kHz USB-audio completion interrupts never queue behind ethernet/SD.
+
+# 1. Thermal: the A20 GPADC sensor has no working IRQ on this board ("Failed to locate
+#    of_node"); every read times out after ~1 s and burns ~110 ms in the kernel. The
+#    thermal core polls it, which caused 3-4 quantum dropouts every ~1.1 s (16-17 per
+#    track start enabled, 0 disabled). The sotm-lean DT overlay removes the sensor; this
+#    stays as a fallback if the overlay is not applied. Temperature comes from the AXP209.
+for z in /sys/class/thermal/thermal_zone*; do
+    [ -e "$z/type" ] && [ "$(cat "$z/type")" = cpu-thermal ] && echo disabled > "$z/mode"
+done
+
+# 2. IRQs: everything on CPU0, USB host controllers (ehci/ohci) on CPU1.
+echo 1 > /proc/irq/default_smp_affinity
+for d in /proc/irq/[0-9]*; do
+    echo 1 > "$d/smp_affinity" 2>/dev/null
+done
+awk -F: '/[eo]hci_hcd:usb/ {gsub(/ /, "", $1); print $1}' /proc/interrupts | while read -r irq; do
+    echo 2 > "/proc/irq/$irq/smp_affinity"
+done
+
+# 3. Unbound kernel workqueues on CPU0 only.
+[ -w /sys/devices/virtual/workqueue/cpumask ] && echo 1 > /sys/devices/virtual/workqueue/cpumask
+
+# 4. Ethernet at 100 Mbit/s (autoneg kept, only 100baseT/Full advertised): the PHY and
+#    RGMII run slower. Measured on the AXP209 ACIN rail: 1.65 W at 1000 vs 1.53 W at 100.
+#    The panel can switch this to 1000 (System → Enheten); its choice is kept in settings.json.
+if ! grep -q '"net_speed": 1000' /var/lib/sotm-web/settings.json 2>/dev/null; then
+    command -v ethtool >/dev/null && ethtool -s end0 advertise 0x008 2>/dev/null
+fi
+
+# 5. Network receive processing stays with its IRQ on CPU0.
+for q in /sys/class/net/end0/queues/rx-*/rps_cpus; do [ -w "$q" ] && echo 1 > "$q"; done
+true

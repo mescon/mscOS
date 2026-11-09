@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Soloist runs its PipeWire client and render threads as SCHED_OTHER, which makes
+# it miss PipeWire's deadline (graph xruns). Promote those threads to SCHED_FIFO.
+# Threads are recreated on restart/playback, so re-check periodically. Runs as the
+# soloist user (rtprio limit 95 via @pipewire); PipeWire's own data-loop is ~88.
+# Uses bash builtins only (reads /proc directly): one fork per 2 s for sleep, plus
+# pgrep only when Soloist (re)starts and chrt only when a thread needs promoting.
+PRIO=${SOLOIST_RT_PRIO:-70}
+pid=
+while :; do
+    if [[ -z $pid || ! -d /proc/$pid ]]; then
+        pid=$(pgrep -u "$UID" -x soloist | head -n1)
+    fi
+    if [[ -n $pid ]]; then
+        for t in /proc/"$pid"/task/*; do
+            read -r comm < "$t/comm" 2>/dev/null || continue
+            case $comm in
+                "pipewire-loop"|"Audio Driver Th"|"Media Mixer Ren")
+                    read -r stat < "$t/stat" 2>/dev/null || continue
+                    # Field 41 (policy) = 39th field after "pid (comm) "; 1 = SCHED_FIFO.
+                    set -- ${stat##*) }
+                    [[ ${39} == 1 ]] || chrt -f -p "$PRIO" "${t##*/}" 2>/dev/null
+                    ;;
+            esac
+        done
+    fi
+    sleep 2
+done

@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mark Levinson 585.5</title>
+<meta name="description" content="Spotify Lossless till Mark Levinson 585.5 via SOtM sMS-200Ultra: uppspelning, signalintegritet och system">
+<meta name="theme-color" content="#e4e2dc" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1e21" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preload" href="fonts/jost-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/cormorant-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="shell">
+
+<header class="masthead">
+  <div class="ident">
+    <h1 id="dev-name">Mark Levinson 585.5</h1>
+    <p id="dev-sub">sMS-200Ultra, ansluter…</p>
+  </div>
+  <span class="link-led" id="conn" role="img" aria-label="Ingen kontakt med enheten"></span>
+</header>
+
+<!-- Front-panel display: what reaches the DAC, and whether it is untouched -->
+<section class="display" aria-label="Signal till DAC:en">
+  <div class="readout" aria-live="polite">
+    <span class="rd"><b id="r-rate">––,–</b><small>kHz</small></span>
+    <span class="rd"><b id="r-bits">––</b><small>bit</small></span>
+    <span class="rd"><b id="r-gain">–,–</b><small>dB</small></span>
+  </div>
+  <ol class="strip" id="strip" aria-label="Signalväg">
+    <li data-k="spotify"><i></i>Spotify</li>
+    <li data-k="soloist"><i></i>Soloist</li>
+    <li data-k="pipewire"><i></i>PipeWire</li>
+    <li data-k="usb"><i></i>USB</li>
+    <li data-k="dac"><i></i>585.5</li>
+  </ol>
+  <div class="seal" id="seal">
+    <svg class="seal-mark" viewBox="0 0 40 40" aria-hidden="true">
+      <circle cx="20" cy="20" r="18.5" fill="none" stroke="currentColor" stroke-width="1"/>
+      <circle cx="20" cy="20" r="15" fill="none" stroke="currentColor" stroke-width=".6" stroke-dasharray="1.2 1.6"/>
+      <path id="seal-path" d="M13 20.5l4.6 4.5L27.5 15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div>
+      <p class="seal-head" id="seal-head">Väntar på status</p>
+      <p class="seal-sub" id="seal-sub"></p>
+    </div>
+  </div>
+</section>
+
+<main id="views">
+
+  <!-- ===================================================== Spelar -->
+  <section class="view" id="v-play" aria-labelledby="h-play">
+    <h2 id="h-play" class="vh">Spelar</h2>
+    <figure class="sleeve">
+      <div class="cover"><img id="np-cover" alt="" hidden><span class="cover-empty" id="cover-empty" aria-hidden="true"></span></div>
+      <figcaption>
+        <p class="np-title" id="np-title">Inget spelas</p>
+        <p class="np-artist" id="np-artist">Välj Mark Levinson 585.5 i Spotify-appen</p>
+        <p class="np-album" id="np-album"></p>
+      </figcaption>
+    </figure>
+    <div class="scrub" id="scrub" role="slider" aria-label="Position i låten" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
+      <div class="scrub-track"><div class="scrub-fill" id="np-bar"></div></div>
+      <div class="times"><span id="np-pos">0:00</span><span id="np-dur">0:00</span></div>
+    </div>
+    <div class="transport">
+      <button class="t-aux" data-cmd="shuffle" id="b-shuffle" aria-pressed="false" aria-label="Blanda">
+        <svg viewBox="0 0 24 24"><path d="M3 7h3.5c2 0 3 1 4.2 2.8l2.6 4.4C14.5 16 15.5 17 17.5 17H21M18 4.5 21 7l-3 2.5M3 17h3.5c1.4 0 2.3-.5 3.1-1.4M14 8.4c.8-.9 1.7-1.4 3.5-1.4M18 14.5l3 2.5-3 2.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="t-skip" data-cmd="skip_prev" aria-label="Föregående">
+        <svg viewBox="0 0 24 24"><path d="M6.5 5.5v13M18 6 9 12l9 6z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/></svg>
+      </button>
+      <button class="t-main" id="b-play" data-cmd="toggle" aria-label="Spela">
+        <svg id="i-play" viewBox="0 0 24 24"><path d="M9 6.5v11l9-5.5z" fill="currentColor"/></svg>
+        <svg id="i-pause" viewBox="0 0 24 24" hidden><path d="M8.5 6.5h2.2v11H8.5zM13.3 6.5h2.2v11h-2.2z" fill="currentColor"/></svg>
+      </button>
+      <button class="t-skip" data-cmd="skip_next" aria-label="Nästa">
+        <svg viewBox="0 0 24 24"><path d="M17.5 5.5v13M6 6l9 6-9 6z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/></svg>
+      </button>
+      <button class="t-aux" data-cmd="repeat" id="b-repeat" aria-pressed="false" aria-label="Upprepa">
+        <svg viewBox="0 0 24 24"><path d="M4 11.5V10a3 3 0 0 1 3-3h12.5M17 4.5 19.5 7 17 9.5M20 12.5V14a3 3 0 0 1-3 3H4.5M7 19.5 4.5 17 7 14.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <b id="b-repeat-1" hidden>1</b>
+      </button>
+    </div>
+    <section class="sect amp" id="amp">
+      <h3>Förstärkaren</h3>
+      <p class="lead" id="ml-state">Söker 585.5 i nätverket…</p>
+      <div id="ml-ctl" hidden>
+        <div class="row">
+          <button class="btn" id="ml-power" aria-pressed="false">Slå på</button>
+          <button class="btn" id="ml-mute" aria-pressed="false">Ljud av</button>
+        </div>
+        <label class="fader">
+          <span class="fader-head"><span>Volym</span><b id="ml-vol-v">–</b></span>
+          <input type="range" id="ml-vol" min="0" max="65" step="0.5" value="40">
+        </label>
+        <div class="sources" id="ml-src" role="radiogroup" aria-label="Ingång"></div>
+      </div>
+    </section>
+    <div class="notice" id="vol-warn" hidden>
+      <p>Spotify-volymen står på <b id="vol-val"></b> %. Under 100 % räknas varje sampel om. Styr volymen med förstärkarens reglage ovan.</p>
+      <button class="btn" id="vol-reset">Återställ till 100 %</button>
+    </div>
+    <section class="sect">
+      <h3>Härnäst</h3>
+      <ol class="queue" id="queue"><li class="empty">Kön visas när något spelas.</li></ol>
+    </section>
+  </section>
+
+  <!-- ===================================================== Signal -->
+  <section class="view" id="v-signal" aria-labelledby="h-signal">
+    <h2 id="h-signal" class="vh">Signal</h2>
+
+    <section class="sect">
+      <h3>Signalvägen</h3>
+      <ol class="path" id="path"></ol>
+    </section>
+
+    <section class="sect">
+      <h3>Verifiering</h3>
+      <p class="lead">Spelar in exakt det som går till DAC:en och kontrollerar varje sampel mot Spotifys FLAC-raster, och att inga avbrott finns.</p>
+      <div class="verify" id="test-result"></div>
+      <div class="verify-run">
+        <div class="seg" role="radiogroup" aria-label="Testlängd" id="test-secs">
+          <button role="radio" data-v="15" aria-checked="false">15 s</button>
+          <button role="radio" data-v="30" aria-checked="true">30 s</button>
+          <button role="radio" data-v="60" aria-checked="false">60 s</button>
+          <button role="radio" data-v="120" aria-checked="false">2 min</button>
+        </div>
+        <button class="btn primary" id="test-run">Verifiera nu</button>
+      </div>
+      <label class="toggle admin"><input type="checkbox" id="auto-verify"><span class="toggle-ui" aria-hidden="true"></span><span>Verifiera automatiskt varje timme</span></label>
+      <p class="fine admin">20 sekunder mitt i en låt, bara när musik spelar. Avvikelser skickas som larm.</p>
+      <h4 class="sub">Logg</h4>
+      <ol class="vlog" id="vlog"><li class="empty">Inga verifieringar än.</li></ol>
+    </section>
+
+    <section class="sect">
+      <h3>Avbrott, senaste dygnet</h3>
+      <div class="glass chart"><canvas id="spark" aria-label="Avbrott per halvminut senaste 24 timmarna"></canvas>
+        <div class="chart-axis"><span>−24 h</span><span>−12 h</span><span>nu</span></div></div>
+      <p class="fine" id="spark-sum"></p>
+      <button class="btn admin" id="hist-clear">Nollställ historiken</button>
+    </section>
+
+    <section class="sect">
+      <h3>Optimeringar</h3>
+      <div class="opt-head">
+        <p class="opt-count"><b id="opt-n">–</b><span id="opt-of"></span></p>
+        <p class="fine" id="opt-sum">Kontrollerar enheten…</p>
+      </div>
+      <div id="opt-list"></div>
+    </section>
+  </section>
+
+  <!-- ===================================================== DAC -->
+  <section class="view" id="v-dac" aria-labelledby="h-dac">
+    <h2 id="h-dac" class="vh">DAC</h2>
+    <section class="sect">
+      <h3>DAC:ns klocka</h3>
+      <div class="glass clockface">
+        <p class="ck-read"><b id="ck-hz">–</b><small>Hz</small></p>
+        <p class="ck-ppm" id="ck-ppm">&nbsp;</p>
+        <canvas id="ck-chart" aria-label="Klockans avvikelse senaste 24 timmarna"></canvas>
+        <div class="chart-axis"><span>−24 h</span><span>−12 h</span><span>nu</span></div>
+      </div>
+      <p class="fine" id="ck-sum">Mäts via DAC:ns återkoppling när enheten är ansluten.</p>
+    </section>
+    <section class="sect">
+      <h3 id="dac-title">DAC:n</h3>
+      <dl class="spec" id="dac-kv"></dl>
+    </section>
+    <section class="sect">
+      <h3>USB-länken</h3>
+      <dl class="spec" id="usb-kv"></dl>
+      <div class="notice" id="usb-note" hidden></div>
+      <div class="admin">
+        <button class="btn" id="usb-reconnect">Anslut DAC:n på nytt</button>
+        <p class="fine">Gör om USB-förhandlingen, till exempel efter byte av kabel eller port. Ljudet bryts i cirka 10 sekunder.</p>
+      </div>
+    </section>
+    <section class="sect">
+      <h3>Format</h3>
+      <table class="fmt" id="dac-fmt"></table>
+      <p class="fine" id="dac-cur"></p>
+    </section>
+    <section class="sect">
+      <h3>Anslutningar sedan start</h3>
+      <ol class="vlog" id="usb-ev"><li class="empty">Läser kärnans logg…</li></ol>
+    </section>
+    <section class="sect">
+      <details class="raw">
+        <summary>Rådata</summary>
+        <div id="dac-raw"></div>
+      </details>
+    </section>
+  </section>
+
+  <!-- ===================================================== Arcam -->
+  <section class="view" id="v-arcam" aria-labelledby="h-arcam">
+    <h2 id="h-arcam" class="vh">Arcam AVR10</h2>
+    <section class="sect">
+      <h3>Arcam AVR10</h3>
+      <p class="lead" id="arcam-state">Söker receivern…</p>
+      <div class="arcam" id="arcam-ctl" hidden>
+        <div class="row">
+          <button class="btn" id="arcam-power" aria-pressed="false">Slå på</button>
+          <button class="btn" id="arcam-mute" aria-pressed="false">Ljud av</button>
+        </div>
+        <label class="fader">
+          <span class="fader-head"><span>Volym</span><b id="arcam-vol-v">–</b></span>
+          <input type="range" id="arcam-vol" min="0" max="99" step="1" value="30">
+        </label>
+        <div class="sources" id="arcam-src" role="radiogroup" aria-label="Källa"></div>
+      </div>
+    </section>
+  </section>
+
+  <!-- ===================================================== System -->
+  <section class="view" id="v-sys" aria-labelledby="h-sys">
+    <h2 id="h-sys" class="vh">System</h2>
+
+    <section class="sect" id="access">
+      <h3>Åtkomst</h3>
+      <p class="lead" id="access-state">Kontrollerar…</p>
+      <form id="login-form" class="key-form" hidden>
+        <input id="pw-in" type="password" autocomplete="current-password" aria-label="Lösenord" placeholder="Lösenord">
+        <button class="btn primary">Logga in</button>
+      </form>
+      <form id="setup-form" class="pw-grid" hidden>
+        <input id="pw-new" type="password" autocomplete="new-password" aria-label="Nytt lösenord" placeholder="Nytt lösenord, minst 8 tecken">
+        <input id="pw-new2" type="password" autocomplete="new-password" aria-label="Upprepa lösenordet" placeholder="Upprepa lösenordet">
+        <button class="btn primary">Skapa lösenord</button>
+      </form>
+      <div id="session" hidden>
+        <div class="row wrap">
+          <button class="btn" id="logout">Logga ut</button>
+          <button class="btn" id="pw-change-open" aria-expanded="false" aria-controls="pw-change-form">Byt lösenord</button>
+        </div>
+        <form id="pw-change-form" class="pw-grid" hidden>
+          <input id="pw-cur" type="password" autocomplete="current-password" aria-label="Nuvarande lösenord" placeholder="Nuvarande lösenord">
+          <input id="pw-next" type="password" autocomplete="new-password" aria-label="Nytt lösenord" placeholder="Nytt lösenord, minst 8 tecken">
+          <button class="btn primary">Spara nytt lösenord</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="sect">
+      <h3>Spotify Soloist</h3>
+      <dl class="spec" id="solo-kv"></dl>
+      <div class="validity" id="validity" hidden><div class="validity-bar"><i id="validity-fill"></i></div><p class="fine" id="validity-txt"></p></div>
+      <div class="row wrap admin">
+        <button class="btn" id="solo-restart">Starta om Soloist</button>
+        <button class="btn" id="solo-update">Sök ny version</button>
+      </div>
+    </section>
+
+    <section class="sect admin">
+      <h3>Namn i Spotify</h3>
+      <form class="row" id="name-form">
+        <input id="name-in" maxlength="40" aria-label="Namn i Spotify" autocomplete="off">
+        <button class="btn">Spara namn</button>
+      </form>
+    </section>
+
+    <section class="sect admin">
+      <h3>Utvecklarnyckel</h3>
+      <p class="lead" id="key-state">–</p>
+      <form id="key-form" class="key-form">
+        <input id="key-in" type="password" autocomplete="off" spellcheck="false" aria-label="Ny Soloist-nyckel" placeholder="Klistra in ny nyckel">
+        <button class="btn" id="key-save">Byt nyckel</button>
+      </form>
+      <p class="fine">Nyckeln lagras bara på enheten och visas aldrig. Efter bytet startas Soloist om och kontrolleras. Startar den inte, återställs den tidigare nyckeln.</p>
+    </section>
+
+    <section class="sect admin">
+      <h3>Ljudinställningar</h3>
+      <label class="toggle"><input type="checkbox" id="norm"><span class="toggle-ui" aria-hidden="true"></span><span>Volymnormalisering</span></label>
+      <p class="fine">Av ger bit-perfekt ljud. Spotify-appens reglage når inte Soloist, så det styrs här.</p>
+    </section>
+
+    <section class="sect admin">
+      <h3>Mark Levinson 585.5</h3>
+      <p class="lead" id="ml-conn">–</p>
+      <label class="toggle"><input type="checkbox" id="ml-auto-on"><span class="toggle-ui" aria-hidden="true"></span><span>Slå på och välj USB när Spotify börjar spela</span></label>
+      <h4 class="sub">Standby när inget spelas</h4>
+      <div class="seg" role="radiogroup" aria-label="Standby efter" id="ml-off">
+        <button role="radio" data-v="0" aria-checked="false">Aldrig</button>
+        <button role="radio" data-v="15" aria-checked="false">15 min</button>
+        <button role="radio" data-v="30" aria-checked="false">30 min</button>
+        <button role="radio" data-v="60" aria-checked="false">1 h</button>
+      </div>
+      <p class="fine">Gäller bara när panelen själv har slagit på förstärkaren, så att en skivspelare eller annan källa inte stängs av mitt i.</p>
+      <h4 class="sub">Högsta volym från panelen</h4>
+      <form class="row" id="ml-max-form">
+        <input id="ml-max" type="number" min="20" max="80" step="0.5" inputmode="decimal" aria-label="Högsta volym i dB">
+        <button class="btn">Spara</button>
+      </form>
+      <h4 class="sub">Adress</h4>
+      <form class="row" id="ml-host-form">
+        <input id="ml-host" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="Hittas automatiskt" aria-label="Förstärkarens IP-adress">
+        <button class="btn">Spara</button>
+      </form>
+      <p class="fine">På förstärkaren: Setup → Advanced → Connect = Ethernet, och standbyläget Normal. I läget Green stängs nätverket av i standby, och då kan panelen inte väcka den.</p>
+      <details class="raw">
+        <summary>Kommunikation</summary>
+        <pre class="console" id="ml-log">Ingen trafik än.</pre>
+      </details>
+    </section>
+
+    <section class="sect admin">
+      <h3>Larm till telefonen</h3>
+      <p class="lead" id="alerts-state">–</p>
+      <label class="toggle"><input type="checkbox" id="alerts-on"><span class="toggle-ui" aria-hidden="true"></span><span>Skicka larm</span></label>
+      <p class="fine">Larmet går via Home Assistant till din telefon när DAC:en är borta i mer än en minut, när Soloist stannar, vid avbrott under uppspelning, när en verifiering avviker och när Soloist-bygget har två veckor kvar. Samma larm skickas högst var sjätte timme, avbrott högst en gång i timmen.</p>
+      <button class="btn" id="alerts-test">Skicka testlarm</button>
+    </section>
+
+    <section class="sect">
+      <h3>Enheten</h3>
+      <dl class="spec" id="sys-kv"></dl>
+      <div class="admin dev-ctl">
+        <label class="toggle"><input type="checkbox" id="leds"><span class="toggle-ui" aria-hidden="true"></span><span>Aktivitetslampa</span></label>
+        <p class="fine">Den gröna lampan blinkar när SD-kortet läses. Av gör enheten helt mörk.</p>
+        <div class="seg net-seg" role="radiogroup" aria-label="Nätverkshastighet" id="net-speed">
+          <button role="radio" data-v="100" aria-checked="false">100 Mbit/s</button>
+          <button role="radio" data-v="1000" aria-checked="false">1000 Mbit/s</button>
+        </div>
+        <p class="fine">100 Mbit/s räcker gott för Lossless och drar 0,12 W mindre. Länken bryts några sekunder vid byte.</p>
+      </div>
+    </section>
+
+    <section class="sect admin">
+      <h3>Underhåll</h3>
+      <div class="row wrap">
+        <button class="btn" id="apt-check">Sök systemuppdateringar</button>
+        <button class="btn" id="apt-run" hidden>Installera uppdateringar</button>
+      </div>
+      <p class="fine" id="apt-info"></p>
+      <label class="toggle"><input type="checkbox" id="overlay"><span class="toggle-ui" aria-hidden="true"></span><span>Skrivskyddat system</span></label>
+      <p class="fine">Skyddar SD-kortet vid strömavbrott. Ändringar ligger bara i minnet tills skyddet stängs av. Kräver omstart.</p>
+      <pre class="console" id="job-out" hidden></pre>
+    </section>
+
+    <section class="sect admin">
+      <h3>Ström och omstart</h3>
+      <div class="row wrap">
+        <button class="btn" id="audio-restart">Starta om ljudtjänsterna</button>
+        <button class="btn danger" id="reboot">Starta om enheten</button>
+        <button class="btn danger" id="poweroff">Stäng av enheten</button>
+      </div>
+      <p class="fine">Ljudtjänsterna är PipeWire, WirePlumber och Soloist. Spotify kopplar upp igen inom några sekunder. Avstängd startar enheten inte igen förrän strömmen bryts och slås på, eftersom den saknar strömbrytare.</p>
+    </section>
+
+    <section class="sect admin">
+      <h3>Loggar</h3>
+      <div class="row wrap">
+        <select id="log-src" aria-label="Logg">
+          <option value="soloist">Soloist</option><option value="audio">PipeWire</option>
+          <option value="kernel">Kärna</option><option value="system">System</option><option value="web">Panelen</option>
+        </select>
+        <label class="toggle inline"><input type="checkbox" id="log-err"><span class="toggle-ui" aria-hidden="true"></span><span>Bara fel</span></label>
+        <button class="btn" id="log-load">Visa</button>
+      </div>
+      <pre class="console" id="log-out" hidden></pre>
+    </section>
+  </section>
+</main>
+</div>
+
+<nav class="tabs" aria-label="Vyer">
+  <a href="#v-play" class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="12" cy="12" r="5.4" fill="none" stroke="currentColor" stroke-width=".7" opacity=".55"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>Spelar</a>
+  <a href="#v-signal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12h15" stroke="currentColor" stroke-width="1.2"/><circle cx="3.8" cy="12" r="1.7" fill="currentColor"/><circle cx="8.8" cy="12" r="1.7" fill="currentColor"/><circle cx="13.8" cy="12" r="1.7" fill="currentColor"/><circle cx="19.4" cy="12" r="2.4" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>Signal</a>
+  <a href="#v-dac"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 4.5h11v10.2l-2.6 4.8H9.1l-2.6-4.8z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><rect x="9.6" y="8" width="4.8" height="3.4" fill="none" stroke="currentColor" stroke-width=".9" opacity=".7"/><path d="M12 19.5v2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>DAC</a>
+  <a href="#v-arcam"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="19" height="10" rx=".8" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M5.5 10.5h6" stroke="currentColor" stroke-width="1.2"/><path d="M5.5 13.5h3.5" stroke="currentColor" stroke-width=".8" opacity=".6"/><circle cx="16.8" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M16.8 12l1.3-1.3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>Arcam</a>
+  <a href="#v-sys"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12.5" r="5.6" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M12 12.5V8.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M12 3.2v1.6M5.4 5.9l1.1 1.1M18.6 5.9l-1.1 1.1M3.2 12.5h1.6M19.2 12.5h1.6" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity=".7"/></svg>System</a>
+</nav>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="app.js" type="module"></script>
+</body>
+</html>

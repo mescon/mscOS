@@ -1,0 +1,38 @@
+// sMS-200Ultra runs the Cubietruck device tree, which enables hardware this box does
+// not have (HDMI/display pipeline, GPU, video decoder, SATA, WiFi/BT, IR, S/PDIF,
+// analog codec, touchscreen/GPADC thermal sensor). Disabling them keeps their drivers
+// unbound, so clk_disable_unused gates their clocks/PLLs and nothing polls them.
+// Kept: USB (all ports), ethernet, SD (mmc0), PMIC i2c0, i2c1/2, UART0 console, LEDs.
+// Installed as /boot/overlay-user/sotm-lean.dtbo, enabled by user_overlays=sotm-lean.
+// If it fails to apply, Armbian's boot.scr falls back to the unmodified DTB.
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "allwinner,sun7i-a20";
+
+	fragment@0  { target-path = "/soc/lcd-controller@1c0c000";   __overlay__ { status = "disabled"; }; };
+	fragment@1  { target-path = "/soc/lcd-controller@1c0d000";   __overlay__ { status = "disabled"; }; };
+	fragment@2  { target-path = "/soc/video-codec@1c0e000";      __overlay__ { status = "disabled"; }; };
+	fragment@3  { target-path = "/soc/mmc@1c12000";              __overlay__ { status = "disabled"; }; }; /* WiFi SDIO */
+	fragment@4  { target-path = "/soc/crypto-engine@1c15000";    __overlay__ { status = "disabled"; }; };
+	fragment@5  { target-path = "/soc/hdmi@1c16000";             __overlay__ { status = "disabled"; }; };
+	fragment@6  { target-path = "/soc/sata@1c18000";             __overlay__ { status = "disabled"; }; };
+	fragment@7  { target-path = "/soc/pwm@1c20e00";              __overlay__ { status = "disabled"; }; };
+	fragment@8  { target-path = "/soc/spdif@1c21000";            __overlay__ { status = "disabled"; }; };
+	fragment@9  { target-path = "/soc/ir@1c21800";               __overlay__ { status = "disabled"; }; };
+	fragment@10 { target-path = "/soc/codec@1c22c00";            __overlay__ { status = "disabled"; }; };
+	fragment@11 { target-path = "/soc/rtp@1c25000";              __overlay__ { status = "disabled"; }; }; /* GPADC: the blocking thermal sensor */
+	fragment@12 { target-path = "/soc/serial@1c28800";           __overlay__ { status = "disabled"; }; }; /* Bluetooth UART */
+	fragment@13 { target-path = "/soc/gpu@1c40000";              __overlay__ { status = "disabled"; }; };
+	fragment@14 { target-path = "/soc/display-frontend@1e00000"; __overlay__ { status = "disabled"; }; };
+	fragment@15 { target-path = "/soc/display-frontend@1e20000"; __overlay__ { status = "disabled"; }; };
+	fragment@16 { target-path = "/soc/display-backend@1e40000";  __overlay__ { status = "disabled"; }; };
+	fragment@17 { target-path = "/soc/display-backend@1e60000";  __overlay__ { status = "disabled"; }; };
+	fragment@18 { target-path = "/display-engine";               __overlay__ { status = "disabled"; }; };
+	fragment@19 { target-path = "/hdmi-connector";               __overlay__ { status = "disabled"; }; };
+	fragment@20 { target-path = "/sound";                        __overlay__ { status = "disabled"; }; }; /* S/PDIF card */
+	fragment@21 { target-path = "/spdif-out";                    __overlay__ { status = "disabled"; }; };
+	fragment@22 { target-path = "/pwrseq";                       __overlay__ { status = "disabled"; }; }; /* WiFi power seq */
+	fragment@23 { target-path = "/ahci-5v";                      __overlay__ { status = "disabled"; }; };
+};

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Install/refresh Spotify Soloist (builds expire 90 days after build date).
+# Only replaces the binary when the downloaded build differs, then restarts the user service.
+set -euo pipefail
+URL=https://soloist-builds.spotifycdn.com/soloist_release_arm32.tar.gz
+DST=/usr/local/bin/soloist
+SVC_USER=soloist
+
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+curl --fail --location --silent --show-error --retry 3 -o "$tmp/s.tar.gz" "$URL"
+tar -xzf "$tmp/s.tar.gz" -C "$tmp"
+test -x "$tmp/soloist"
+"$tmp/soloist" --version >/dev/null
+
+if [[ -x $DST ]] && cmp -s "$tmp/soloist" "$DST"; then
+    echo "soloist up to date: $("$DST" --version)"
+    exit 0
+fi
+install -m 755 "$tmp/soloist" "$DST"
+install -D -m 644 "$tmp/CHANGELOG.md" /usr/local/share/doc/soloist/CHANGELOG.md 2>/dev/null || true
+echo "soloist installed: $("$DST" --version)"
+
+if [[ ${1:-} != --no-restart ]]; then
+    uid=$(id -u "$SVC_USER")
+    runuser -u "$SVC_USER" -- env XDG_RUNTIME_DIR=/run/user/$uid systemctl --user restart soloist.service
+fi

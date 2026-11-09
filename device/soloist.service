@@ -1,0 +1,19 @@
+[Unit]
+Description=Spotify Soloist (Spotify Connect, Lossless)
+After=pipewire.service wireplumber.service network-online.target
+Wants=pipewire.service wireplumber.service
+
+[Service]
+EnvironmentFile=/etc/soloist.env
+# Keep the PipeWire sink at unity gain: any software volume < 1.0 alters the bits.
+ExecStartPre=-/usr/bin/wpctl set-volume @DEFAULT_AUDIO_SINK@ 1.0
+ExecStart=/usr/local/bin/soloist --device-name "@DEVICE_NAME@" --api-key ${SOLOIST_API_KEY} \
+    --initial-volume 100 --data-dir %h/.local/share/soloist --cache-dir %h/.cache/soloist --cache-size 300 --ws 127.0.0.1:9090
+Restart=always
+RestartSec=5
+# Exit code 10 = build expired; the updater timer fetches a new build.
+RestartPreventExitStatus=10
+Nice=-10
+
+[Install]
+WantedBy=default.target

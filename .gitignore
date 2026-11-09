@@ -1,0 +1,12 @@
+# secrets
+.env
+# large binaries: card images, backups, kernel build tree and packages
+backup/
+images/
+kernel/armbian-build/
+kernel/debs-*/
+kernel/*.log
+# tooling
+.playwright-mcp/
+__pycache__/
+*.pyc

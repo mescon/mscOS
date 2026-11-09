@@ -1,0 +1,8 @@
+[Unit]
+Description=Update Spotify Soloist build
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/soloist-update
