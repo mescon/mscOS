@@ -187,10 +187,11 @@ class Levinson:
 
         POST "\n" to /cgi-bin/WebControlInterFace.cgi "just scrapes the screen" (the unit's
         MatrixDisplay.js). Verified 2026-11-09:
-            standby:  "DD:0:                :000000 :100:0000"
+            standby:  "DD:0:                :000000 :100:0000"   (or :000010, via the remote)
             on, USB:  "DD:0:SOtM       10.0 :000010 :100:0000"   (input named "SOtM", 10.0 dB)
             on, line: "DD:0:Arcam      Line :000010 :070:0000"   (fixed-gain input shows "Line")
-        Field 3 is 000000 in standby; the text is the input's own name, then the level.
+        Standby is an empty text. Field 3 is NOT a power flag: it read 000000 right after !1039 but
+        000010 in standby entered with the remote (2026-11-09).
         """
         try:
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3)) as s:
@@ -203,7 +204,7 @@ class Levinson:
         if not m or m.group(1) != "0":  # "displayInvalid" set: keep what we had
             return None
         text = m.group(2).strip()
-        on = m.group(3) != "000000" or bool(text)
+        on = bool(text)
         parts = re.split(r"\s{2,}", text, maxsplit=1)
         return {"on": on, "text": text, "label": parts[0] if on and text else "",
                 "level": parts[1] if len(parts) > 1 else ""}

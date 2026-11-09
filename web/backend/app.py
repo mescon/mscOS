@@ -98,7 +98,7 @@ class Hub:
         self.since: dict[str, float] = {}  # when a bad condition was first seen
         self.http: ClientSession | None = None
         self._load()
-        self.ml = Levinson(self.settings.get("ml_host") or None)
+        self.ml = Levinson(self.settings.get("ml_host") or self.settings.get("ml_host_found") or None)
         self.ml_state: dict = {"reachable": None}
         self.ml_found = ""          # address found by scanning
         self._was_playing = False
@@ -161,6 +161,8 @@ class Hub:
             try:
                 async with websockets.connect(SOLOIST_WS, max_size=None, open_timeout=5) as ws:
                     self.soloist_ws = ws
+                    self._was_active = None  # the first auth_state only records the current state
+                    self._playing_known = False  # likewise the first playback_state
                     await ws.send(json.dumps({"type": "command", "command": "get_auth_state"}))
                     async for raw in ws:
                         ev = json.loads(raw)
@@ -395,8 +397,28 @@ class Hub:
 
     # ---- Mark Levinson 585.5
     def _on_playback_change(self):
-        if self.settings.get("source") == "spotify":
-            self._set_playing(self.playback.get("status") == "playing")
+        if self.settings.get("source") != "spotify":
+            return
+        # Choosing "Mark Levinson 585.5" in the Spotify app already wakes the amplifier and
+        # selects USB, before anything plays (ml_on_play has a 90 s guard, so play right after
+        # does not send it twice).
+        if "is_active" not in self.auth:
+            return
+        active = bool(self.auth.get("is_active"))
+        prev = getattr(self, "_was_active", None)  # None: first report after (re)connecting
+        if active and prev is False:
+            asyncio.ensure_future(self.ml_on_play())
+        self._was_active = active
+        playing = self.playback.get("status") == "playing"
+        if not getattr(self, "_playing_known", True) and "status" in self.playback:
+            # first report after (re)connecting: music already playing is not a new start,
+            # so a panel restart never wakes the amplifier
+            self._playing_known = True
+            self._was_playing = playing
+            if not playing:
+                self._idle_since = time.time()
+            return
+        self._set_playing(playing)
 
     def _set_playing(self, playing: bool):
         if playing and not self._was_playing:
@@ -413,14 +435,17 @@ class Hub:
             return
         self._ml_play_t = time.time()
         try:
+            # Read the display now: the remote may have changed power or input since the last poll.
+            d = await self.ml.read_display()
+            if d:
+                self.ml.power = d["on"]
             woke = self.ml.power is not True
             if woke:
                 await self.ml.set_power(True)
                 self._ml_woke_t = time.time()
                 await asyncio.sleep(6)  # leaving standby takes a few seconds; inputs are ignored meanwhile
-            if self.ml.input != USB_INPUT or woke:
-                await self.ml.set_input(USB_INPUT)
-                asyncio.ensure_future(self.ml_learn_label(USB_INPUT))
+            await self.ml.set_input(USB_INPUT)  # always: harmless when already there, and state may be stale
+            asyncio.ensure_future(self.ml_learn_label(USB_INPUT))
             log.info("585.5: %s, input USB", "woken" if woke else "already on")
         except LevinsonError as e:
             log.warning("585.5 auto-on failed: %s", e)
@@ -462,6 +487,8 @@ class Hub:
                         log.info("585.5 found at %s", ip)
                         self.ml_found = self.ml.host = ip
                         self._ml_seen_t = time.time()
+                        self.settings["ml_host_found"] = ip
+                        await asyncio.get_running_loop().run_in_executor(None, self.save_settings)
                 await self.ml_refresh()
                 # an automatically found address that stops answering may have moved (DHCP): search again
                 if self.ml_state.get("reachable"):
