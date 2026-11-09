@@ -33,20 +33,35 @@ async function post(url, data = {}) {
 }
 const cmd = (command, extra = {}) => post("/api/soloist/command", { command, ...extra }).catch(() => {});
 const desktop = matchMedia("(min-width: 1024px)");
+// Fold rows: a short value on the right of each closed row (fv-<id>).
+const fv = (id, text, warn = false) => { const el = $(`#fv-${id}`); if (el) { el.textContent = text ?? ""; el.classList.toggle("warn", !!warn); } };
 let optT = 0, testSecs = 30, dacT = 0;
 
 // ------------------------------------------------------------------ views
+const LEGACY = { "v-dac": "v-signal", "v-arcam": "v-play" };
 function showView(id) {
+  id = LEGACY[id] || id;
   $$(".view").forEach((v) => v.classList.toggle("active", v.id === id));
   $$(".tabs a").forEach((a) => a.classList.toggle("on", a.getAttribute("href") === `#${id}`));
-  if (id === "v-signal") { loadOpts(); requestAnimationFrame(renderSpark); }
-  if (id === "v-dac") loadDac();
+  if (id === "v-signal") { loadOpts(); loadDac(); requestAnimationFrame(renderSpark); }
 }
 $$(".tabs a").forEach((a) => a.addEventListener("click", (e) => {
   e.preventDefault(); const id = a.getAttribute("href").slice(1); showView(id); history.replaceState(null, "", `#${id}`); window.scrollTo(0, 0);
 }));
-const initial = (location.hash || "#v-play").slice(1);
+const initial = LEGACY[(location.hash || "#v-play").slice(1)] || (location.hash || "#v-play").slice(1);
 showView($(`#${initial}.view`) ? initial : "v-play");
+// remember which rows are open; a chart drawn while its row was closed is redrawn at full width
+const foldKey = (d) => `fold:${d.dataset.k}`;
+$$("details.fold").forEach((d) => {
+  try { if (localStorage.getItem(foldKey(d)) === "1") d.open = true; } catch {}
+  d.addEventListener("toggle", () => {
+    try { localStorage.setItem(foldKey(d), d.open ? "1" : "0"); } catch {}
+    if (!d.open) return;
+    if (d.id === "f-drop") renderSpark();
+    if (d.id === "f-clock" && S.dacd?.clock_avg) renderClockChart(S.dacd.clock_avg.series || []);
+    if (d.id === "f-opt") loadOpts(true);
+  });
+});
 
 // ------------------------------------------------------------------ socket
 let ws, retry = 1000;
@@ -158,6 +173,7 @@ function renderQueue() {
   $("#queue").innerHTML = up.length
     ? up.map((q) => `<li><img src="${esc(coverOf(q.item, "small") || "")}" alt="" loading="lazy"><div><span class="q-t">${esc(nameOf(q.item))}</span><span class="q-a">${esc(artistsOf(q.item))}</span></div></li>`).join("")
     : `<li class="empty">Kön visas när något spelas.</li>`;
+  fv("queue", up.length ? nameOf(up[0].item) : "");
 }
 $$(".transport button").forEach((b) => b.addEventListener("click", () => {
   const c = b.dataset.cmd, p = S.playback, o = p.options || {};
@@ -270,13 +286,15 @@ function renderSignal() {
   }
   else if (c.issues.length) { head = "Signalen ändras"; sub = c.issues.join(", ").replace(/^./, (x) => x.toUpperCase()) + "."; cls = "warn"; }
   else if (c.t && c.t.verdict === "bitperfect" && !c.t.gaps.length) {
-    head = "Bit-perfekt"; cls = "verified";
+    head = "Bitperfekt"; cls = "verified";
     sub = `Verifierat ${clock(c.t.t)}: ${c.t.bits} bit, ${dec(c.t.gain_db)} dB, inga avbrott`;
-  } else if (c.t && c.t.verdict === "bitperfect") { head = "Bit-perfekt, med avbrott"; sub = `${c.t.gaps.length} avbrott i testet ${clock(c.t.t)}`; cls = "warn"; }
+  } else if (c.t && c.t.verdict === "bitperfect") { head = "Bitperfekt, med avbrott"; sub = `${c.t.gaps.length} avbrott i testet ${clock(c.t.t)}`; cls = "warn"; }
   else if (c.t && c.t.verdict === "scaled") { head = "Skalat"; sub = `Senaste testet visade ${dec(c.t.gain_db)} dB`; cls = "warn"; }
-  else if (!c.playing) { head = "Redo"; sub = "Signalvägen är inställd för bit-perfekt ljud."; }
-  else { head = "Orörd signalväg"; sub = "Inställt för bit-perfekt. Verifiera under Signal."; }
+  else if (!c.playing) { head = "Redo"; sub = "Signalvägen är inställd för bitperfekt ljud."; }
+  else { head = "Orörd signalväg"; sub = "Inställt för bitperfekt. Verifiera under Signal."; }
   seal.className = `seal ${cls}`;
+  const bad = c.stages.some((x) => x.state === "bad");
+  fv("path", c.issues.length ? "Ändras" : bad ? "Avvikelse" : "Orörd", c.issues.length > 0 || bad);
   $("#seal-head").textContent = head; $("#seal-sub").textContent = sub;
   // schematic
   $("#path").innerHTML = c.stages.map((s) => `<li class="${s.state}">
@@ -290,7 +308,7 @@ function renderStatus() {
   const st = S.status, sys = st.system || {}, solo = st.soloist || {};
   $("#dev-name").textContent = devName();
   document.title = devName();
-  $("#dev-sub").textContent = `sMS-200Ultra${sys.net?.ip ? `, ${sys.net.ip}` : ""}${sys.pmic_temp_c != null ? `, ${dec(sys.pmic_temp_c)} °C` : ""}`;
+  $("#dev-sub").textContent = `sMS-200Ultra${sys.pmic_temp_c != null ? `, ${dec(sys.pmic_temp_c)} °C` : ""}`;
   // Soloist
   const days = solo.days_left;
   spec($("#solo-kv"), [
@@ -328,6 +346,24 @@ function renderStatus() {
   ]);
   $("#leds").checked = !!st.leds;
   $("#overlay").checked = !!sys.root_overlay;
+  fv("spotify", solo.service && solo.service !== "active" ? "Kör inte" : days != null ? `${days} dagar kvar` : "", (solo.service && solo.service !== "active") || (days != null && days < 14));
+  fv("device", [sys.pmic_temp_c != null ? `${dec(sys.pmic_temp_c)} °C` : null, st.supply ? `${dec(st.supply.v, 2)} V` : null].filter(Boolean).join(", "));
+  renderSysHead();
+}
+function renderSysHead() {
+  const st = S.status, solo = st.soloist || {}, dac = st.dac || {}, sys = st.system || {}, m = ML.state || {};
+  if (!st.system) return;
+  const roon = roonMode(), issues = [];
+  if (!dac.present) issues.push("DAC:n hittas inte");
+  if (roon ? !(st.roon || {}).active : solo.service !== "active") issues.push(roon ? "Roon Bridge kör inte" : "Soloist kör inte");
+  if (solo.days_left != null && solo.days_left < 14) issues.push(`Spotify-bygget går ut om ${solo.days_left} dagar`);
+  if (m.host && m.reachable === false) issues.push("förstärkaren svarar inte");
+  const t = $("#sys-title");
+  t.textContent = issues.length ? "Behöver uppmärksamhet" : "Allt i ordning";
+  t.classList.toggle("warn", issues.length > 0);
+  $("#sys-sum").textContent = issues.length
+    ? issues.join(", ").replace(/^./, (c) => c.toUpperCase()) + "."
+    : `${roon ? "Roon Bridge" : "Soloist"} igång${m.reachable ? ", förstärkaren ansluten" : ""}${S.settings?.alerts ? ", larm till telefonen på" : ""}. Drifttid ${fmtUptime(sys.uptime_s || 0)}.`;
 }
 function fmtDate(s) {
   if (!s || s === "n/a") return "–";
@@ -338,7 +374,7 @@ function fmtDate(s) {
 // ------------------------------------------------------------------ dropouts, 24 h
 function renderSpark() {
   const cv = $("#spark"), ctx = cv.getContext("2d"), dpr = window.devicePixelRatio || 1;
-  const w = cv.clientWidth, h = cv.clientHeight; if (!w) return;
+  const w = cv.clientWidth || 320, h = cv.clientHeight || 72;
   cv.width = w * dpr; cv.height = h * dpr; ctx.scale(dpr, dpr); ctx.clearRect(0, 0, w, h);
   const now = Date.now() / 1000, span = 86400, pts = S.xruns.filter((p) => p.t > now - span);
   const css = getComputedStyle(document.documentElement);
@@ -356,6 +392,7 @@ function renderSpark() {
   $("#spark-sum").textContent = played
     ? `${total ? `${total} avbrott vid DAC:en` : "Inga avbrott vid DAC:en"} under ${Math.round(played / 2)} minuters uppspelning.${streamMiss ? ` Gula markeringar: Spotify-strömmen missade ${streamMiss} cykler, oftast vid låtbyte eller volymändring, utan luckor i signalen.` : ""} Röda staplar är avbrott.`
     : "Ingen uppspelning registrerad senaste dygnet.";
+  fv("drop", played ? (total ? `${total} vid DAC:en` : "Inga") : "Ingen uppspelning", total > 0);
 }
 window.addEventListener("resize", renderSpark);
 
@@ -366,7 +403,7 @@ function renderTest(r) {
   const gaps = r.gaps || [];
   let head, warn = true;
   if (r.verdict === "silent" || (r.rms ?? 1) < 1e-4) head = "Inget ljud under testet";
-  else if (r.verdict === "bitperfect") { head = gaps.length ? "Bit-perfekt, men med avbrott" : "Bit-perfekt"; warn = !!gaps.length; }
+  else if (r.verdict === "bitperfect") { head = gaps.length ? "Bitperfekt, men med avbrott" : "Bitperfekt"; warn = !!gaps.length; }
   else if (r.verdict === "scaled") head = `Skalat med ${dec(r.gain_db)} dB`;
   else if (r.verdict === "lossy_or_processed") head = "Inte orört: förlustkodat eller bearbetat";
   else head = "Kunde inte avgöra";
@@ -408,6 +445,7 @@ function renderOpts() {
   const ok = core.filter((i) => i.state === "ok").length, warn = core.length - ok;
   $("#opt-n").textContent = ok; $("#opt-of").textContent = `/${core.length}`;
   $("#opt-n").parentElement.classList.toggle("warn", !!warn);
+  fv("opt", `${ok} av ${core.length}`, !!warn);
   $("#opt-sum").textContent = warn
     ? `${warn} ${warn === 1 ? "optimering behöver" : "optimeringar behöver"} åtgärd. Kontrollerat på enheten ${clock(S.opts.t)}.`
     : `Alla aktiva och kontrollerade på enheten ${clock(S.opts.t)}.`;
@@ -493,7 +531,7 @@ $("#log-load").addEventListener("click", async () => {
 });
 
 // ------------------------------------------------------------------ verification log, settings
-const VERDICT = { bitperfect: "Bit-perfekt", scaled: "Skalat", lossy_or_processed: "Bearbetat", inconclusive: "Oavgjort" };
+const VERDICT = { bitperfect: "Bitperfekt", scaled: "Skalat", lossy_or_processed: "Bearbetat", inconclusive: "Oavgjort" };
 function renderVlog() {
   const items = [...S.tests].reverse().slice(0, 12);
   $("#vlog").innerHTML = items.length ? items.map((t) => {
@@ -503,6 +541,8 @@ function renderVlog() {
     return `<li class="${good ? "" : "warn"}">${good ? MARK.ok : MARK.warn}<div class="vl-what">${esc(head)}<span>${esc(detail)}</span></div>
       <div class="vl-when">${esc(stamp(t.t))}<br>${t.auto ? "Automatisk" : "Manuell"}</div></li>`;
   }).join("") : `<li class="empty">Inga verifieringar än.</li>`;
+  const last = S.tests.length ? S.tests[S.tests.length - 1] : null;
+  fv("ver", last ? `${VERDICT[last.verdict] || last.verdict} ${clock(last.t)}` : "Inga än", !!last && !(last.verdict === "bitperfect" && !last.gaps));
 }
 function renderSettings() {
   const st = S.settings || {};
@@ -512,6 +552,7 @@ function renderSettings() {
     ? (st.alerts ? "Kopplat till Home Assistant. Larm skickas till din telefon." : "Kopplat till Home Assistant, men larmen är avstängda.")
     : "Inte kopplat till Home Assistant.";
   $("#alerts-on").disabled = !st.alerts_configured; $("#alerts-test").disabled = !st.alerts_configured || !st.alerts;
+  fv("alerts", !st.alerts_configured ? "Inte kopplat" : st.alerts ? "På" : "Av", !st.alerts_configured || !st.alerts);
   $$("#net-speed button").forEach((b) => b.setAttribute("aria-checked", +b.dataset.v === (st.net_speed || 100)));
 }
 async function setSetting(key, on, el) {
@@ -542,6 +583,8 @@ function renderAccess() {
   $("#access-state").textContent = !a.configured
     ? "Inget lösenord är skapat. Skapa ett för att skydda omstart, uppdateringar, nyckel och inställningar."
     : a.logged_in ? "Inloggad på den här enheten i 90 dagar." : "Logga in för att ändra inställningar, starta om eller uppdatera.";
+  fv("access", !a.configured ? "Inget lösenord" : a.logged_in ? "Inloggad" : "Utloggad", !a.configured);
+  if (!a.logged_in) $("#access").open = true;
 }
 $("#login-form").addEventListener("submit", async (e) => {
   e.preventDefault(); const pw = $("#pw-in").value;
@@ -565,11 +608,12 @@ $("#pw-change-form").addEventListener("submit", async (e) => {
 // ------------------------------------------------------------------ Arcam
 function renderArcam() {
   const a = S.arcam, ctl = $("#arcam-ctl");
-  if (a.reachable === false) { $("#arcam-state").textContent = "Receivern svarar inte. Kontrollera att den är på nätverket och att IP-styrning är aktiverad."; ctl.hidden = true; return; }
+  if (a.reachable === false) { $("#arcam-state").textContent = "Receivern svarar inte. Kontrollera att den är på nätverket och att IP-styrning är aktiverad."; ctl.hidden = true; fv("arcam", "Svarar inte"); return; }
   if (a.reachable == null) return;
   ctl.hidden = false;
   ctl.classList.toggle("off", !a.power);
   $("#arcam-state").textContent = a.power ? `På, källa ${a.source}${a.muted ? ", ljudet avstängt" : ""}` : "I standby";
+  fv("arcam", a.power ? `På, ${a.source}` : "I standby");
   const pb = $("#arcam-power"); pb.textContent = a.power ? "Stäng av" : "Slå på";
   const mb = $("#arcam-mute"); mb.textContent = a.muted ? "Slå på ljudet" : "Stäng av ljudet"; mb.setAttribute("aria-pressed", !!a.muted);
   const vol = $("#arcam-vol"); if (document.activeElement !== vol && a.volume != null) vol.value = a.volume;
@@ -587,7 +631,7 @@ $("#arcam-src").addEventListener("click", (e) => { const b = e.target.closest("b
 
 
 // ------------------------------------------------------------------ DAC (Eunhasu's /dacinfo/, interpreted)
-const dacVisible = () => desktop.matches || $("#v-dac").classList.contains("active");
+const dacVisible = () => desktop.matches || $("#v-signal").classList.contains("active");
 async function loadDac() {
   clearTimeout(dacT);
   try { S.dacd = await (await fetch("/api/dac")).json(); renderDac(); } catch {}
@@ -599,6 +643,7 @@ function renderDac() {
   const face = $(".clockface");
   if (!d.present) {
     $("#ck-hz").textContent = "–"; $("#ck-ppm").innerHTML = "&nbsp;"; face.classList.remove("live");
+    fv("clock", "–"); fv("usb", "Ingen DAC", true); fv("dac", "");
     $("#ck-sum").textContent = "Ingen DAC ansluten."; spec($("#dac-kv"), [["Status", "Inte ansluten", "warn"]]);
     spec($("#usb-kv"), []); $("#usb-note").hidden = true; renderUsbEvents([]); return;
   }
@@ -607,6 +652,7 @@ function renderDac() {
   face.classList.toggle("live", S.playback.status === "playing");
   if (ck.hz) {
     $("#ck-hz").textContent = ck.hz.toLocaleString("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    fv("clock", `${$("#ck-hz").textContent} Hz`);
     $("#ck-ppm").innerHTML = `<b>${ppmTxt(ck.ppm)} ppm</b> mot ${khz(ck.nominal)} kHz, ±${dec(ck.unc_ppm, ck.unc_ppm < 1 ? 2 : 1)} ppm efter ${fmtUptime(ck.elapsed_s)}`;
     const s = ck.series || [];
     const lo = s.length ? Math.min(...s.map((x) => x[1])) : null, hi = s.length ? Math.max(...s.map((x) => x[1])) : null;
@@ -629,6 +675,8 @@ function renderDac() {
   ]);
   // link
   const hs = d.speed_mbps >= 480, failedHs = (d.events || []).some((e) => e.kind === "failed" && e.speed === "high-speed");
+  fv("usb", hs ? "High speed" : "Full speed", !hs);
+  fv("dac", d.firmware ? `Firmware ${d.firmware}` : "");
   spec($("#usb-kv"), [
     ["Port på SOtM:en", esc(d.port), d.port === "Audio USB" ? "good" : ""],
     ["Hastighet", hs ? "High speed, 480 Mbit/s (USB 2.0)" : `Full speed, ${d.speed_mbps} Mbit/s (USB 1.1)`, hs ? "good" : "warn"],
@@ -743,6 +791,10 @@ function renderLevinson() {
   }
   $("#ml-state").textContent = lead;
   $("#ml-ctl").hidden = !m.reachable;
+  $("#ml-step").hidden = !m.reachable || m.power === false;
+  $("#amp").classList.toggle("live", !!m.reachable && m.power !== false);
+  fv("amp", !m.reachable ? "" : m.power === false ? "Standby" : (m.label || m.input || ""));
+  fv("ml", m.host || "Söker", m.reachable === false);
   $("#amp").classList.toggle("off", m.power === false);
   $("#ml-power").textContent = m.power === false ? "Slå på" : "Standby";
   $("#ml-mute").setAttribute("aria-pressed", !!m.muted);
@@ -752,7 +804,7 @@ function renderLevinson() {
   const over = m.volume_db != null && m.volume_db > max;
   if (document.activeElement !== vol) {
     if (m.volume_db != null) vol.value = Math.min(m.volume_db, max);
-    $("#ml-vol-v").textContent = m.volume_db != null ? `${dec(m.volume_db)} dB` : "–";
+    $("#ml-vol-v").textContent = m.volume_db != null ? dec(m.volume_db) : "–";
   }
   $("#ml-limit").textContent = over
     ? `Volymen är ställd med fjärrkontrollen över panelens gräns på ${dec(max)} dB. Panelen kan bara sänka den.`
@@ -789,7 +841,18 @@ $("#ml-power").addEventListener("click", () => {
   ml({ power: on });
 });
 $("#ml-mute").addEventListener("click", () => ml({ mute: !ML.state.muted }));
-$("#ml-vol").addEventListener("input", (e) => { $("#ml-vol-v").textContent = `${dec(+e.target.value)} dB`; });
+$("#ml-vol").addEventListener("input", (e) => { $("#ml-vol-v").textContent = dec(+e.target.value); });
+// ± one dB per press; never above the panel ceiling, and never "raising" a remote-set level down to it
+function mlStep(d) {
+  const m = ML.state || {}, max = +(S.settings?.ml_max_db || 40);
+  if (m.volume_db == null) return;
+  if (d > 0 && m.volume_db >= max) { toast(`Panelen går högst till ${dec(max)} dB. Högre volym ställer du med fjärrkontrollen.`); return; }
+  const v = Math.max(0, Math.min(max, Math.round((m.volume_db + d) * 2) / 2));
+  $("#ml-vol-v").textContent = dec(v);
+  ml({ volume_db: v });
+}
+$("#ml-down").addEventListener("click", () => mlStep(-1));
+$("#ml-up").addEventListener("click", () => mlStep(1));
 $("#ml-vol").addEventListener("change", (e) => ml({ volume_db: +e.target.value }));
 $("#ml-src").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) ml({ input: b.dataset.src }); });
 $("#ml-auto-on").addEventListener("change", (e) => setSetting("ml_auto_on", e.target.checked, e.target));
