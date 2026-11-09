@@ -25,6 +25,8 @@ printf '[Manager]\n# Default for all services: CPU0. The audio user gets CPU1 (u
     > /etc/systemd/system.conf.d/10-sotm-cpu.conf
 printf '[Service]\n# PipeWire, WirePlumber, Soloist (+ soloist-rt) on the audio core, next to the USB IRQs.\nCPUAffinity=1\n' \
     > "/etc/systemd/system/user@$UID_.service.d/10-audio-cpu.conf"
+# Hardware watchdog (A20 sunxi-wdt, max 16 s): reboot automatically if the system hangs.
+printf '[Manager]\nRuntimeWatchdogSec=15s\nRebootWatchdogSec=10min\n' > /etc/systemd/system.conf.d/20-watchdog.conf
 install -m 755 "$HERE/sotm-tuning" /usr/local/sbin/sotm-tuning
 sed "s/@982/@$UID_/g" "$HERE/sotm-tuning.service" > /etc/systemd/system/sotm-tuning.service
 install -m 755 "$HERE/soloist-rt" /usr/local/bin/soloist-rt
