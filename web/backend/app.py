@@ -10,7 +10,9 @@ import asyncio
 import collections
 import contextlib
 import json
+import ipaddress
 import logging
+import math
 import os
 import re
 import shutil
@@ -101,6 +103,7 @@ class Hub:
         self._was_playing = False
         self._ml_woke_t = 0.0       # when we last woke it (auto standby only undoes our own wake)
         self._idle_since = time.time()
+        self._ml_seen_t = time.time()  # last time the amplifier answered (or was found)
 
     # ---- persistence of small stats (rarely written, SD-friendly)
     def _load(self):
@@ -426,12 +429,13 @@ class Hub:
                     if ip:
                         log.info("585.5 found at %s", ip)
                         self.ml_found = self.ml.host = ip
+                        self._ml_seen_t = time.time()
                 await self.ml_refresh()
                 # an automatically found address that stops answering may have moved (DHCP): search again
                 if self.ml_state.get("reachable"):
                     self._ml_seen_t = time.time()
                 elif (self.ml.host and not self.settings.get("ml_host")
-                      and time.time() - getattr(self, "_ml_seen_t", time.time()) > 900):
+                      and time.time() - self._ml_seen_t > 900):
                     await self.ml.close()
                     self.ml.host = self.ml_found = ""
                     self._ml_seen_t = time.time()
@@ -495,9 +499,22 @@ def ok(**kw):
 
 async def body(request) -> dict:
     try:
-        return await request.json()
+        b = await request.json()
     except (ValueError, json.JSONDecodeError):
         return {}
+    return b if isinstance(b, dict) else {}
+
+
+def num(v, lo: float, hi: float, what: str, integer: bool = False):
+    """A finite number within [lo, hi] from JSON input, else 400 (never 500, never NaN)."""
+    try:
+        x = float(v)
+    except (TypeError, ValueError, OverflowError):
+        raise web.HTTPBadRequest(text=f"{what}: ange ett tal")
+    if not math.isfinite(x):
+        raise web.HTTPBadRequest(text=f"{what}: ange ett tal")
+    x = max(lo, min(hi, x))
+    return int(round(x)) if integer else round(x, 1)
 
 
 # =========================================================================== routes
@@ -646,10 +663,14 @@ async def audio_test(request):
 # ---- DAC detail (Eunhasu's /dacinfo/, interpreted)
 @routes.get("/api/dac")
 async def dac(request):
+    c = getattr(hub, "_dac_cache", (0.0, None))
+    if time.monotonic() - c[0] < 8 and c[1]:
+        return web.json_response(c[1])
     d = await collect.dac_detail()
     if d.get("present"):
         d["clock_avg"] = collect.clock_stats(list(hub.clock), collect.pcm_counter())
     d["supply_history"] = list(hub.supply)
+    hub._dac_cache = (time.monotonic(), d)
     return web.json_response(d)
 
 
@@ -662,24 +683,27 @@ async def get_settings(request):
 @routes.post("/api/settings")
 async def set_settings(request):
     b = await body(request)
-    for k in ("auto_verify", "alerts", "leds"):
-        if k in b:
-            hub.settings[k] = bool(b[k])
-    if "leds" in b:
-        collect.apply_leds(hub.settings["leds"])
-    if "ml_auto_on" in b:
-        hub.settings["ml_auto_on"] = bool(b["ml_auto_on"])
+    upd: dict = {k: bool(b[k]) for k in ("auto_verify", "alerts", "leds", "ml_auto_on") if k in b}
     if "ml_auto_off_min" in b:
-        hub.settings["ml_auto_off_min"] = max(0, min(240, int(b["ml_auto_off_min"])))
+        upd["ml_auto_off_min"] = num(b["ml_auto_off_min"], 0, 240, "Standby efter", integer=True)
     if "ml_max_db" in b:
-        hub.settings["ml_max_db"] = max(20.0, min(80.0, round(float(b["ml_max_db"]), 1)))
+        upd["ml_max_db"] = num(b["ml_max_db"], 20, 80, "Högsta volym")
     if "ml_host" in b:
         h = str(b["ml_host"]).strip()
-        if h and not re.fullmatch(r"\d{1,3}(\.\d{1,3}){3}", h):
-            raise web.HTTPBadRequest(text="Ange en IP-adress, till exempel 192.168.1.150, eller lämna tomt.")
-        hub.settings["ml_host"] = h
+        if h:
+            try:
+                ipaddress.IPv4Address(h)
+            except ValueError:
+                raise web.HTTPBadRequest(text="Ange en IP-adress, till exempel 192.168.1.150, eller lämna tomt.")
+        upd["ml_host"] = h
+    # all valid: apply
+    hub.settings.update(upd)
+    if "leds" in upd:
+        collect.apply_leds(upd["leds"])
+    if "ml_host" in upd:
         await hub.ml.close()
-        hub.ml.host = h or hub.ml_found or None
+        hub.ml.host = upd["ml_host"] or hub.ml_found or None
+        hub._ml_seen_t = time.time()
     if b.get("net_speed") in (100, 1000) and b["net_speed"] != hub.settings.get("net_speed"):
         hub.settings["net_speed"] = b["net_speed"]
         # the link renegotiates (~3 s); answer first so the reply is not lost
@@ -741,16 +765,20 @@ async def auth_setup(request):
     return _login_response(request, AUTH.new_session())
 
 
+LOGIN_LOCK = asyncio.Lock()  # one password check at a time, so parallel guesses cannot outrun the throttle
+
+
 @routes.post("/api/auth/login")
 async def auth_login(request):
-    if AUTH.throttled():
-        raise web.HTTPTooManyRequests(text="För många felaktiga försök. Vänta tio minuter.")
     pw = str((await body(request)).get("password", ""))
-    good = await asyncio.get_running_loop().run_in_executor(None, AUTH.verify, pw)
-    if not good:
-        AUTH.failed()
-        await asyncio.sleep(1)
-        raise web.HTTPUnauthorized(text="Fel lösenord.")
+    async with LOGIN_LOCK:
+        if AUTH.throttled():
+            raise web.HTTPTooManyRequests(text="För många felaktiga försök. Vänta tio minuter.")
+        good = await asyncio.get_running_loop().run_in_executor(None, AUTH.verify, pw)
+        if not good:
+            AUTH.failed()
+            await asyncio.sleep(1)
+            raise web.HTTPUnauthorized(text="Fel lösenord.")
     return _login_response(request, AUTH.new_session())
 
 
@@ -786,7 +814,7 @@ async def levinson_action(request):
         if "input" in b:
             await hub.ml.set_input(str(b["input"]))
         if "volume_db" in b:
-            await hub.ml.set_volume(float(b["volume_db"]), hub.settings.get("ml_max_db", 65.0))
+            await hub.ml.set_volume(num(b["volume_db"], 0, 80, "Volym"), hub.settings.get("ml_max_db", 65.0))
         if "mute" in b:
             await hub.ml.set_mute(bool(b["mute"]))
     except LevinsonError as e:
@@ -839,9 +867,16 @@ async def restart_audio(request):
     return ok()
 
 
+USB_LOCK = asyncio.Lock()
+
+
 @routes.post("/api/system/usb-reconnect")
 async def usb_reconnect(request):
-    r = await collect.usb_reconnect()
+    if USB_LOCK.locked():
+        raise web.HTTPConflict(text="DAC:n ansluts redan på nytt")
+    async with USB_LOCK:
+        r = await collect.usb_reconnect()
+    hub._dac_cache = (0.0, None)
     await hub.refresh_status()
     return ok(**r)
 
@@ -910,6 +945,20 @@ async def only_via_proxy(request, handler):
 
 
 @web.middleware
+async def same_origin_json(request, handler):
+    """CSRF guard for every state-changing request, protected or not (amplifier volume,
+    playback, Arcam). A cross-site page can only send "simple" requests without a CORS
+    preflight, which cannot be application/json; browsers also send Origin on POST."""
+    if request.method not in ("GET", "HEAD", "OPTIONS"):
+        origin = request.headers.get("Origin")
+        if origin and origin.rstrip("/") != PUBLIC_URL.rstrip("/"):
+            raise web.HTTPForbidden(text="Begäran kommer från en annan webbplats.")
+        if request.content_type != "application/json":
+            raise web.HTTPUnsupportedMediaType(text="Begäran måste vara JSON.")
+    return await handler(request)
+
+
+@web.middleware
 async def require_login(request, handler):
     p = request.path
     guarded = any(p.startswith(x) for x in PROTECTED) and not (p == "/api/settings" and request.method == "GET")
@@ -944,7 +993,7 @@ async def on_cleanup(app):
 
 def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    app = web.Application(middlewares=[only_via_proxy, require_login, cache_headers])
+    app = web.Application(middlewares=[only_via_proxy, same_origin_json, require_login, cache_headers])
     app.add_routes(routes)
     app.router.add_static("/", STATIC, show_index=False)
     app.on_startup.append(on_startup)

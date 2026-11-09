@@ -17,6 +17,7 @@ import collections
 import ipaddress
 import logging
 import re
+import socket
 import time
 
 PORT = 7701
@@ -65,6 +66,16 @@ class Levinson:
         except (OSError, asyncio.TimeoutError) as e:
             self._r = self._w = None
             raise LevinsonError(f"ingen kontakt med {self.host}:{PORT} ({e})") from e
+        # A powered-off amplifier or a pulled cable sends no FIN: detect it within ~10 s
+        # instead of TCP's minutes of retransmission, so commands are not silently lost.
+        sock = self._w.get_extra_info("socket")
+        if sock is not None:
+            for opt, val in ((socket.SO_KEEPALIVE, 1),):
+                sock.setsockopt(socket.SOL_SOCKET, opt, val)
+            for name, val in (("TCP_KEEPIDLE", 5), ("TCP_KEEPINTVL", 2), ("TCP_KEEPCNT", 3), ("TCP_USER_TIMEOUT", 8000)):
+                if hasattr(socket, name):
+                    sock.setsockopt(socket.IPPROTO_TCP, getattr(socket, name), val)
+        self._unanswered = 0
         self._lines = asyncio.Queue()
         self._reader_task = asyncio.create_task(self._reader(self._r))
 
@@ -169,6 +180,9 @@ class Levinson:
             answered = await self.read_volume() is not None
         except LevinsonError as e:
             return {"reachable": False, "host": self.host, "error": str(e), **self._known()}
+        self._unanswered = 0 if answered else getattr(self, "_unanswered", 0) + 1
+        if self._unanswered >= 3:
+            await self.close()  # reconnect next time; a half-dead socket would swallow commands
         # In standby the control port stays up (Normal standby) but the volume cannot be read.
         # Assumption to confirm on the real unit: see rx_log.
         if not answered and time.time() - self.volume_t > 25:

@@ -561,9 +561,10 @@ async def dac_detail() -> dict:
     raw = {}
     for title, cmd_ in (("aplay -l", "aplay -l"), ("lsusb", "lsusb"), ("lsusb -t", "lsusb -t"),
                         ("/proc/asound/cards", f"cat /proc/asound/cards"), (f"{card}/stream0", f"cat {card}/stream0"),
-                        ("amixer", f"amixer -c {n} contents")):
+                        ):
         _, out, _ = await run(cmd_, timeout=5)
         raw[title] = out
+    raw["amixer"] = mix
     return {
         "present": True,
         "manufacturer": sysf("manufacturer"), "product": sysf("product"),
