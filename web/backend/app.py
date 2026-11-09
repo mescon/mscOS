@@ -965,7 +965,8 @@ async def index(request):
 
 PROTECTED = ("/api/system/", "/api/logs", "/api/soloist/apikey", "/api/soloist/name", "/api/soloist/normalization",
              "/api/soloist/restart", "/api/soloist/update", "/api/settings", "/api/alerts/", "/api/tests/",
-             "/api/auth/password")
+             "/api/auth/password",
+             "/api/source")  # stops/starts the audio stacks as root
 
 
 def _peer(request) -> str:
