@@ -731,7 +731,10 @@ function renderLevinson() {
   else if (!m.host) lead = "Hittar inte förstärkaren i nätverket. Anslut nätverkskabeln och välj Connect = Ethernet i dess Setup-meny.";
   else if (!m.reachable) lead = `Ingen kontakt med 585.5 på ${m.host}. Står den i standbyläget Green är nätverket avstängt.`;
   else if (m.power === false) lead = "I standby";
-  else lead = `På${m.input ? `, ingång ${m.input}` : ""}${m.muted ? ", ljudet av" : ""}`;
+  else {
+    const name = m.label ? (m.input && m.input !== m.label ? `${m.label} (${m.input})` : m.label) : m.input;
+    lead = `På${name ? `, ${name}` : ""}${m.muted ? ", ljudet av" : ""}`;
+  }
   $("#ml-state").textContent = lead;
   $("#ml-ctl").hidden = !m.reachable;
   $("#amp").classList.toggle("off", m.power === false);
@@ -749,8 +752,11 @@ function renderLevinson() {
     ? `Volymen är ställd med fjärrkontrollen över panelens gräns på ${dec(max)} dB. Panelen kan bara sänka den.`
     : `Panelen går högst till ${dec(max)} dB. Högre volym ställer du med fjärrkontrollen.`;
   const src = $("#ml-src");
-  if (!src.children.length && ML.inputs.length) {
-    src.innerHTML = ML.inputs.map((s) => `<button class="src" role="radio" data-src="${esc(s)}"><i aria-hidden="true"></i>${esc(s)}</button>`).join("");
+  // inputs, with the names the amplifier's display uses once the panel has seen them
+  const labels = m.labels || {}, key = JSON.stringify(labels);
+  if (ML.inputs.length && src.dataset.k !== key) {
+    src.dataset.k = key;
+    src.innerHTML = ML.inputs.map((s) => `<button class="src" role="radio" data-src="${esc(s)}"><i aria-hidden="true"></i>${esc(labels[s] && labels[s] !== s ? labels[s] : s)}</button>`).join("");
   }
   src.querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", b.dataset.src === m.input));
   // settings

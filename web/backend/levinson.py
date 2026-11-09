@@ -20,6 +20,8 @@ import re
 import socket
 import time
 
+import aiohttp
+
 PORT = 7701
 EOL = b"\r"
 
@@ -50,6 +52,7 @@ class Levinson:
         self.power: bool | None = None
         self.input: str | None = None
         self.muted: bool | None = None
+        self.display: dict = {}
 
     # ------------------------------------------------------------- connection
     @property
@@ -113,14 +116,19 @@ class Levinson:
             self._r = self._w = None
 
     def _got(self, line: str):
+        # Verified on the unit (2026-11-09): on connect "Connected\r\0>"; every command is echoed,
+        # then the answer, then "OK:" and the prompt ">". !2GET answers "V= 70" = 7.0 dB (tenths,
+        # space-padded to three characters). Only "\r" as line end: "\r\n" corrupts the next command.
+        line = line.replace("\x00", "").lstrip(">").strip()
+        if not line or line.startswith("!"):  # empty, or the echo of what we sent
+            return
         self.rx_log.append([time.time(), "rx", line])
         log.info("585.5 → %r", line)
-        m = re.search(r"2(\d{3})\b", line)  # volume answer, e.g. "!2400" or "2400"
-        if m and "GET" not in line:
+        m = re.fullmatch(r"V=\s*(\d{1,3})", line)
+        if m:
             v = int(m.group(1))
             if 0 <= v <= 800:
                 self.volume_db, self.volume_t = v / 10, time.time()
-                self.power = True  # it answered with a level, so it is on
         self._lines.put_nowait(line)
 
     async def send(self, code: str, expect: str | None = None, wait: float = 1.2) -> str | None:
@@ -152,7 +160,7 @@ class Levinson:
 
     # ------------------------------------------------------------- commands
     async def read_volume(self) -> float | None:
-        line = await self.send("!2GET", expect=r"2\d{3}")
+        line = await self.send("!2GET", expect=r"^V=\s*\d+$")
         return self.volume_db if line else None
 
     async def set_power(self, on: bool):
@@ -174,8 +182,35 @@ class Levinson:
         await self.send("!1050" if on else "!1051")
         self.muted = on
 
+    async def read_display(self) -> dict | None:
+        """What the front-panel display shows, via the unit's own web remote.
+
+        POST "\n" to /cgi-bin/WebControlInterFace.cgi "just scrapes the screen" (the unit's
+        MatrixDisplay.js). Verified 2026-11-09:
+            standby:  "DD:0:                :000000 :100:0000"
+            on, USB:  "DD:0:SOtM       10.0 :000010 :100:0000"   (input named "SOtM", 10.0 dB)
+            on, line: "DD:0:Arcam      Line :000010 :070:0000"   (fixed-gain input shows "Line")
+        Field 3 is 000000 in standby; the text is the input's own name, then the level.
+        """
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3)) as s:
+                async with s.post(f"http://{self.host}/cgi-bin/WebControlInterFace.cgi", data=b"\n",
+                                  headers={"Content-Type": "multipart/form-data"}) as r:
+                    t = await r.text(errors="replace")
+        except (aiohttp.ClientError, asyncio.TimeoutError, OSError):
+            return None
+        m = re.match(r"DD:(\d):(.*?):(\d{6})\s*:\s*(\d+):", t.strip("\r\n"))
+        if not m or m.group(1) != "0":  # "displayInvalid" set: keep what we had
+            return None
+        text = m.group(2).strip()
+        on = m.group(3) != "000000" or bool(text)
+        parts = re.split(r"\s{2,}", text, maxsplit=1)
+        return {"on": on, "text": text, "label": parts[0] if on and text else "",
+                "level": parts[1] if len(parts) > 1 else ""}
+
     async def status(self) -> dict:
-        """Poll what can be polled (volume). No reply while connected suggests standby."""
+        """Volume over the control port; power and input from the display (the protocol
+        itself cannot report them, and the unit answers !2GET in standby too)."""
         try:
             answered = await self.read_volume() is not None
         except LevinsonError as e:
@@ -183,14 +218,14 @@ class Levinson:
         self._unanswered = 0 if answered else getattr(self, "_unanswered", 0) + 1
         if self._unanswered >= 3:
             await self.close()  # reconnect next time; a half-dead socket would swallow commands
-        # In standby the control port stays up (Normal standby) but the volume cannot be read.
-        # Assumption to confirm on the real unit: see rx_log.
-        if not answered and time.time() - self.volume_t > 25:
-            self.power = False
+        d = await self.read_display()
+        if d:
+            self.power, self.display = d["on"], d
         return {"reachable": True, "host": self.host, "answers": answered, **self._known()}
 
     def _known(self) -> dict:
         return {"power": self.power, "input": self.input, "volume_db": self.volume_db,
+                "label": self.display.get("label", ""), "display": self.display.get("text", ""),
                 "volume_fresh": time.time() - self.volume_t < 30, "muted": self.muted,
                 "log": list(self.rx_log)[-20:]}
 

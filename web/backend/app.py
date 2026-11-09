@@ -420,13 +420,34 @@ class Hub:
                 await asyncio.sleep(6)  # leaving standby takes a few seconds; inputs are ignored meanwhile
             if self.ml.input != USB_INPUT or woke:
                 await self.ml.set_input(USB_INPUT)
+                asyncio.ensure_future(self.ml_learn_label(USB_INPUT))
             log.info("585.5: %s, input USB", "woken" if woke else "already on")
         except LevinsonError as e:
             log.warning("585.5 auto-on failed: %s", e)
         await self.ml_refresh()
 
+    async def ml_learn_label(self, name: str):
+        """After selecting an input, remember what the display calls it (e.g. USB = "SOtM")."""
+        for _ in range(6):
+            await asyncio.sleep(1.5)
+            d = await self.ml.read_display()
+            if d and d["label"]:
+                labels = dict(self.settings.get("ml_labels") or {})
+                if labels.get(d["label"]) != name:
+                    labels = {k: v for k, v in labels.items() if v != name}
+                    labels[d["label"]] = name
+                    self.settings["ml_labels"] = labels
+                    await asyncio.get_running_loop().run_in_executor(None, self.save_settings)
+                break
+        await self.ml_refresh()
+
     async def ml_refresh(self):
         self.ml_state = await self.ml.status() if self.ml.host else {"reachable": False, "host": None, "searching": True}
+        lab = self.ml_state.get("label")
+        if lab:  # the display is the truth, also after the remote was used
+            known = (self.settings.get("ml_labels") or {}).get(lab)
+            self.ml.input = self.ml_state["input"] = known
+        self.ml_state["labels"] = {v: k for k, v in (self.settings.get("ml_labels") or {}).items()}
         self.ml_state["found"] = self.ml_found
         await self.broadcast({"type": "levinson", "levinson": self.ml_state})
 
@@ -850,6 +871,7 @@ async def levinson_action(request):
                 await asyncio.sleep(0.5)
         if "input" in b:
             await hub.ml.set_input(str(b["input"]))
+            asyncio.ensure_future(hub.ml_learn_label(str(b["input"])))
         if "volume_db" in b:
             await hub.ml.set_volume(num(b["volume_db"], 0, 80, "Volym"), hub.settings.get("ml_max_db", 40.0))
         if "mute" in b:
