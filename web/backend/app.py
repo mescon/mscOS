@@ -107,6 +107,8 @@ class Hub:
         self._ml_seen_t = time.time()  # last time the amplifier answered (or was found)
         self._dac_running = False
         self.source_lock = asyncio.Lock()
+        self.cmd_lock = asyncio.Lock()  # one Soloist command at a time: its errors carry no request id
+        self._cmd_reply: asyncio.Future | None = None
 
     # ---- persistence of small stats (rarely written, SD-friendly)
     def _load(self):
@@ -166,6 +168,8 @@ class Hub:
                     await ws.send(json.dumps({"type": "command", "command": "get_auth_state"}))
                     async for raw in ws:
                         ev = json.loads(raw)
+                        if ev.get("type") in ("error", "command_result") and self._cmd_reply and not self._cmd_reply.done():
+                            self._cmd_reply.set_result(ev)
                         self._apply_soloist(ev)
                         self._on_playback_change()
                         await self.broadcast({"type": "soloist", "event": ev})
@@ -197,10 +201,31 @@ class Hub:
         elif t == "device_changed":
             self.auth = {**self.auth, "is_active": ev.get("is_active"), "device_name": ev.get("device_name")}
 
-    async def soloist_cmd(self, msg: dict):
+    async def soloist_cmd(self, msg: dict, wait: float = 0.0) -> dict | None:
+        """Send a command. With wait, return Soloist's error or command_result if one arrives
+        within that time (None: accepted without complaint)."""
         if not self.soloist_ws:
             raise web.HTTPServiceUnavailable(text="Soloist svarar inte")
-        await self.soloist_ws.send(json.dumps({"type": "command", **msg}))
+        if not wait:
+            await self.soloist_ws.send(json.dumps({"type": "command", **msg}))
+            return None
+        async with self.cmd_lock:
+            self._cmd_reply = asyncio.get_running_loop().create_future()
+            try:
+                await self.soloist_ws.send(json.dumps({"type": "command", **msg}))
+                return await asyncio.wait_for(asyncio.shield(self._cmd_reply), wait)
+            except asyncio.TimeoutError:
+                return None
+            finally:
+                self._cmd_reply = None
+
+    async def wait_active(self, secs: float = 8.0) -> bool:
+        end = time.time() + secs
+        while time.time() < end:
+            if self.auth.get("is_active"):
+                return True
+            await asyncio.sleep(0.25)
+        return bool(self.auth.get("is_active"))
 
     # ---- periodic sampling
     async def sample_loop(self):
@@ -429,11 +454,13 @@ class Hub:
             self._idle_since = time.time()
         self._was_playing = playing
 
-    async def ml_on_play(self):
-        """Spotify started: wake the amplifier and select the USB input."""
+    async def ml_on_play(self, force: bool = False):
+        """Spotify started: wake the amplifier and select the USB input. force: an explicit
+        request to play on the stereo (from HA), so the guard against fighting a manual
+        input change does not apply."""
         if not self.settings.get("ml_auto_on") or not self.ml.host:
             return
-        if time.time() - getattr(self, "_ml_play_t", 0) < 90:  # don't fight a manual input change
+        if not force and time.time() - getattr(self, "_ml_play_t", 0) < 90:  # don't fight a manual input change
             return
         self._ml_play_t = time.time()
         try:
@@ -613,15 +640,124 @@ async def status(request):
 
 
 # ---- Soloist
+SPOTIFY_URI = re.compile(r"spotify:(track|album|playlist|artist|episode|show):[A-Za-z0-9]{22}")
+
+
 @routes.post("/api/soloist/command")
 async def soloist_command(request):
     b = await body(request)
+    c = b.get("command")
     allowed = {"play", "pause", "skip_next", "skip_prev", "seek", "set_volume", "set_shuffle",
-               "set_repeat_context", "set_repeat_track", "get_state", "get_queue", "activate"}
-    if b.get("command") not in allowed:
+               "set_repeat_context", "set_repeat_track", "get_state", "get_queue", "activate",
+               "deactivate", "add_to_queue"}
+    if c not in allowed:
         raise web.HTTPBadRequest(text="okänt kommando")
-    await hub.soloist_cmd({k: v for k, v in b.items() if k in ("command", "position_ms", "volume", "enabled", "uri", "limit")})
-    return ok()
+    uri = b.get("uri")
+    if c == "add_to_queue" or uri is not None:
+        m = SPOTIFY_URI.fullmatch(uri) if isinstance(uri, str) else None
+        if not m:
+            raise web.HTTPBadRequest(text="Ogiltig Spotify-adress. Ange till exempel spotify:album:<22 tecken>.")
+        if c == "add_to_queue" and m.group(1) != "track":
+            raise web.HTTPBadRequest(text="Bara enskilda spår kan läggas i kön (spotify:track:…).")
+    msg = {k: v for k, v in b.items() if k in ("command", "position_ms", "volume", "enabled", "uri", "limit")}
+    if not (c == "play" and uri) and c not in ("add_to_queue", "deactivate", "activate"):
+        await hub.soloist_cmd(msg)  # the panel's own buttons: fire and forget, as before
+        return ok()
+    # From HA/the voice assistant: say what actually happened.
+    if hub.settings.get("source") == "roon":
+        raise web.HTTPConflict(text="Stereon är inställd på Roon")
+    if not hub.soloist_ws:
+        raise web.HTTPServiceUnavailable(text="Soloist svarar inte")
+    if not hub.auth.get("logged_in"):
+        raise web.HTTPConflict(text="Soloist är inte inloggad på Spotify. Välj enheten i Spotify-appen en gång.")
+    if c == "play":
+        if not hub.auth.get("is_active"):
+            r = await hub.soloist_cmd({"command": "activate"}, wait=1.5)
+            if r and r.get("type") == "error":
+                raise web.HTTPBadGateway(text=f"Soloist: {r.get('message')}")
+            if not await hub.wait_active():
+                raise web.HTTPGatewayTimeout(text="Soloist blev inte aktiv på Spotify")
+        r = await hub.soloist_cmd(msg, wait=2.0)
+        if not (r and r.get("type") == "error") and time.time() - getattr(hub, "_ml_play_t", 0) > 10:
+            asyncio.ensure_future(hub.ml_on_play(force=True))  # wake the amplifier, select SOtM
+    else:
+        r = await hub.soloist_cmd(msg, wait=2.0)
+    if r and r.get("type") == "error":
+        raise web.HTTPBadGateway(text=f"Soloist: {r.get('message')}")
+    return ok(result=r)
+
+
+def _ha_soloist() -> dict:
+    connected = hub.soloist_ws is not None
+    a, p = hub.auth, hub.playback
+    it = p.get("item") or {}
+    deco = it.get("decorations") or {}
+    ctx = p.get("context") or {}
+    name = lambda e: (((e or {}).get("decorations") or {}).get("identity") or {}).get("name")  # noqa: E731
+
+    def cover(e):
+        c = (((e or {}).get("decorations") or {}).get("visual_identity") or {}).get("cover") or []
+        best = next((x for x in c if x.get("size") == "large"), None) or (c[-1] if c else {})
+        return best.get("url")
+
+    active = bool(a.get("is_active")) if connected and "is_active" in a else None
+    st = p.get("status")
+    pos = p.get("position") or {}
+    opts = p.get("options") or {}
+    return {
+        "reachable": connected,
+        "logged_in": a.get("logged_in") if connected else None,
+        "active": active,
+        # what this device does; the account playing on another device is "stopped" here
+        "status": None if not connected else (st if active and st in ("playing", "paused") else "stopped"),
+        "title": name(it) if it else None,
+        "artist": ", ".join(filter(None, (name(c.get("entity")) for c in deco.get("creators") or []))) or None,
+        "album": name((deco.get("parent") or {}).get("entity")),
+        "uri": it.get("uri"),
+        "context_uri": ctx.get("uri"),
+        "image_url": cover(it) or cover(ctx),
+        "duration_ms": (deco.get("playback") or {}).get("duration_ms"),
+        "position_ms": pos.get("position_ms"),
+        "position_ts": pos["timestamp_ms"] / 1000 if pos.get("timestamp_ms") else None,
+        "shuffle": opts.get("shuffle"),
+        "repeat": opts.get("repeat"),
+        "device_name": a.get("device_name"),
+    }
+
+
+def _ha_amp() -> dict:
+    m = hub.ml_state or {}
+    reach = bool(m.get("reachable"))
+    inp = m.get("input") if reach else None
+    labels = m.get("labels") or {}
+    return {
+        "reachable": reach,
+        "power": ("on" if m.get("power") else "standby" if m.get("power") is False else "unknown") if reach else "unknown",
+        "input": (labels.get(inp) or m.get("label") or inp) if reach else None,  # what the display calls it, e.g. "SOtM"
+        "input_id": inp,  # the panel's name: USB, XLR, ...
+        "input_no": ML_INPUTS.index(inp) + 1 if inp in ML_INPUTS else None,  # as on the remote, 1..11
+        "volume_db": m.get("volume_db") if reach else None,
+        "mute": m.get("muted") if reach else None,
+        "max_db": float(hub.settings.get("ml_max_db", 40.0)),
+    }
+
+
+@routes.get("/api/ha")
+async def ha_summary(request):
+    """One cheap snapshot for Home Assistant: in-memory state only, plus the DAC's /proc state."""
+    d = collect.dac_info()
+    src = hub.settings.get("source", "spotify")
+    solo = _ha_soloist()
+    # PipeWire keeps the DAC open (ALSA RUNNING) also in silence, so with Spotify "running"
+    # means Soloist is playing here; Roon Bridge opens the DAC only while it plays.
+    running = (d.get("state") == "RUNNING") if src == "roon" else (solo["status"] == "playing" if solo["reachable"] else None)
+    return web.json_response({
+        "ts": time.time(),
+        "source": src,
+        "soloist": solo,
+        "amp": _ha_amp(),
+        "dac": {"present": bool(d.get("present")), "running": running if d.get("present") else None},
+    })
 
 
 @routes.post("/api/soloist/restart")
@@ -909,12 +1045,21 @@ async def levinson_action(request):
             asyncio.ensure_future(hub.ml_learn_label(str(b["input"])))
         if "volume_db" in b:
             await hub.ml.set_volume(num(b["volume_db"], 0, 80, "Volym"), hub.settings.get("ml_max_db", 40.0))
+        if "volume_step_db" in b:
+            step = num(b["volume_step_db"], -20, 20, "Volymsteg")
+            mx = float(hub.settings.get("ml_max_db", 40.0))
+            cur = await hub.ml.read_volume()  # fresh: the remote may have changed it
+            if cur is None:
+                raise LevinsonError("volymen gick inte att läsa")
+            # never raise past the ceiling, and a level set higher with the remote only goes down
+            if not (step > 0 and cur >= mx):
+                await hub.ml.set_volume(max(0.0, min(mx, cur + step)) if step > 0 else max(0.0, cur + step), max(mx, cur))
         if "mute" in b:
             await hub.ml.set_mute(bool(b["mute"]))
     except LevinsonError as e:
         raise web.HTTPBadGateway(text=f"585.5: {e}")
     await hub.ml_refresh()
-    return ok(levinson=hub.ml_state)
+    return ok(levinson=hub.ml_state, amp=_ha_amp())
 
 
 @routes.post("/api/arcam")
