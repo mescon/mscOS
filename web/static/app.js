@@ -13,6 +13,12 @@ const fmtUptime = (s) => { const d = Math.floor(s / 86400), h = Math.floor(s % 8
 const clock = (t) => new Date(t * 1000).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
 const stamp = (t) => new Date(t * 1000).toLocaleString("sv-SE", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+// ALSA sample formats in plain words. S32_LE = each sample sent as a 32-bit number; Spotify's
+// 24-bit audio sits unchanged in it (the last 8 bits are zero), as the verification confirms.
+const FMT = { S16_LE: "16 bit", S24_3LE: "24 bit", S24_LE: "24 bit", S32_LE: "32 bit", S32LE: "32 bit", F32LE: "32 bit flyttal" };
+const fmtWord = (f) => FMT[f] || f || "";
+const verifiedBits = () => (S.lastTest && S.lastTest.verdict === "bitperfect" && S.lastTest.bits) || null;
+const fmtCarry = (f, bits = verifiedBits()) => /32/.test(f || "") && bits && bits < 32 ? `${bits} bit i 32-bitarsformat` : fmtWord(f);
 const bitsOf = (fmt) => { const m = /S(\d+)/.exec(fmt || ""); return m ? (m[1] === "32" ? 32 : +m[1]) : null; };
 
 function spec(el, rows) {
@@ -108,7 +114,7 @@ function renderPlay() {
   if (roonMode()) {
     const d = S.status.dac || {}, running = d.state === "RUNNING";
     $("#np-title").textContent = running ? "Spelar via Roon" : "Roon";
-    $("#np-artist").textContent = running ? `${d.hw_params?.format || ""}, ${khz(parseInt(d.hw_params?.rate) || 44100)} kHz till 585.5` : "Välj Mark Levinson 585.5 i Roon-appen";
+    $("#np-artist").textContent = running ? `${fmtWord(d.hw_params?.format)}, ${khz(parseInt(d.hw_params?.rate) || 44100)} kHz till 585.5` : "Välj Mark Levinson 585.5 i Roon-appen";
     $("#np-album").textContent = "";
     $("#np-cover").hidden = true; $("#cover-empty").hidden = false; $("#vol-warn").hidden = true;
     return;
@@ -191,7 +197,7 @@ function chainRoon() {
       facts: dac.present ? `Asynkron överföring, ${dac.usb_speed === "high" ? "USB 2.0" : "USB 1.1"}` : "Ingen DAC ansluten",
       note: dac.present ? (dac.usb_speed === "high" ? "Upp till 192 kHz och DSD64 via DoP." : `Upp till ${khz(dac.max_rate || 48000)} kHz. Roon räknar om högre upplösningar.`) : "Kontrollera USB-kabeln" },
     { k: "dac", name: "585.5", tag: "Mark Levinson", state: !dac.present ? "bad" : running ? "ok" : "idle",
-      facts: running ? `${dac.hw_params.format || ""}, ${khz(rate)} kHz` : dac.present ? "Ansluten, vilar" : "Inte ansluten",
+      facts: running ? `${fmtWord(dac.hw_params.format)}, ${khz(rate)} kHz` : dac.present ? "Ansluten, vilar" : "Inte ansluten",
       note: running ? "Tar emot signalen direkt från Roon Bridge" : "Väntar på Roon" },
   ];
   return { stages, running, playing: running, rate, issues: [], t: null, dac, xrunHour: 0, roon };
@@ -225,7 +231,7 @@ function chain() {
       note: solo.service !== "active" ? "Tjänsten kör inte" : (vol < 100 || norm) ? "Ändrar samplen digitalt" : solo.rt_watcher === "active" ? "Realtidsprioritet, avkodar orört" : "Avkodar orört" },
     { k: "pipewire", name: "PipeWire", tag: "pro-audio",
       state: !sink.name ? "bad" : (!sinkUnity || issues.includes("omsampling i PipeWire")) ? "bad" : (stream && running ? "ok" : "idle"),
-      facts: `${sink.format || "S32LE"} ${sink.rate ? khz(sink.rate) : "44,1"} kHz, ingen omsampling`,
+      facts: `${fmtCarry(sink.format || "S32LE")}, ${sink.rate ? khz(sink.rate) : "44,1"} kHz, ingen omsampling`,
       note: `Buffert ${st.pw_top?.quantum || 1024} sampel, ${xrunHour ? `${xrunHour} avbrott vid DAC:en` : "inga avbrott vid DAC:en"} senaste timmen${streamHour ? ` (strömmen: ${streamHour} missade cykler vid låtbyten)` : ""}` },
     { k: "usb", name: "USB", tag: dac.usb_speed === "high" ? "high speed" : dac.present ? "full speed" : "",
       state: !dac.present ? "bad" : running ? "ok" : "idle",
@@ -233,7 +239,7 @@ function chain() {
       note: dac.present ? `DAC:ns egen klocka styr takten. ${dac.usb_speed === "high" ? "Upp till 192 kHz." : `Upp till ${khz(dac.max_rate || 48000)} kHz, räcker för Spotify.`}` : "Kontrollera USB-kabeln" },
     { k: "dac", name: "585.5", tag: "Mark Levinson",
       state: !dac.present ? "bad" : running ? "ok" : "idle",
-      facts: running ? `${dac.hw_params.format || ""}, ${khz(rate)} kHz` : dac.present ? "Ansluten, vilar" : "Inte ansluten",
+      facts: running ? `${fmtCarry(dac.hw_params.format)}, ${khz(rate)} kHz` : dac.present ? "Ansluten, vilar" : "Inte ansluten",
       note: running ? "Tar emot signalen" : "Väljer USB-ingången när musik spelar" },
   ];
   return { stages, running, playing, rate, issues, t: fresh ? t : null, dac, xrunHour };
@@ -259,7 +265,7 @@ function renderSignal() {
   if (!c.dac.present) { head = "Ingen DAC"; sub = "Kontrollera USB-kabeln till 585.5."; cls = "warn"; }
   else if (c.roon) {
     head = c.roon.active ? (c.running ? "Roon spelar" : "Roon, redo") : "Roon Bridge kör inte";
-    sub = c.running ? `Roon Bridge äger DAC:en: ${c.dac.hw_params?.format || ""}, ${khz(c.rate)} kHz.` : "Välj Mark Levinson 585.5 i Roon-appen.";
+    sub = c.running ? `Roon Bridge äger DAC:en: ${fmtWord(c.dac.hw_params?.format)}, ${khz(c.rate)} kHz.` : "Välj Mark Levinson 585.5 i Roon-appen.";
     cls = c.roon.active ? "" : "warn";
   }
   else if (c.issues.length) { head = "Signalen ändras"; sub = c.issues.join(", ").replace(/^./, (x) => x.toUpperCase()) + "."; cls = "warn"; }
@@ -637,10 +643,10 @@ function renderDac() {
   note.innerHTML = `<p>585.5 anmäler sig som USB 2.0, men redan första paketet i 480 Mbit/s kommer fram förvanskat, så länken faller tillbaka till USB 1.1. Det räcker för Spotify, 24 bit/44,1 kHz bitperfekt. Prova en kort vanlig USB-kabel. Som test kan du också prova en av de två USB-portarna bredvid.</p>`;
   // formats
   const cur = st.hw_params || {}, rows = st.altsets || [];
-  $("#dac-fmt").innerHTML = `<tr><th>Format</th><th>Bitdjup</th><th>Frekvenser, kHz</th></tr>` + rows.map((a) =>
-    `<tr class="${a.format === cur.format ? "on" : ""}"><td>${esc(a.format)}</td><td>${a.bits ?? "–"}</td><td>${a.rates.map(khz).join(", ")}</td></tr>`).join("");
+  $("#dac-fmt").innerHTML = `<tr><th>Ordlängd</th><th>Frekvenser, kHz</th></tr>` + rows.map((a) =>
+    `<tr class="${a.format === cur.format ? "on" : ""}" title="${esc(a.format)}"><td>${esc(fmtWord(a.format))}${a.format === "S24_3LE" ? " (3 byte)" : ""}</td><td>${a.rates.map(khz).join(", ")}</td></tr>`).join("");
   const rate = parseInt(cur.rate), per = parseInt(cur.period_size), buf = parseInt(cur.buffer_size);
-  $("#dac-cur").textContent = rate ? `Används nu: ${cur.format}, ${khz(rate)} kHz, period ${per.toLocaleString("sv-SE")} sampel (${dec(per / rate * 1000)} ms), buffert ${buf.toLocaleString("sv-SE")} sampel (${Math.round(buf / rate * 1000)} ms). 24-bitarsljudet ligger orört i 32-bitarsformatet.` : "Ingen ström öppen just nu.";
+  $("#dac-cur").textContent = rate ? `Används nu: ${fmtCarry(cur.format)}, ${khz(rate)} kHz, period ${per.toLocaleString("sv-SE")} sampel (${dec(per / rate * 1000)} ms), buffert ${buf.toLocaleString("sv-SE")} sampel (${Math.round(buf / rate * 1000)} ms). Varje sampel skickas som ett 32-bitars tal, och musikens bitar ligger orörda i det (i rådata heter formatet ${cur.format}).` : "Ingen ström öppen just nu.";
   renderUsbEvents(d.events || []);
   // raw, keep open state
   const raw = $("#dac-raw");
