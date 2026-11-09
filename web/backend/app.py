@@ -421,7 +421,9 @@ class Hub:
         self._set_playing(playing)
 
     def _set_playing(self, playing: bool):
-        if playing and not self._was_playing:
+        # A real start, not a track change: Soloist pauses for a moment between tracks, and
+        # re-selecting the input then makes the amplifier relock (audible glitch).
+        if playing and not self._was_playing and time.time() - self._idle_since > 30:
             asyncio.ensure_future(self.ml_on_play())
         if not playing and self._was_playing:
             self._idle_since = time.time()
@@ -444,9 +446,15 @@ class Hub:
                 await self.ml.set_power(True)
                 self._ml_woke_t = time.time()
                 await asyncio.sleep(6)  # leaving standby takes a few seconds; inputs are ignored meanwhile
-            await self.ml.set_input(USB_INPUT)  # always: harmless when already there, and state may be stale
-            asyncio.ensure_future(self.ml_learn_label(USB_INPUT))
-            log.info("585.5: %s, input USB", "woken" if woke else "already on")
+            # Re-selecting the input it is already on makes the amplifier relock (audible), so only
+            # switch when the display (read just now) shows another input or a name not learned yet.
+            usb_label = next((k for k, v in (self.settings.get("ml_labels") or {}).items() if v == USB_INPUT), None)
+            on_usb = not woke and d is not None and usb_label is not None and d["label"] == usb_label
+            if not on_usb:
+                await self.ml.set_input(USB_INPUT)
+                asyncio.ensure_future(self.ml_learn_label(USB_INPUT))
+            log.info("585.5: %s, %s", "woken" if woke else "already on",
+                     "already on USB" if on_usb else "input USB")
         except LevinsonError as e:
             log.warning("585.5 auto-on failed: %s", e)
         await self.ml_refresh()
