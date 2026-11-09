@@ -89,7 +89,7 @@ class Hub:
         self.settings: dict = {"auto_verify": True, "alerts": True, "leds": True, "net_speed": 100,
                                # Mark Levinson 585.5: address ("" = find it), wake + USB on play,
                                # standby after N idle minutes (0 = never), panel volume ceiling
-                               "ml_host": "", "ml_auto_on": True, "ml_auto_off_min": 0, "ml_max_db": 65.0}
+                               "ml_host": "", "ml_auto_on": True, "ml_auto_off_min": 0, "ml_max_db": 40.0}
         # 30 s samples, 24 h: the DAC's measured clock and the supply rail
         self.clock = collections.deque(maxlen=24 * 60 * 2)
         self.supply = collections.deque(maxlen=24 * 60 * 2)
@@ -814,7 +814,7 @@ async def levinson_action(request):
         if "input" in b:
             await hub.ml.set_input(str(b["input"]))
         if "volume_db" in b:
-            await hub.ml.set_volume(num(b["volume_db"], 0, 80, "Volym"), hub.settings.get("ml_max_db", 65.0))
+            await hub.ml.set_volume(num(b["volume_db"], 0, 80, "Volym"), hub.settings.get("ml_max_db", 40.0))
         if "mute" in b:
             await hub.ml.set_mute(bool(b["mute"]))
     except LevinsonError as e:

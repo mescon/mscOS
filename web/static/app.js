@@ -681,7 +681,7 @@ $("#net-speed").addEventListener("click", async (e) => {
 const ML = { state: {}, inputs: [] };
 function renderLevinson() {
   const m = ML.state || {}, st = S.settings || {};
-  const max = +(st.ml_max_db || 65);
+  const max = +(st.ml_max_db || 40);
   let lead;
   if (m.reachable === null || m.reachable === undefined) lead = "Söker 585.5 i nätverket…";
   else if (!m.host) lead = "Hittar inte förstärkaren i nätverket. Anslut nätverkskabeln och välj Connect = Ethernet i dess Setup-meny.";
@@ -696,10 +696,14 @@ function renderLevinson() {
   $("#ml-mute").textContent = m.muted ? "Ljud på" : "Ljud av";
   const vol = $("#ml-vol");
   vol.max = max;
+  const over = m.volume_db != null && m.volume_db > max;
   if (document.activeElement !== vol) {
-    if (m.volume_db != null) vol.value = m.volume_db;
+    if (m.volume_db != null) vol.value = Math.min(m.volume_db, max);
     $("#ml-vol-v").textContent = m.volume_db != null ? `${dec(m.volume_db)} dB` : "–";
   }
+  $("#ml-limit").textContent = over
+    ? `Volymen är ställd med fjärrkontrollen över panelens gräns på ${dec(max)} dB. Panelen kan bara sänka den.`
+    : `Panelen går högst till ${dec(max)} dB. Högre volym ställer du med fjärrkontrollen.`;
   const src = $("#ml-src");
   if (!src.children.length && ML.inputs.length) {
     src.innerHTML = ML.inputs.map((s) => `<button class="src" role="radio" data-src="${esc(s)}"><i aria-hidden="true"></i>${esc(s)}</button>`).join("");
