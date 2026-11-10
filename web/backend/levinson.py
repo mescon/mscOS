@@ -178,6 +178,12 @@ class Levinson:
         await self.send(f"!2{round(db * 10):03d}")
         self.volume_db, self.volume_t = round(db, 1), time.time()
 
+    async def toggle_mute(self):
+        """The remote's Mute key (!1032). Used because Out Mute (!1051) is answered OK but
+        does not always unmute (seen 2026-11-10 on the Arcam bypass input)."""
+        await self.send("!1032")
+        self.muted = None if self.muted is None else not self.muted
+
     async def set_mute(self, on: bool):
         await self.send("!1050" if on else "!1051")
         self.muted = on

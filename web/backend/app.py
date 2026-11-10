@@ -1106,6 +1106,8 @@ async def levinson_action(request):
                 await hub.ml.set_volume(max(0.0, min(mx, cur + step)) if step > 0 else max(0.0, cur + step), max(mx, cur))
         if "mute" in b:
             await hub.ml.set_mute(bool(b["mute"]))
+        if b.get("mute_toggle"):
+            await hub.ml.toggle_mute()
     except LevinsonError as e:
         raise web.HTTPBadGateway(text=f"585.5: {e}")
     await hub.ml_refresh()
