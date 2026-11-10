@@ -275,6 +275,21 @@ def _norm_on(path: str) -> bool:
     return True if not m else m.group(1) != "false"  # Spotify's default is on
 
 
+# What every account on the device needs (a guest's new account has neither): Spotify's
+# defaults are normalization on and a lossy bitrate. Quality 5 is Lossless; an account without
+# Lossless in its plan gets the best it has.
+LOSSLESS = ("audio.play_bitrate_non_metered_enumeration", "5")
+
+
+def required_prefs(normalization: bool) -> dict[str, str]:
+    return {"audio.normalize_v2": "true" if normalization else "false", LOSSLESS[0]: LOSSLESS[1]}
+
+
+def _pref(text: str, key: str) -> str | None:
+    m = re.search(rf"^{re.escape(key)}=(.*)$", text, re.M)
+    return m.group(1).strip() if m else None
+
+
 def normalization_enabled() -> bool | None:
     """On for any account (a guest's new account starts with Spotify's default, on)."""
     ps = prefs_paths()
@@ -282,21 +297,31 @@ def normalization_enabled() -> bool | None:
 
 
 def normalization_mismatch(want: bool) -> list[str]:
-    """Accounts whose prefs (missing = Spotify's default, on) differ from what we want."""
-    return [d + "prefs" for d in account_dirs() if _norm_on(d + "prefs") != want]
+    """Accounts whose prefs differ from what every account needs (normalization as wanted,
+    and Lossless). A missing normalize line is Spotify's default, on."""
+    bad = []
+    for d in account_dirs():
+        text = read(d + "prefs")
+        norm_on = _pref(text, "audio.normalize_v2") != "false"
+        if norm_on != want or _pref(text, LOSSLESS[0]) != LOSSLESS[1]:
+            bad.append(d + "prefs")
+    return bad
 
 
 _SET_NORM = r"""
 import os, re, sys
-path, line = sys.argv[1], sys.argv[2]
+path, lines = sys.argv[1], sys.argv[2:]
 try:
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
     with os.fdopen(fd) as f:
         text = f.read()
 except FileNotFoundError:
     text = ""  # a new account Soloist has not written prefs for yet
-text = re.sub(r"^audio\.normalize_v2=.*$", line, text, flags=re.M) if "audio.normalize_v2=" in text \
-    else text.rstrip("\n") + "\n" + line + "\n"
+for line in lines:
+    key = line.split("=", 1)[0]
+    pat = r"^" + re.escape(key) + r"=.*$"
+    text = re.sub(pat, line, text, flags=re.M) if re.search(pat, text, re.M) \
+        else (text.rstrip("\n") + "\n" if text.strip() else "") + line + "\n"
 tmp = path + ".mscos-tmp"
 fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
 with os.fdopen(fd, "w") as f:
@@ -311,8 +336,8 @@ async def set_normalization_file(path: str, enabled: bool) -> bool:
     with a symlink. As that user it can only touch that user's own files."""
     if not path.startswith(f"{SOLOIST_HOME}/.local/share/soloist/settings/Users/") or "/../" in path:
         return False
-    line = f"audio.normalize_v2={'true' if enabled else 'false'}"
-    rc, _, err = await run(["python3", "-I", "-c", _SET_NORM, path, line], as_user=True, timeout=15)
+    lines = [f"{k}={v}" for k, v in required_prefs(enabled).items()]
+    rc, _, err = await run(["python3", "-I", "-c", _SET_NORM, path, *lines], as_user=True, timeout=15)
     if rc != 0:
         logging.getLogger("collect").warning("prefs %s: %s", path, err.strip()[-200:])
     return rc == 0
