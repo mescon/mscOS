@@ -160,6 +160,7 @@ class Hub:
         self._ml_seen_t = time.time()  # last time the amplifier answered (or was found)
         self._dac_running = False
         self.source_lock = asyncio.Lock()
+        self.track_quality: dict = {}  # measured format of the current track
         self.ml_select_lock = asyncio.Lock()
         self._norm_failed: tuple | None = None   # last set of accounts a write did not fix
         self._accounts: set[str] | None = None  # Spotify accounts seen (guests add new ones)
@@ -243,6 +244,7 @@ class Hub:
         elif t == "playback_state":
             self.playback = ev
         elif t == "track_changed":
+            asyncio.ensure_future(self.measure_track_quality())
             self.playback["item"] = ev.get("item")
         elif t == "playback_changed":
             self.playback["status"] = ev.get("status")
@@ -463,6 +465,58 @@ class Hub:
                              f"{days} dagar kvar. Nattens uppdatering har inte hittat en nyare version; prova Sök ny version i panelen.",
                              cooldown=24 * 3600)
 
+    # ---- what the current track really is (Soloist does not say: measure it)
+    async def measure_track_quality(self):
+        """6 s of what goes to the DAC, a few seconds into each track: on the 16-bit lattice
+        means a 16-bit file, content below it 24-bit, no lattice at all lossy (or processed).
+        Read-only tap on the sink monitor; one at a time; skipped while a verification runs."""
+        if getattr(self, "_quality_busy", False):
+            return
+        uri = (self.playback.get("item") or {}).get("uri")
+        if not uri or self.settings.get("source") != "spotify":
+            log.info("track quality: no track")
+            return
+        self._quality_busy = True
+        try:
+            await asyncio.sleep(8)  # past the track start (gapless join, fades)
+            if (self.playback.get("item") or {}).get("uri") != uri or self.playback.get("status") != "playing" \
+                    or self.jobs.get("audio-test", {}).get("running"):
+                log.info("track quality: skipped (track changed, paused or a verification running)")
+                return
+            sink = (self.status.get("pipewire") or {}).get("sink") or {}
+            if not sink.get("name"):
+                return
+            uid = await collect.soloist_uid()
+            fd, wav = tempfile.mkstemp(suffix=".wav", dir="/tmp")
+            os.close(fd)
+            os.chown(wav, uid, -1)
+            try:
+                await collect.run(["timeout", "7", "pw-record", "-P", "{ stream.capture.sink=true }",
+                                   "--target", sink["name"], "--rate", "44100", "--channels", "2",
+                                   "--format", "f32", wav], as_user=True, timeout=20)
+
+                def analyse():
+                    x = bitcheck.read_f32_wav(wav)
+                    return bitcheck.lattice(x[22050:]) if len(x) > 3 * 44100 else {"verdict": "too_short"}
+                r = await asyncio.get_running_loop().run_in_executor(None, analyse)
+            finally:
+                with contextlib.suppress(OSError):
+                    os.unlink(wav)
+            if (self.playback.get("item") or {}).get("uri") != uri:
+                return  # the track changed while measuring
+            v = r.get("verdict")
+            if v in ("silent", "too_short"):
+                log.info("track quality: %s, not recorded", v)
+                return
+            self.track_quality = {"uri": uri, "t": int(time.time()), "verdict": v, "bits": r.get("bits"),
+                                  "gain_db": r.get("gain_db"), "rate": 44100}
+            log.info("track quality: %s %s bit", v, r.get("bits"))
+            await self.broadcast({"type": "quality", "quality": self.track_quality})
+        except Exception as e:  # noqa: BLE001 - never disturb playback over this
+            log.warning("track quality: %s", e)
+        finally:
+            self._quality_busy = False
+
     # ---- verification (manual or automatic)
     async def maybe_auto_verify(self):
         if not self.settings.get("auto_verify") or self.jobs.get("audio-test", {}).get("running"):
@@ -562,12 +616,16 @@ class Hub:
             # so a panel restart never wakes the amplifier
             self._playing_known = True
             self._was_playing = playing
+            if playing:  # already playing when we (re)connected: still measure this track
+                asyncio.ensure_future(self.measure_track_quality())
             if not playing:
                 self._idle_since = time.time()
             return
         self._set_playing(playing)
 
     def _set_playing(self, playing: bool):
+        if playing and not self._was_playing:
+            asyncio.ensure_future(self.measure_track_quality())
         # A real start, not a track change: Soloist pauses for a moment between tracks, and
         # re-selecting the input then makes the amplifier relock (audible glitch).
         if playing and not self._was_playing and time.time() - self._idle_since > 30:
@@ -762,7 +820,7 @@ async def ws_handler(request):
         "type": "hello", "status": hub.status, "playback": hub.playback, "auth": hub.auth,
         "queue": hub.queue, "xruns": list(hub.xruns)[-2880:], "last_test": hub.last_test,
         "arcam": hub.arcam_state, "arcam_sources": list(SOURCE_RC5),
-        "levinson": hub.ml_state, "ml_inputs": ML_INPUTS,
+        "levinson": hub.ml_state, "ml_inputs": ML_INPUTS, "quality": hub.track_quality,
         "tests": list(hub.tests)[-30:], "settings": {**hub.settings, "alerts_configured": bool(HA_WEBHOOK_URL)},
         "jobs": {k: {kk: vv for kk, vv in v.items()} for k, v in hub.jobs.items()},
     }))
@@ -858,6 +916,8 @@ def _ha_soloist() -> dict:
         "context_uri": ctx.get("uri"),
         "image_url": cover(it) or cover(ctx),
         "duration_ms": (deco.get("playback") or {}).get("duration_ms"),
+        # measured from the samples, for this track only: "flac24", "flac16", "lossy" or None
+        "quality": _ha_quality(it.get("uri")),
         "position_ms": pos.get("position_ms"),
         "position_ts": pos["timestamp_ms"] / 1000 if pos.get("timestamp_ms") else None,
         "shuffle": opts.get("shuffle"),
@@ -872,6 +932,15 @@ def _ml_bypass(text: str | None = None) -> bool:
     t = text if text is not None else (hub.ml_state or {}).get("display") or ""
     parts = re.split(r"\s{2,}", t, maxsplit=1)
     return len(parts) > 1 and parts[1].strip().lower() == "line"
+
+
+def _ha_quality(uri) -> str | None:
+    q = hub.track_quality
+    if not uri or q.get("uri") != uri:
+        return None
+    if q.get("verdict") == "bitperfect":
+        return "flac24" if q.get("bits") == 24 else "flac16" if q.get("bits") == 16 else None
+    return "lossy" if q.get("verdict") == "lossy_or_processed" else None
 
 
 def _ha_amp() -> dict:

@@ -17,7 +17,10 @@ const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 // 24-bit audio sits unchanged in it (the last 8 bits are zero), as the verification confirms.
 const FMT = { S16_LE: "16 bit", S24_3LE: "24 bit", S24_LE: "24 bit", S32_LE: "32 bit", S32LE: "32 bit", F32LE: "32 bit flyttal" };
 const fmtWord = (f) => FMT[f] || f || "";
-const verifiedBits = () => (S.lastTest && S.lastTest.verdict === "bitperfect" && S.lastTest.bits) || null;
+// the current track, measured from the samples a few seconds in (Soloist does not report it)
+const trackQuality = () => { const q = S.quality || {}, u = (S.playback.item || {}).uri; return u && q.uri === u ? q : null; };
+const verifiedBits = () => { const q = trackQuality(); if (q) return q.verdict === "bitperfect" ? q.bits : null;
+  return (S.lastTest && S.lastTest.verdict === "bitperfect" && S.lastTest.bits) || null; };
 const fmtCarry = (f, bits = verifiedBits()) => /32/.test(f || "") && bits && bits < 32 ? `${bits} bit i 32-bitarsformat` : fmtWord(f);
 const bitsOf = (fmt) => { const m = /S(\d+)/.exec(fmt || ""); return m ? (m[1] === "32" ? 32 : +m[1]) : null; };
 
@@ -79,13 +82,14 @@ function connect() {
 function handle(m) {
   switch (m.type) {
     case "hello":
-      Object.assign(S, { status: m.status || {}, playback: m.playback || {}, auth: m.auth || {}, queue: m.queue || {}, xruns: m.xruns || [], lastTest: m.last_test, arcam: m.arcam || {}, sources: m.arcam_sources || [], tests: m.tests || [], settings: m.settings || {} });
+      Object.assign(S, { status: m.status || {}, playback: m.playback || {}, auth: m.auth || {}, queue: m.queue || {}, xruns: m.xruns || [], lastTest: m.last_test, arcam: m.arcam || {}, sources: m.arcam_sources || [], tests: m.tests || [], settings: m.settings || {}, quality: m.quality || {} });
       ML.state = m.levinson || {}; ML.inputs = m.ml_inputs || [];
       renderAll(); break;
     case "status": S.status = m.status; renderStatus(); renderSignal(); if (roonMode()) renderPlay(); else renderSource(); break;
     case "soloist": soloistEvent(m.event); break;
     case "xrun": S.xruns.push(m.point); if (S.xruns.length > 2880) S.xruns.shift(); renderSpark(); renderSignal(); break;
     case "arcam": S.arcam = m.arcam; renderArcam(); break;
+    case "quality": S.quality = m.quality; renderSignal(); break;
     case "levinson": ML.state = m.levinson; renderLevinson(); break;
     case "job": jobEvent(m); break;
     case "settings": S.settings = { ...S.settings, ...m.settings }; renderSettings(); renderPlay(); renderSignal(); break;
@@ -241,7 +245,10 @@ function chain() {
   const stages = [
     { k: "spotify", name: "Spotify", tag: "Lossless",
       state: S.auth.logged_in ? (playing ? "ok" : "idle") : "bad",
-      facts: fresh && t.bits ? `FLAC ${t.bits} bit, 44,1 kHz` : "FLAC upp till 24 bit, 44,1 kHz",
+      facts: (() => { const q = trackQuality();
+        if (q && q.verdict === "bitperfect" && q.bits) return `FLAC ${q.bits} bit, 44,1 kHz (uppmätt)`;
+        if (q && q.verdict === "lossy_or_processed") return "Förlustkomprimerat (uppmätt), inte Lossless";
+        return "FLAC upp till 24 bit, 44,1 kHz, mäts när låten spelat några sekunder"; })(),
       note: !S.auth.logged_in ? "Inte ansluten. Välj enheten i Spotify-appen." : playing ? (nameOf(p.item) || "Spelar") : "Ansluten, väntar" },
     { k: "soloist", name: "Soloist", tag: (solo.version || "").replace(/^soloist /, "").split(" ")[0],
       state: solo.service !== "active" ? "bad" : (volDigital || norm) ? "bad" : playing ? "ok" : "idle",
