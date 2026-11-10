@@ -149,7 +149,7 @@ function renderPlay() {
   $("#b-repeat").setAttribute("aria-pressed", !!(o.repeat && o.repeat !== "off"));
   $("#b-repeat-1").hidden = o.repeat !== "track";
   const vol = p.volume;
-  $("#vol-warn").hidden = !(typeof vol === "number" && vol < 100);
+  $("#vol-warn").hidden = !!S.settings?.spotify_vol_to_amp || !(typeof vol === "number" && vol < 100);
   $("#vol-val").textContent = vol;
   tickProgress();
 }
@@ -233,7 +233,7 @@ function chain() {
   const xrunHour = recent.reduce((a, x) => a + (x.dac || 0), 0);           // dropouts at the DAC
   const streamHour = recent.reduce((a, x) => a + (x.stream || 0), 0);      // Soloist stream counter
   const issues = [];
-  if (vol < 100) issues.push(`Spotify-volymen är ${vol} %`);
+  if (vol < 100 && !S.settings?.spotify_vol_to_amp) issues.push(`Spotify-volymen är ${vol} %`);
   if (norm) issues.push("volymnormalisering är på");
   if (!sinkUnity) issues.push(`PipeWire-volymen är ${Math.round(sink.volume * 100)} %`);
   if (stream && stream.rate && sink.rate && stream.rate !== sink.rate) issues.push("omsampling i PipeWire");
@@ -823,6 +823,7 @@ function renderLevinson() {
   $("#ml-conn").textContent = !m.host ? "Inte hittad än. Panelen söker var tionde minut."
     : m.reachable ? `Ansluten på ${m.host}${st.ml_host ? "" : ", hittad automatiskt"}.` : `Ingen kontakt på ${m.host}.`;
   $("#ml-auto-on").checked = !!st.ml_auto_on;
+  $("#spotify-vol-amp").checked = !!st.spotify_vol_to_amp;
   $$("#ml-off button").forEach((b) => b.setAttribute("aria-checked", +b.dataset.v === (st.ml_auto_off_min || 0)));
   const mx = $("#ml-max"); if (document.activeElement !== mx) mx.value = max;
   const h = $("#ml-host"); if (document.activeElement !== h) h.value = st.ml_host || "";
@@ -858,6 +859,7 @@ $("#ml-up").addEventListener("click", () => mlStep(1));
 $("#ml-vol").addEventListener("change", (e) => ml({ volume_db: +e.target.value }));
 $("#ml-src").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) ml({ input: b.dataset.src }); });
 $("#ml-auto-on").addEventListener("change", (e) => setSetting("ml_auto_on", e.target.checked, e.target));
+$("#spotify-vol-amp").addEventListener("change", (e) => setSetting("spotify_vol_to_amp", e.target.checked, e.target));
 $("#ml-off").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) mlSetting({ ml_auto_off_min: +b.dataset.v }); });
 $("#ml-max-form").addEventListener("submit", (e) => {
   e.preventDefault();

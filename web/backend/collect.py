@@ -777,3 +777,53 @@ async def set_source(src: str) -> dict:
         ok_ = rc2 == 0
         detail = (err + err2).strip()
     return {"ok": ok_, "source": src, "dac_released": released, "roon_active": await roon_active(), "error": detail[:300]}
+
+
+# --------------------------------------------------------------------------- Spotify stream volume
+# Soloist applies the Spotify volume as PipeWire stream volume on its "Spotify" stream node.
+# volbridge.py keeps that at unity (the slider drives the amplifier instead).
+_spotify_nodes: set[int] = set()
+_spotify_last: int | None = None
+
+
+async def spawn_as_user(cmd: list[str]):
+    """A long-running process as the soloist user (PipeWire session), stdout piped."""
+    uid = await soloist_uid()
+    return await asyncio.create_subprocess_exec(
+        "setpriv", f"--reuid={uid}", f"--regid={uid}", "--init-groups", "--",
+        "env", f"HOME={SOLOIST_HOME}", f"XDG_RUNTIME_DIR=/run/user/{uid}", *cmd,
+        stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.DEVNULL)
+
+
+def attenuated_spotify_stream(o: dict) -> bool:
+    """A pw-dump object: is it Soloist's output stream, with a volume below unity?"""
+    global _spotify_last
+    if o.get("type") != "PipeWire:Interface:Node":
+        return False
+    oid, info = o.get("id"), o.get("info")
+    if info is None:  # removed
+        _spotify_nodes.discard(oid)
+        return False
+    props = info.get("props") or {}
+    if props:
+        if props.get("media.class") == "Stream/Output/Audio" and (
+                props.get("application.process.binary") == "soloist"
+                or str(props.get("node.name", "")).lower() == "spotify"
+                or props.get("application.name") == "Spotify"):
+            _spotify_nodes.add(oid)
+        else:
+            _spotify_nodes.discard(oid)
+    if oid not in _spotify_nodes:
+        return False
+    _spotify_last = oid
+    for p in (info.get("params") or {}).get("Props") or []:
+        vols = p.get("channelVolumes")
+        if vols and min(vols) < 0.9999:
+            return True
+    return False
+
+
+async def reset_spotify_stream_volume():
+    for oid in sorted(_spotify_nodes) or ([_spotify_last] if _spotify_last else []):
+        await run(["wpctl", "set-volume", str(oid), "1.0"], as_user=True, timeout=5)

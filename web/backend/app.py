@@ -29,6 +29,7 @@ import bitcheck  # noqa: E402
 from auth import Auth  # noqa: E402
 import collect  # noqa: E402
 from arcam import Arcam, ArcamError, SOURCE_RC5  # noqa: E402
+from volbridge import VolumeBridge  # noqa: E402
 from levinson import INPUTS as ML_INPUTS, USB_INPUT, Levinson, LevinsonError, discover as ml_discover  # noqa: E402
 
 STATIC = os.environ.get("SOTM_STATIC", os.path.join(os.path.dirname(__file__), "..", "static"))
@@ -89,7 +90,7 @@ class Hub:
         self.settings: dict = {"auto_verify": True, "alerts": True, "leds": True, "net_speed": 100,
                                # Mark Levinson 585.5: address ("" = find it), wake + USB on play,
                                # standby after N idle minutes (0 = never), panel volume ceiling
-                               "ml_host": "", "ml_tv_input": "RCA3", "arcam_max_vol": 50, "ml_auto_on": True, "ml_auto_off_min": 0, "ml_max_db": 40.0,
+                               "ml_host": "", "ml_tv_input": "RCA3", "arcam_max_vol": 50, "ml_auto_on": True, "spotify_vol_to_amp": True, "ml_auto_off_min": 0, "ml_max_db": 40.0,
                                "source": "spotify"}  # who owns the DAC: spotify | roon
         # 30 s samples, 24 h: the DAC's measured clock and the supply rail
         self.clock = collections.deque(maxlen=24 * 60 * 2)
@@ -100,6 +101,7 @@ class Hub:
         self._load()
         self.ml = Levinson(self.settings.get("ml_host") or self.settings.get("ml_host_found") or None)
         self.ml_state: dict = {"reachable": None}
+        self.vol = VolumeBridge(self)  # Spotify slider -> 585.5, stream kept at unity
         self.ml_found = ""          # address found by scanning
         self._was_playing = False
         self._ml_woke_t = 0.0       # when we last woke it (auto standby only undoes our own wake)
@@ -193,6 +195,7 @@ class Hub:
             self.playback["status"] = ev.get("status")
         elif t == "volume_changed":
             self.playback["volume"] = ev.get("volume")
+            self.vol.on_volume_changed(ev.get("volume"))
         elif t == "position_sync":
             self.playback["position"] = ev.get("position")
         elif t == "options_changed":
@@ -434,6 +437,8 @@ class Hub:
         prev = getattr(self, "_was_active", None)  # None: first report after (re)connecting
         if active and prev is False:
             asyncio.ensure_future(self.ml_on_play())
+        if active and prev is not True:
+            self.vol.on_active()  # slider from the amplifier, after Spotify restored its own
         self._was_active = active
         playing = self.playback.get("status") == "playing"
         if not getattr(self, "_playing_known", True) and "status" in self.playback:
@@ -955,7 +960,7 @@ async def get_settings(request):
 @routes.post("/api/settings")
 async def set_settings(request):
     b = await body(request)
-    upd: dict = {k: bool(b[k]) for k in ("auto_verify", "alerts", "leds", "ml_auto_on") if k in b}
+    upd: dict = {k: bool(b[k]) for k in ("auto_verify", "alerts", "leds", "ml_auto_on", "spotify_vol_to_amp") if k in b}
     if "ml_auto_off_min" in b:
         upd["ml_auto_off_min"] = num(b["ml_auto_off_min"], 0, 240, "Standby efter", integer=True)
     if "ml_max_db" in b:
@@ -1111,6 +1116,8 @@ async def levinson_action(request):
     except LevinsonError as e:
         raise web.HTTPBadGateway(text=f"585.5: {e}")
     await hub.ml_refresh()
+    if "volume_db" in b or "volume_step_db" in b:
+        asyncio.ensure_future(hub.vol.sync_from_amp())  # the Spotify slider follows
     return ok(levinson=hub.ml_state, amp=_ha_amp())
 
 
@@ -1326,7 +1333,8 @@ async def on_startup(app):
             r = await collect.set_source(src)
             log.info("source at startup: %s", r)
     asyncio.ensure_future(restore())
-    app["tasks"] = [asyncio.create_task(c) for c in (hub.soloist_loop(), hub.sample_loop(), hub.arcam_loop(), hub.levinson_loop())]
+    app["tasks"] = [asyncio.create_task(c) for c in (hub.soloist_loop(), hub.sample_loop(), hub.arcam_loop(), hub.levinson_loop(),
+                                                         hub.vol.amp_loop(), hub.vol.stream_loop())]
 
 
 async def on_cleanup(app):
