@@ -226,6 +226,7 @@ function chain() {
   const running = dac.state === "RUNNING", playing = p.status === "playing";
   const rate = running ? parseInt(dac.hw_params?.rate) || null : null;
   const vol = p.volume ?? 100, norm = solo.normalization;
+  const bridge = !!S.settings?.spotify_vol_to_amp, volDigital = vol < 100 && !bridge;  // with the bridge the slider is the amplifier's
   const sinkUnity = sink.volume == null || Math.abs(sink.volume - 1) < 1e-6;
   const t = S.lastTest, fresh = t && (Date.now() / 1000 - t.t) < 6 * 3600 && t.verdict !== "silent";
   const hourAgo = Date.now() / 1000 - 3600;
@@ -243,9 +244,9 @@ function chain() {
       facts: fresh && t.bits ? `FLAC ${t.bits} bit, 44,1 kHz` : "FLAC upp till 24 bit, 44,1 kHz",
       note: !S.auth.logged_in ? "Inte ansluten. Välj enheten i Spotify-appen." : playing ? (nameOf(p.item) || "Spelar") : "Ansluten, väntar" },
     { k: "soloist", name: "Soloist", tag: (solo.version || "").replace(/^soloist /, "").split(" ")[0],
-      state: solo.service !== "active" ? "bad" : (vol < 100 || norm) ? "bad" : playing ? "ok" : "idle",
-      facts: `Volym ${vol} %, normalisering ${norm ? "på" : "av"}`,
-      note: solo.service !== "active" ? "Tjänsten kör inte" : (vol < 100 || norm) ? "Ändrar samplen digitalt" : solo.rt_watcher === "active" ? "Realtidsprioritet, avkodar orört" : "Avkodar orört" },
+      state: solo.service !== "active" ? "bad" : (volDigital || norm) ? "bad" : playing ? "ok" : "idle",
+      facts: bridge ? `Volym ${vol} % styr 585.5, normalisering ${norm ? "på" : "av"}` : `Volym ${vol} %, normalisering ${norm ? "på" : "av"}`,
+      note: solo.service !== "active" ? "Tjänsten kör inte" : (volDigital || norm) ? "Ändrar samplen digitalt" : solo.rt_watcher === "active" ? "Realtidsprioritet, avkodar orört" : "Avkodar orört" },
     { k: "pipewire", name: "PipeWire", tag: "pro-audio",
       state: !sink.name ? "bad" : (!sinkUnity || issues.includes("omsampling i PipeWire")) ? "bad" : (stream && running ? "ok" : "idle"),
       facts: `${fmtCarry(sink.format || "S32LE")}, ${sink.rate ? khz(sink.rate) : "44,1"} kHz, ingen omsampling`,
