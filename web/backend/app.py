@@ -1017,7 +1017,7 @@ async def soloist_apikey(request):
 @routes.get("/api/optimizations")
 async def get_optimizations(request):
     items = await asyncio.get_running_loop().run_in_executor(
-        None, collect.optimizations, hub.status, hub.playback)
+        None, collect.optimizations, hub.status, hub.playback, hub.vol.enabled())
     return web.json_response({"t": int(time.time()), "items": items})
 
 

@@ -432,7 +432,7 @@ def _kernel_config(opt: str) -> str | None:
     return m.group(1) if m else None
 
 
-def optimizations(status: dict, playback: dict) -> list[dict]:
+def optimizations(status: dict, playback: dict, vol_bridge: bool = False) -> list[dict]:
     """Every tuning measure, verified live on the device. state: ok | warn | optional."""
     cmd = read("/proc/cmdline")
     sysi, pw, solo = status.get("system") or {}, status.get("pipewire") or {}, status.get("soloist") or {}
@@ -483,10 +483,15 @@ def optimizations(status: dict, playback: dict) -> list[dict]:
         "PipeWire är låst till 44,1 kHz, samma som Spotify Lossless.", rate_ok,
         f"Utgång {sink.get('format')} 44,1 kHz" if live else ("Låst till 44,1 kHz" if locked else "Inte låst"))
     vol = playback.get("volume")
-    vol_ok = (vol in (None, 100)) and (sink.get("volume") is None or abs(sink["volume"] - 1) < 1e-6)
-    add("Ljudväg", "volume", "Full digital volym",
-        "All volym under 100 % räknar om samplen. Volymen sköts i förstärkaren.", vol_ok,
-        f"Spotify {vol if vol is not None else '–'} %, PipeWire {round((sink.get('volume') or 0) * 100)} %")
+    sink_ok = sink.get("volume") is None or abs(sink["volume"] - 1) < 1e-6
+    if vol_bridge:  # the Spotify slider drives the amplifier; the stream is kept at unity
+        add("Ljudväg", "volume", "Full digital volym",
+            "Spotify-reglaget styr förstärkaren. Strömmen hålls på 100 %, så samplen räknas aldrig om.",
+            sink_ok, f"Spotify {vol if vol is not None else '–'} % styr 585.5, strömmen 100 %")
+    else:
+        add("Ljudväg", "volume", "Full digital volym",
+            "All volym under 100 % räknar om samplen. Volymen sköts i förstärkaren.", (vol in (None, 100)) and sink_ok,
+            f"Spotify {vol if vol is not None else '–'} %, PipeWire {round((sink.get('volume') or 0) * 100)} %")
     norm = solo.get("normalization")
     add("Ljudväg", "norm", "Volymnormalisering av",
         "Spotify sänker annars vissa låtar med flera dB.", norm is False,
