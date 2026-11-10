@@ -56,7 +56,10 @@ class VolumeBridge:
         return float(self.hub.settings.get("ml_max_db", 40.0))
 
     def to_db(self, v: int) -> float:
-        return max(0.0, min(self._max(), round(v / 100 * self._max() * 2) / 2))
+        """The 585.5 has whole-dB steps up to 24 dB and 0.1 dB above (it rounds what it is
+        sent), so ask for what it will take: whole dB below 24, half dB above."""
+        db = max(0.0, min(self._max(), v / 100 * self._max()))
+        return float(round(db)) if db < 24 else round(db * 2) / 2
 
     def to_pct(self, db: float) -> int:
         return max(0, min(100, round(min(db, self._max()) / self._max() * 100)))
@@ -92,7 +95,8 @@ class VolumeBridge:
                 db = cur + MAX_UP_DB
             try:
                 await self.hub.ml.set_volume(db, self._max())
-                self._amp_db = db
+                actual = await self.hub.ml.read_volume()  # what it actually took
+                self._amp_db = actual if actual is not None else db
                 log.info("Spotify %d %% -> 585.5 %.1f dB%s", v, db, " (capped)" if capped else "")
             except LevinsonError as e:
                 log.warning("volume bridge: %s", e)
