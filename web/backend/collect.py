@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import datetime as dt
 import glob
 import json
@@ -274,13 +275,33 @@ def normalization_mismatch(want: bool) -> list[str]:
     return [p for p in prefs_paths() if _norm_on(p) != want]
 
 
-def set_normalization_file(path: str, enabled: bool):
-    text = read(path)
+_SET_NORM = r"""
+import os, re, sys
+path, line = sys.argv[1], sys.argv[2]
+fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+with os.fdopen(fd) as f:
+    text = f.read()
+text = re.sub(r"^audio\.normalize_v2=.*$", line, text, flags=re.M) if "audio.normalize_v2=" in text \
+    else text.rstrip("\n") + "\n" + line + "\n"
+tmp = path + ".mscos-tmp"
+fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+with os.fdopen(fd, "w") as f:
+    f.write(text)
+os.replace(tmp, path)
+"""
+
+
+async def set_normalization_file(path: str, enabled: bool) -> bool:
+    """Edit one account's prefs AS THE SOLOIST USER: the Users/<account>/ tree is the
+    soloist user's (guests add accounts), so a root write there could be sent elsewhere
+    with a symlink. As that user it can only touch that user's own files."""
+    if not path.startswith(f"{SOLOIST_HOME}/.local/share/soloist/settings/Users/") or "/../" in path:
+        return False
     line = f"audio.normalize_v2={'true' if enabled else 'false'}"
-    text = re.sub(r"^audio\.normalize_v2=.*$", line, text, flags=re.M) if "audio.normalize_v2=" in text \
-        else text.rstrip("\n") + "\n" + line + "\n"
-    with open(path, "w") as f:
-        f.write(text)
+    rc, _, err = await run(["python3", "-I", "-c", _SET_NORM, path, line], as_user=True, timeout=15)
+    if rc != 0:
+        logging.getLogger("collect").warning("prefs %s: %s", path, err.strip()[-200:])
+    return rc == 0
 
 
 _version_cache: tuple[float, str] = (0.0, "")

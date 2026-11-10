@@ -16,6 +16,7 @@ import math
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -60,9 +61,20 @@ def persist(path: str) -> None:
         return
     subprocess.run(["mount", "-o", "remount,rw", RO_LOWER], check=False)
     try:
-        dst = RO_LOWER + path
-        os.makedirs(os.path.dirname(dst), exist_ok=True)
-        shutil.copy2(path, dst)
+        # never follow a symlink, at either end (some files live in the soloist user's tree)
+        src = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            st = os.fstat(src)
+            if not stat.S_ISREG(st.st_mode):
+                return
+            dst = RO_LOWER + path
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            out = os.open(dst, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, st.st_mode & 0o7777)
+            with os.fdopen(src, "rb", closefd=False) as fi, os.fdopen(out, "wb") as fo:
+                shutil.copyfileobj(fi, fo)
+            os.chown(dst, st.st_uid, st.st_gid)
+        finally:
+            os.close(src)
     finally:
         subprocess.run(["mount", "-o", "remount,ro", RO_LOWER], check=False)
 
@@ -867,8 +879,8 @@ async def apply_normalization(enabled: bool):
     """Write the setting into every account's prefs (Soloist reads them at start)."""
     await user_systemctl("stop", "soloist.service")
     for p in collect.prefs_paths():
-        collect.set_normalization_file(p, enabled)
-        persist(p)
+        if await collect.set_normalization_file(p, enabled):
+            persist(p)
     await user_systemctl("start", "soloist.service")
 
 
