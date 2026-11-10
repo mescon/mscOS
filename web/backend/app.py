@@ -55,26 +55,65 @@ def overlay_active() -> bool:
     return collect.system_info()["root_overlay"]
 
 
+def _walk_nofollow(root: str, rel: str, create: bool) -> int:
+    """An fd for directory root/rel, walking one component at a time with O_NOFOLLOW (no
+    symlink anywhere on the way), creating missing directories if asked. Caller closes it."""
+    fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for part in [p for p in rel.split("/") if p]:
+            if part in (".", ".."):
+                raise OSError(f"refusing path component {part!r}")
+            try:
+                nfd = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            except FileNotFoundError:
+                if not create:
+                    raise
+                os.mkdir(part, 0o755, dir_fd=fd)
+                nfd = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            os.close(fd)
+            fd = nfd
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+
 def persist(path: str) -> None:
-    """With overlayroot active, also write a changed file to the real SD-card root."""
+    """With overlayroot active, also write a changed file to the real SD-card root.
+    Some of these files live in the soloist user's tree, so neither end may follow a symlink
+    at any level, and only permission bits (no setuid/setgid) and the owner are carried over."""
     if not overlay_active() or not os.path.isdir(RO_LOWER):
         return
+    if not os.path.isabs(path):
+        return
+    d, name = os.path.split(path)
     subprocess.run(["mount", "-o", "remount,rw", RO_LOWER], check=False)
     try:
-        # never follow a symlink, at either end (some files live in the soloist user's tree)
-        src = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        sdir = _walk_nofollow("/", d, create=False)
+        try:
+            src = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=sdir)
+        finally:
+            os.close(sdir)
         try:
             st = os.fstat(src)
             if not stat.S_ISREG(st.st_mode):
                 return
-            dst = RO_LOWER + path
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
-            out = os.open(dst, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, st.st_mode & 0o7777)
-            with os.fdopen(src, "rb", closefd=False) as fi, os.fdopen(out, "wb") as fo:
-                shutil.copyfileobj(fi, fo)
-            os.chown(dst, st.st_uid, st.st_gid)
+            ddir = _walk_nofollow(RO_LOWER, d, create=True)
+            try:
+                out = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600, dir_fd=ddir)
+            finally:
+                os.close(ddir)
+            try:
+                os.fchown(out, st.st_uid, st.st_gid)
+                os.fchmod(out, st.st_mode & 0o777)
+                with os.fdopen(src, "rb", closefd=False) as fi, os.fdopen(out, "wb", closefd=False) as fo:
+                    shutil.copyfileobj(fi, fo)
+            finally:
+                os.close(out)
         finally:
             os.close(src)
+    except OSError as e:
+        log.warning("persist %s: %s", path, e)
     finally:
         subprocess.run(["mount", "-o", "remount,ro", RO_LOWER], check=False)
 
