@@ -254,12 +254,33 @@ def prefs_path() -> str | None:
     return p[0] if p else None
 
 
+def prefs_paths() -> list[str]:
+    """One prefs file per Spotify account that has used the device (you, and guests)."""
+    return sorted(glob.glob(f"{SOLOIST_HOME}/.local/share/soloist/settings/Users/*/prefs"))
+
+
+def _norm_on(path: str) -> bool:
+    m = re.search(r"^audio\.normalize_v2=(\w+)", read(path), re.M)
+    return True if not m else m.group(1) != "false"  # Spotify's default is on
+
+
 def normalization_enabled() -> bool | None:
-    p = prefs_path()
-    if not p:
-        return None
-    m = re.search(r"^audio\.normalize_v2=(\w+)", read(p), re.M)
-    return True if not m else m.group(1) != "false"
+    """On for any account (a guest's new account starts with Spotify's default, on)."""
+    ps = prefs_paths()
+    return any(_norm_on(p) for p in ps) if ps else None
+
+
+def normalization_mismatch(want: bool) -> list[str]:
+    return [p for p in prefs_paths() if _norm_on(p) != want]
+
+
+def set_normalization_file(path: str, enabled: bool):
+    text = read(path)
+    line = f"audio.normalize_v2={'true' if enabled else 'false'}"
+    text = re.sub(r"^audio\.normalize_v2=.*$", line, text, flags=re.M) if "audio.normalize_v2=" in text \
+        else text.rstrip("\n") + "\n" + line + "\n"
+    with open(path, "w") as f:
+        f.write(text)
 
 
 _version_cache: tuple[float, str] = (0.0, "")

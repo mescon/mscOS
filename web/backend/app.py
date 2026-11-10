@@ -90,7 +90,7 @@ class Hub:
         self.settings: dict = {"auto_verify": True, "alerts": True, "leds": True, "net_speed": 100,
                                # Mark Levinson 585.5: address ("" = find it), wake + USB on play,
                                # standby after N idle minutes (0 = never), panel volume ceiling
-                               "ml_host": "", "ml_tv_input": "RCA3", "arcam_max_vol": 50, "ml_auto_on": True, "spotify_vol_to_amp": True, "ml_auto_off_min": 0, "ml_max_db": 40.0,
+                               "ml_host": "", "ml_tv_input": "RCA3", "arcam_max_vol": 50, "ml_auto_on": True, "spotify_vol_to_amp": True, "soloist_normalization": False, "ml_auto_off_min": 0, "ml_max_db": 40.0,
                                "source": "spotify"}  # who owns the DAC: spotify | roon
         # 30 s samples, 24 h: the DAC's measured clock and the supply rail
         self.clock = collections.deque(maxlen=24 * 60 * 2)
@@ -246,12 +246,28 @@ class Hub:
                 await self.maybe_auto_verify()
                 if self.settings.get("source") == "roon":
                     self._set_playing(collect.dac_info().get("state") == "RUNNING")
+                if n % 12 == 6:
+                    await self.keep_normalization()
                 if n % 720 == 0 and n:  # hourly: keep SD-card writes rare
                     await asyncio.get_running_loop().run_in_executor(None, self.save)
             except Exception:  # keep sampling no matter what
                 log.exception("sampling failed")
             n += 1
             await asyncio.sleep(5)
+
+    async def keep_normalization(self):
+        """A guest's new account starts with Spotify's normalization on (-5 dB, not
+        bit-perfect). Fix every account's prefs, but only after 10 quiet minutes: Soloist
+        reads them at start, and a restart would cut off someone listening."""
+        if self.settings.get("source") != "spotify" or self._was_playing:
+            return
+        want = bool(self.settings.get("soloist_normalization", False))
+        wrong = collect.normalization_mismatch(want)
+        if not wrong or time.time() - self._idle_since < 600:
+            return
+        log.info("normalization %s for %d account(s); restarting Soloist", "on" if want else "off", len(wrong))
+        async with self.source_lock:
+            await apply_normalization(want)
 
     async def refresh_status(self):
         pw, solo = await asyncio.gather(collect.pipewire_info(), collect.soloist_info())
@@ -839,19 +855,21 @@ async def soloist_name(request):
 @routes.post("/api/soloist/normalization")
 async def soloist_normalization(request):
     enabled = bool((await body(request)).get("enabled"))
-    p = collect.prefs_path()
-    if not p:
+    if not collect.prefs_paths():
         raise web.HTTPConflict(text="Soloist har inte loggat in än. Anslut från Spotify-appen först.")
-    await user_systemctl("stop", "soloist.service")
-    text = collect.read(p)
-    line = f"audio.normalize_v2={'true' if enabled else 'false'}"
-    text = re.sub(r"^audio\.normalize_v2=.*$", line, text, flags=re.M) if "audio.normalize_v2=" in text \
-        else text.rstrip("\n") + "\n" + line + "\n"
-    with open(p, "w") as f:
-        f.write(text)
-    persist(p)
-    await user_systemctl("start", "soloist.service")
+    hub.settings["soloist_normalization"] = enabled  # kept for every account, guests too
+    await asyncio.get_running_loop().run_in_executor(None, hub.save_settings)
+    await apply_normalization(enabled)
     return ok(enabled=enabled)
+
+
+async def apply_normalization(enabled: bool):
+    """Write the setting into every account's prefs (Soloist reads them at start)."""
+    await user_systemctl("stop", "soloist.service")
+    for p in collect.prefs_paths():
+        collect.set_normalization_file(p, enabled)
+        persist(p)
+    await user_systemctl("start", "soloist.service")
 
 
 @routes.post("/api/soloist/apikey")
