@@ -256,7 +256,13 @@ def prefs_path() -> str | None:
 
 
 def account_dirs() -> list[str]:
-    return sorted(glob.glob(f"{SOLOIST_HOME}/.local/share/soloist/settings/Users/*/"))
+    """Real account directories only (no symlinks: the tree is the soloist user's)."""
+    base = f"{SOLOIST_HOME}/.local/share/soloist/settings/Users"
+    try:
+        with os.scandir(base) as it:
+            return sorted(f"{base}/{e.name}/" for e in it if e.is_dir(follow_symlinks=False))
+    except OSError:
+        return []
 
 
 def prefs_paths() -> list[str]:

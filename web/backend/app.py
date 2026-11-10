@@ -161,6 +161,7 @@ class Hub:
         self._dac_running = False
         self.source_lock = asyncio.Lock()
         self.ml_select_lock = asyncio.Lock()
+        self._norm_failed: tuple | None = None   # last set of accounts a write did not fix
         self._accounts: set[str] | None = None  # Spotify accounts seen (guests add new ones)
         self.cmd_lock = asyncio.Lock()  # one Soloist command at a time: its errors carry no request id
         self._cmd_reply: asyncio.Future | None = None
@@ -320,6 +321,12 @@ class Hub:
         want = bool(self.settings.get("soloist_normalization", False))
         wrong = collect.normalization_mismatch(want)
         if not wrong:
+            self._norm_failed = None
+            return
+        # never restart Soloist again for the same accounts after a write that did not stick
+        # (one attempt per set of accounts; a new account, or a manual change, retries)
+        key = (want, tuple(wrong))
+        if key == self._norm_failed:
             return
         if new and any(w.startswith(tuple(new)) for w in wrong):
             # A guest's first connection: fix it now and bring their playback straight back,
@@ -327,14 +334,20 @@ class Hub:
             playing, active = self._was_playing, bool(self.auth.get("is_active"))
             log.info("new Spotify account: normalization %s, restarting Soloist", "on" if want else "off")
             async with self.source_lock:
-                await apply_normalization(want)
+                ok_ = await apply_normalization(want)
+            if not ok_:
+                self._norm_failed = (want, tuple(collect.normalization_mismatch(want)))
+                log.warning("normalization could not be written for %s", self._norm_failed[1])
             asyncio.ensure_future(self._resume_after_restart(active, playing))
             return
         if self._was_playing or time.time() - self._idle_since < 600:
             return  # an existing account: only when nobody is listening
         log.info("normalization %s for %d account(s); restarting Soloist", "on" if want else "off", len(wrong))
         async with self.source_lock:
-            await apply_normalization(want)
+            ok_ = await apply_normalization(want)
+        if not ok_:
+            self._norm_failed = (want, tuple(collect.normalization_mismatch(want)))
+            log.warning("normalization could not be written for %s", self._norm_failed[1])
 
     async def _resume_after_restart(self, active: bool, playing: bool):
         """After a Soloist restart: take the device back (activate) and resume, as before."""
@@ -950,13 +963,15 @@ async def soloist_normalization(request):
     return ok(enabled=enabled)
 
 
-async def apply_normalization(enabled: bool):
-    """Write the setting into every account's prefs (Soloist reads them at start)."""
+async def apply_normalization(enabled: bool) -> bool:
+    """Write the setting into every account's prefs (Soloist reads them at start).
+    Returns whether every account now has it."""
     await user_systemctl("stop", "soloist.service")
     for d in collect.account_dirs():
         if await collect.set_normalization_file(d + "prefs", enabled):
             persist(d + "prefs")
     await user_systemctl("start", "soloist.service")
+    return not collect.normalization_mismatch(enabled)
 
 
 @routes.post("/api/soloist/apikey")
