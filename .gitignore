@@ -10,3 +10,4 @@ kernel/*.log
 .playwright-mcp/
 __pycache__/
 *.pyc
+kernel/mscos-dsd/out/

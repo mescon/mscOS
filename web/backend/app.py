@@ -1311,13 +1311,19 @@ async def cache_headers(request, handler):
 
 async def on_startup(app):
     collect.apply_leds(hub.settings.get("leds", True))
-    if hub.settings.get("source") == "roon":
-        async def restore():
-            await asyncio.sleep(5)  # let the user session come up first
-            async with hub.source_lock:
-                r = await collect.set_source("roon")
-                log.info("source at startup: %s", r)
-        asyncio.ensure_future(restore())
+    async def restore():
+        """Bring up the saved source. Spotify normally starts with the soloist session by itself;
+        start it only if it is not running (e.g. Roon mode was ended by editing settings)."""
+        await asyncio.sleep(5)  # let the user session come up first
+        src = hub.settings.get("source", "spotify")
+        if src == "spotify":
+            rc, out, _ = await collect.run(["systemctl", "--user", "is-active", "soloist.service"], as_user=True, timeout=10)
+            if out.strip() == "active":
+                return
+        async with hub.source_lock:
+            r = await collect.set_source(src)
+            log.info("source at startup: %s", r)
+    asyncio.ensure_future(restore())
     app["tasks"] = [asyncio.create_task(c) for c in (hub.soloist_loop(), hub.sample_loop(), hub.arcam_loop(), hub.levinson_loop())]
 
 

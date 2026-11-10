@@ -1,0 +1,320 @@
+From: mscOS <noreply@mscos.local>
+Subject: [PATCH] ALSA: usb-audio: mscOS native DSD for CM6632A 64-bit raw subslot (ML No585)
+
+The Mark Levinson No585/No585.5 (0ecb:18a7, C-Media CM6632A) offers a raw-DSD
+altsetting with an 8-byte subslot that the generic DSD_RAW path cannot drive.
+Expose it as stereo DSD_U32_LE at twice the device clock, program the clock at
+half the ALSA rate, keep packets to whole device frames and swap the middle
+words of every 16 bytes (L0 R0 L1 R1 -> L0 L1 R0 R1). Wire format read from
+C-Media's macOS driver (CmediaUSBDSD.kext 2.7.16, PrepareDoPContent).
+All logic in mscos_dsd.c; hooks are one line each. mscos_dsd=0 disables it.
+
+---
+diff --git a/sound/usb/card.h b/sound/usb/card.h
+--- a/sound/usb/card.h
++++ b/sound/usb/card.h
+@@ -41,6 +41,7 @@
+ 	bool dsd_dop;			/* add DOP headers in case of DSD samples */
+ 	bool dsd_bitrev;		/* reverse the bits of each DSD sample */
+ 	bool dsd_raw;			/* altsetting is raw DSD */
++	bool mscos_dsd64;		/* mscOS: 64-bit raw DSD subslot, see mscos_dsd.c */
+ };
+ 
+ struct snd_usb_substream;
+@@ -114,6 +115,7 @@
+ 	int	   freqshift;		/* how much to shift the feedback value to get Q16.16 */
+ 	unsigned int freqmax;		/* maximum sampling rate, used for buffer management */
+ 	unsigned int phase;		/* phase accumulator */
++	unsigned int mscos_carry;	/* mscOS: frame carried to the next packet */
+ 	unsigned int maxpacksize;	/* max packet size in bytes */
+ 	unsigned int maxframesize;      /* max packet size in frames */
+ 	unsigned int max_urb_packs;	/* packets allocated per data URB */
+diff --git a/sound/usb/clock.c b/sound/usb/clock.c
+--- a/sound/usb/clock.c
++++ b/sound/usb/clock.c
+@@ -19,6 +19,7 @@
+ #include "card.h"
+ #include "helper.h"
+ #include "clock.h"
++#include "mscos_dsd.h"
+ #include "quirks.h"
+ 
+ union uac23_clock_source_desc {
+@@ -661,6 +662,7 @@
+ int snd_usb_init_sample_rate(struct snd_usb_audio *chip,
+ 			     const struct audioformat *fmt, int rate)
+ {
++	rate = mscos_dsd_clock_rate(fmt, rate);
+ 	usb_audio_dbg(chip, "%d:%d Set sample rate %d, clock %d\n",
+ 		      fmt->iface, fmt->altsetting, rate, fmt->clock);
+ 
+diff --git a/sound/usb/endpoint.c b/sound/usb/endpoint.c
+--- a/sound/usb/endpoint.c
++++ b/sound/usb/endpoint.c
+@@ -19,6 +19,7 @@
+ #include "endpoint.h"
+ #include "pcm.h"
+ #include "clock.h"
++#include "mscos_dsd.h"
+ #include "quirks.h"
+ 
+ enum {
+@@ -228,9 +229,9 @@
+ 	}
+ 
+ 	if (ep->sync_source)
+-		return synced_next_packet_size(ep, avail);
++		return mscos_dsd_packet_frames(ep, synced_next_packet_size(ep, avail));
+ 	else
+-		return next_packet_size(ep, avail);
++		return mscos_dsd_packet_frames(ep, next_packet_size(ep, avail));
+ }
+ 
+ static void call_retire_callback(struct snd_usb_endpoint *ep,
+@@ -1386,6 +1387,7 @@
+ 	ep->freqshift = INT_MIN;
+ 
+ 	ep->phase = 0;
++	ep->mscos_carry = 0;
+ 
+ 	switch (ep->type) {
+ 	case  SND_USB_ENDPOINT_TYPE_DATA:
+diff --git a/sound/usb/format.c b/sound/usb/format.c
+--- a/sound/usb/format.c
++++ b/sound/usb/format.c
+@@ -17,6 +17,7 @@
+ #include "quirks.h"
+ #include "helper.h"
+ #include "clock.h"
++#include "mscos_dsd.h"
+ #include "format.h"
+ 
+ /*
+@@ -874,6 +875,7 @@
+ 	fp->fmt_type = fmt->bFormatType;
+ 	if (err < 0)
+ 		return err;
++	mscos_dsd_fixup_rates(fp);
+ #if 1
+ 	/* FIXME: temporary hack for extigy/audigy 2 nx/zs */
+ 	/* extigy apparently supports sample rates other than 48k
+diff --git a/sound/usb/Makefile b/sound/usb/Makefile
+--- a/sound/usb/Makefile
++++ b/sound/usb/Makefile
+@@ -21,7 +21,8 @@
+ 			proc.o \
+ 			quirks.o \
+ 			stream.o \
+-			validate.o
++			validate.o \
++			mscos_dsd.o
+ 
+ snd-usb-audio-$(CONFIG_SND_USB_AUDIO_MIDI_V2) += midi2.o
+ snd-usb-audio-$(CONFIG_SND_USB_AUDIO_USE_MEDIA_CONTROLLER) += media.o
+diff --git a/sound/usb/mscos_dsd.c b/sound/usb/mscos_dsd.c
+--- a/sound/usb/mscos_dsd.c
++++ b/sound/usb/mscos_dsd.c
+@@ -0,0 +1,117 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ * mscOS: native DSD for C-Media CM6632A receivers with a 64-bit raw subslot.
++ *
++ * The Mark Levinson No585/No585.5 (Harman, 0ecb:18a7) uses a C-Media CM6632A
++ * USB receiver. Besides three PCM altsettings it offers a raw-DSD one:
++ *
++ *   bmFormats 0x80000000 (TYPE_I_RAW_DATA), bSubslotSize 8, bBitResolution 64
++ *
++ * The CM6632A does not decode DoP. C-Media's own macOS driver
++ * (CmediaUSBDSD.kext 2.7.16, CmediaUSBDSDStream::PrepareDoPContent, which binds
++ * to "HarmanUSBDSD" 0ecb:18a7) shows the wire format: one device frame carries
++ * 64 DSD bits per channel, as two 32-bit little-endian words with the earliest
++ * bit in the MSB, left channel first:
++ *
++ *   L(t0) L(t1) R(t0) R(t1)        (each a u32 LE, t1 = the next 32 bits)
++ *
++ * and the device clock runs at DSD rate / 64 (DSD64 = 44.1 kHz).
++ *
++ * That is ALSA's DSD_U32_LE with two frames per device frame and the middle
++ * words swapped. So userspace sees an ordinary stereo DSD_U32_LE device at the
++ * usual rates (DSD64 = 88200), and the driver:
++ *   - doubles the rate table (the descriptors report the device clock),
++ *   - programs the device clock at half the ALSA rate,
++ *   - keeps every USB packet a whole device frame (an even number of ALSA
++ *     frames; the remainder is carried to the next packet),
++ *   - swaps words 1 and 2 of every 16 bytes when the URB is filled.
++ * The endpoint stays in ALSA units, so packet sizes, periods and the asynchronous
++ * feedback (whose format the driver already detects by shifting) need no change.
++ *
++ * Everything is limited to the devices in mscos_dsd_ids[] and to an altsetting
++ * that is raw DSD with an 8-byte subslot; mscos_dsd=0 turns it off.
++ */
++
++#include <linux/module.h>
++#include <linux/usb.h>
++#include <sound/core.h>
++#include <sound/pcm.h>
++
++#include "usbaudio.h"
++#include "card.h"
++#include "mscos_dsd.h"
++
++static bool mscos_dsd = true;
++module_param(mscos_dsd, bool, 0444);
++MODULE_PARM_DESC(mscos_dsd, "mscOS: native DSD for CM6632A 64-bit raw subslot devices (default: yes).");
++
++static const u32 mscos_dsd_ids[] = {
++	USB_ID(0x0ecb, 0x18a7),	/* Harman: Mark Levinson No585 / No585.5 */
++};
++
++static bool mscos_dsd_known(u32 id)
++{
++	int i;
++
++	for (i = 0; i < ARRAY_SIZE(mscos_dsd_ids); i++)
++		if (mscos_dsd_ids[i] == id)
++			return true;
++	return false;
++}
++
++u64 mscos_dsd_format(struct snd_usb_audio *chip, struct audioformat *fp,
++		     unsigned int sample_bytes)
++{
++	if (!mscos_dsd || !fp->dsd_raw || sample_bytes != 8 || fp->channels != 2 ||
++	    !mscos_dsd_known(chip->usb_id))
++		return 0;
++	fp->mscos_dsd64 = true;
++	usb_audio_info(chip, "%u:%d: mscOS native DSD (64-bit subslot as DSD_U32_LE)\n",
++		       fp->iface, fp->altsetting);
++	return SNDRV_PCM_FMTBIT_DSD_U32_LE;
++}
++
++void mscos_dsd_fixup_rates(struct audioformat *fp)
++{
++	unsigned int i;
++
++	if (!fp->mscos_dsd64)
++		return;
++	fp->rates = 0;
++	for (i = 0; i < fp->nr_rates; i++) {
++		fp->rate_table[i] *= 2;
++		fp->rates |= snd_pcm_rate_to_rate_bit(fp->rate_table[i]);
++	}
++	fp->rate_min *= 2;
++	fp->rate_max *= 2;
++}
++
++int mscos_dsd_clock_rate(const struct audioformat *fmt, int rate)
++{
++	return (fmt && fmt->mscos_dsd64) ? rate / 2 : rate;
++}
++
++int mscos_dsd_packet_frames(struct snd_usb_endpoint *ep, int frames)
++{
++	unsigned int total;
++
++	if (frames <= 0 || !ep->cur_audiofmt || !ep->cur_audiofmt->mscos_dsd64)
++		return frames;
++	total = frames + ep->mscos_carry;
++	ep->mscos_carry = total & 1;
++	return total & ~1u;
++}
++
++void mscos_dsd_pack(const struct audioformat *fmt, void *buf, unsigned int bytes)
++{
++	u32 *w = buf, t;
++	unsigned int n;
++
++	if (!fmt || !fmt->mscos_dsd64)
++		return;
++	for (n = bytes / 16; n; n--, w += 4) {
++		t = w[1];
++		w[1] = w[2];
++		w[2] = t;
++	}
++}
+diff --git a/sound/usb/mscos_dsd.h b/sound/usb/mscos_dsd.h
+--- a/sound/usb/mscos_dsd.h
++++ b/sound/usb/mscos_dsd.h
+@@ -0,0 +1,27 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++/*
++ * mscOS: native DSD for C-Media CM6632A receivers with a 64-bit raw subslot
++ * (Mark Levinson No585/No585.5, 0ecb:18a7). See mscos_dsd.c.
++ */
++#ifndef __USBAUDIO_MSCOS_DSD_H
++#define __USBAUDIO_MSCOS_DSD_H
++
++#include <linux/types.h>
++
++struct snd_usb_audio;
++struct snd_usb_endpoint;
++struct audioformat;
++
++/* quirks.c: claim the raw-DSD altsetting; returns the ALSA format bits or 0 */
++u64 mscos_dsd_format(struct snd_usb_audio *chip, struct audioformat *fp,
++		     unsigned int sample_bytes);
++/* format.c: rates in the table are the device clock; ALSA frames run twice as fast */
++void mscos_dsd_fixup_rates(struct audioformat *fp);
++/* clock.c: the rate to program into the device clock */
++int mscos_dsd_clock_rate(const struct audioformat *fmt, int rate);
++/* endpoint.c: keep every packet a whole number of device frames (2 ALSA frames) */
++int mscos_dsd_packet_frames(struct snd_usb_endpoint *ep, int frames);
++/* pcm.c: reorder L0 R0 L1 R1 into L0 L1 R0 R1, in place */
++void mscos_dsd_pack(const struct audioformat *fmt, void *buf, unsigned int bytes);
++
++#endif /* __USBAUDIO_MSCOS_DSD_H */
+diff --git a/sound/usb/pcm.c b/sound/usb/pcm.c
+--- a/sound/usb/pcm.c
++++ b/sound/usb/pcm.c
+@@ -21,6 +21,7 @@
+ #include "helper.h"
+ #include "pcm.h"
+ #include "clock.h"
++#include "mscos_dsd.h"
+ #include "power.h"
+ #include "media.h"
+ #include "implicit.h"
+@@ -659,6 +660,9 @@
+ 	/* implicit feedback mode has own operation mode */
+ 	if (snd_usb_endpoint_implicit_feedback_sink(subs->data_endpoint))
+ 		return false;
++	/* mscOS 64-bit DSD carries frames between packets */
++	if (subs->cur_audiofmt && subs->cur_audiofmt->mscos_dsd64)
++		return false;
+ 	return true;
+ }
+ 
+@@ -1608,8 +1612,10 @@
+ 			fill_playback_urb_dsd_bitrev(subs, urb, bytes);
+ 		} else {
+ 			/* usual PCM */
+-			if (!subs->tx_length_quirk)
++			if (!subs->tx_length_quirk) {
+ 				copy_to_urb(subs, urb, 0, stride, bytes);
++				mscos_dsd_pack(subs->cur_audiofmt, urb->transfer_buffer, bytes);
++			}
+ 			else
+ 				bytes = copy_to_urb_quirk(subs, urb, stride, bytes);
+ 			/* bytes is now amount of outgoing data */
+diff --git a/sound/usb/quirks.c b/sound/usb/quirks.c
+--- a/sound/usb/quirks.c
++++ b/sound/usb/quirks.c
+@@ -21,6 +21,7 @@
+ #include "midi.h"
+ #include "midi2.h"
+ #include "quirks.h"
++#include "mscos_dsd.h"
+ #include "helper.h"
+ #include "endpoint.h"
+ #include "pcm.h"
+@@ -1984,6 +1985,10 @@
+ 					unsigned int sample_bytes)
+ {
+ 	struct usb_interface *iface;
++	u64 mscos = mscos_dsd_format(chip, fp, sample_bytes);
++
++	if (mscos)
++		return mscos;
+ 
+ 	/* Playback Designs */
+ 	if (USB_ID_VENDOR(chip->usb_id) == 0x23ba &&
