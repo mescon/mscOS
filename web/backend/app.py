@@ -89,7 +89,7 @@ class Hub:
         self.settings: dict = {"auto_verify": True, "alerts": True, "leds": True, "net_speed": 100,
                                # Mark Levinson 585.5: address ("" = find it), wake + USB on play,
                                # standby after N idle minutes (0 = never), panel volume ceiling
-                               "ml_host": "", "ml_auto_on": True, "ml_auto_off_min": 0, "ml_max_db": 40.0,
+                               "ml_host": "", "ml_tv_input": "RCA3", "ml_auto_on": True, "ml_auto_off_min": 0, "ml_max_db": 40.0,
                                "source": "spotify"}  # who owns the DAC: spotify | roon
         # 30 s samples, 24 h: the DAC's measured clock and the supply rail
         self.clock = collections.deque(maxlen=24 * 60 * 2)
@@ -107,6 +107,7 @@ class Hub:
         self._ml_seen_t = time.time()  # last time the amplifier answered (or was found)
         self._dac_running = False
         self.source_lock = asyncio.Lock()
+        self.ml_select_lock = asyncio.Lock()
         self.cmd_lock = asyncio.Lock()  # one Soloist command at a time: its errors carry no request id
         self._cmd_reply: asyncio.Future | None = None
 
@@ -464,6 +465,15 @@ class Hub:
             return
         self._ml_play_t = time.time()
         try:
+            await self.ml_select(USB_INPUT)
+        except LevinsonError as e:
+            log.warning("585.5 auto-on failed: %s", e)
+        await self.ml_refresh()
+
+    async def ml_select(self, name: str) -> dict:
+        """Wake the amplifier if needed and put it on an input, without re-selecting the input
+        it is already on (that makes it relock: audible). Raises LevinsonError."""
+        async with self.ml_select_lock:
             # Read the display now: the remote may have changed power or input since the last poll.
             d = await self.ml.read_display()
             if d:
@@ -473,18 +483,20 @@ class Hub:
                 await self.ml.set_power(True)
                 self._ml_woke_t = time.time()
                 await asyncio.sleep(6)  # leaving standby takes a few seconds; inputs are ignored meanwhile
-            # Re-selecting the input it is already on makes the amplifier relock (audible), so only
-            # switch when the display (read just now) shows another input or a name not learned yet.
-            usb_label = next((k for k, v in (self.settings.get("ml_labels") or {}).items() if v == USB_INPUT), None)
-            on_usb = not woke and d is not None and usb_label is not None and d["label"] == usb_label
-            if not on_usb:
-                await self.ml.set_input(USB_INPUT)
-                asyncio.ensure_future(self.ml_learn_label(USB_INPUT))
+            label = next((k for k, v in (self.settings.get("ml_labels") or {}).items() if v == name), None)
+            already = not woke and d is not None and label is not None and d["label"] == label
+            if not already:
+                await self.ml.set_input(name)
+                asyncio.ensure_future(self.ml_learn_label(name))
+                if label:  # let the display catch up, so the answer shows the new input
+                    for _ in range(10):
+                        await asyncio.sleep(0.5)
+                        d2 = await self.ml.read_display()
+                        if d2 and d2["label"] == label and d2.get("level"):
+                            break
             log.info("585.5: %s, %s", "woken" if woke else "already on",
-                     "already on USB" if on_usb else "input USB")
-        except LevinsonError as e:
-            log.warning("585.5 auto-on failed: %s", e)
-        await self.ml_refresh()
+                     f"already on {name}" if already else f"input {name}")
+            return {"woke": woke, "switched": not already}
 
     async def ml_learn_label(self, name: str):
         """After selecting an input, remember what the display calls it (e.g. USB = "SOtM")."""
@@ -732,10 +744,11 @@ def _ha_soloist() -> dict:
     }
 
 
-def _ml_bypass() -> bool:
+def _ml_bypass(text: str | None = None) -> bool:
     """The display shows "Line" instead of a level when the input is in processor bypass
     (fixed gain, e.g. "Arcam      Line"): the AV receiver sets the volume then."""
-    parts = re.split(r"\s{2,}", (hub.ml_state or {}).get("display") or "", maxsplit=1)
+    t = text if text is not None else (hub.ml_state or {}).get("display") or ""
+    parts = re.split(r"\s{2,}", t, maxsplit=1)
     return len(parts) > 1 and parts[1].strip().lower() == "line"
 
 
@@ -758,6 +771,18 @@ def _ha_amp() -> dict:
     }
 
 
+def _ha_mode() -> str | None:
+    """Living-room mode from what the 585.5 is on: tv (the AV receiver's input), stereo (SOtM),
+    off (standby), other, or None when unknown. Follows the remote as well."""
+    m = hub.ml_state or {}
+    if not m.get("reachable") or m.get("power") is None:
+        return None
+    if m.get("power") is False:
+        return "off"
+    inp = m.get("input")
+    return "tv" if inp == hub.settings.get("ml_tv_input", "RCA3") else "stereo" if inp == USB_INPUT else "other"
+
+
 @routes.get("/api/ha")
 async def ha_summary(request):
     """One cheap snapshot for Home Assistant: in-memory state only, plus the DAC's /proc state."""
@@ -772,6 +797,7 @@ async def ha_summary(request):
         "source": src,
         "soloist": solo,
         "amp": _ha_amp(),
+        "mode": _ha_mode(),
         "dac": {"present": bool(d.get("present")), "running": running if d.get("present") else None},
     })
 
@@ -1059,8 +1085,13 @@ async def levinson_action(request):
         if "input" in b:
             await hub.ml.set_input(str(b["input"]))
             asyncio.ensure_future(hub.ml_learn_label(str(b["input"])))
-        if ("volume_db" in b or "volume_step_db" in b) and _ml_bypass():
-            raise web.HTTPConflict(text="Ingången står i bypass. Volymen ställs på Arcam.")
+        if "volume_db" in b or "volume_step_db" in b:
+            # read fresh, and by input too: right after a switch the display shows no level yet
+            d = await hub.ml.read_display()
+            tv_label = next((k for k, v in (hub.settings.get("ml_labels") or {}).items()
+                             if v == hub.settings.get("ml_tv_input", "RCA3")), None)
+            if _ml_bypass(d["text"] if d else None) or (d and tv_label and d["label"] == tv_label):
+                raise web.HTTPConflict(text="Ingången står i bypass. Volymen ställs på Arcam.")
         if "volume_db" in b:
             await hub.ml.set_volume(num(b["volume_db"], 0, 80, "Volym"), hub.settings.get("ml_max_db", 40.0))
         if "volume_step_db" in b:
@@ -1078,6 +1109,45 @@ async def levinson_action(request):
         raise web.HTTPBadGateway(text=f"585.5: {e}")
     await hub.ml_refresh()
     return ok(levinson=hub.ml_state, amp=_ha_amp())
+
+
+@routes.post("/api/mode")
+async def living_room_mode(request):
+    """The 585.5's part of the living-room modes (HA does the TV, the Shield and the Arcam):
+    tv      wake it and select the AV receiver's input (bypass); pause Soloist, which would
+            otherwise play into an input nobody hears
+    stereo  wake it and select SOtM (USB), as when the device is chosen in Spotify
+    tv_off  standby, but only if it is on the receiver's input: music playing stays on"""
+    b = await body(request)
+    mode = b.get("mode")
+    tv = hub.settings.get("ml_tv_input", "RCA3")
+    if mode not in ("tv", "stereo", "tv_off"):
+        raise web.HTTPBadRequest(text="mode ska vara tv, stereo eller tv_off")
+    if not hub.ml.host:
+        raise web.HTTPServiceUnavailable(text="Förstärkaren är inte hittad")
+    did: dict = {}
+    try:
+        if mode == "tv":
+            if hub.soloist_ws and hub.auth.get("is_active") and hub.playback.get("status") == "playing":
+                await hub.soloist_cmd({"command": "pause"})
+                did["paused_soloist"] = True
+            did |= await hub.ml_select(tv)
+        elif mode == "stereo":
+            did |= await hub.ml_select(USB_INPUT)  # Spotify and Roon both play through USB
+            hub._ml_play_t = time.time()  # the next Spotify start need not do it again
+        else:
+            d = await hub.ml.read_display()
+            label = next((k for k, v in (hub.settings.get("ml_labels") or {}).items() if v == tv), None)
+            if d and d["on"] and label and d["label"] == label:
+                await hub.ml.set_power(False)
+                did["standby"] = True
+            else:
+                did["standby"] = False
+                did["reason"] = "förstärkaren är inte på tv-ingången" if d and d["on"] else "redan i standby"
+    except LevinsonError as e:
+        raise web.HTTPBadGateway(text=f"585.5: {e}")
+    await hub.ml_refresh()
+    return ok(mode=mode, did=did, amp=_ha_amp())
 
 
 @routes.post("/api/arcam")
