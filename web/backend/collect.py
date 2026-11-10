@@ -255,6 +255,10 @@ def prefs_path() -> str | None:
     return p[0] if p else None
 
 
+def account_dirs() -> list[str]:
+    return sorted(glob.glob(f"{SOLOIST_HOME}/.local/share/soloist/settings/Users/*/"))
+
+
 def prefs_paths() -> list[str]:
     """One prefs file per Spotify account that has used the device (you, and guests)."""
     return sorted(glob.glob(f"{SOLOIST_HOME}/.local/share/soloist/settings/Users/*/prefs"))
@@ -272,15 +276,19 @@ def normalization_enabled() -> bool | None:
 
 
 def normalization_mismatch(want: bool) -> list[str]:
-    return [p for p in prefs_paths() if _norm_on(p) != want]
+    """Accounts whose prefs (missing = Spotify's default, on) differ from what we want."""
+    return [d + "prefs" for d in account_dirs() if _norm_on(d + "prefs") != want]
 
 
 _SET_NORM = r"""
 import os, re, sys
 path, line = sys.argv[1], sys.argv[2]
-fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
-with os.fdopen(fd) as f:
-    text = f.read()
+try:
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(fd) as f:
+        text = f.read()
+except FileNotFoundError:
+    text = ""  # a new account Soloist has not written prefs for yet
 text = re.sub(r"^audio\.normalize_v2=.*$", line, text, flags=re.M) if "audio.normalize_v2=" in text \
     else text.rstrip("\n") + "\n" + line + "\n"
 tmp = path + ".mscos-tmp"

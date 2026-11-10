@@ -161,6 +161,7 @@ class Hub:
         self._dac_running = False
         self.source_lock = asyncio.Lock()
         self.ml_select_lock = asyncio.Lock()
+        self._accounts: set[str] | None = None  # Spotify accounts seen (guests add new ones)
         self.cmd_lock = asyncio.Lock()  # one Soloist command at a time: its errors carry no request id
         self._cmd_reply: asyncio.Future | None = None
 
@@ -297,8 +298,7 @@ class Hub:
                 await self.maybe_auto_verify()
                 if self.settings.get("source") == "roon":
                     self._set_playing(collect.dac_info().get("state") == "RUNNING")
-                if n % 12 == 6:
-                    await self.keep_normalization()
+                await self.keep_normalization()
                 if n % 720 == 0 and n:  # hourly: keep SD-card writes rare
                     await asyncio.get_running_loop().run_in_executor(None, self.save)
             except Exception:  # keep sampling no matter what
@@ -310,15 +310,51 @@ class Hub:
         """A guest's new account starts with Spotify's normalization on (-5 dB, not
         bit-perfect). Fix every account's prefs, but only after 10 quiet minutes: Soloist
         reads them at start, and a restart would cut off someone listening."""
-        if self.settings.get("source") != "spotify" or self._was_playing:
+        if self.settings.get("source") != "spotify":
             return
+        accounts = set(collect.account_dirs())
+        if self._accounts is None:  # first look: what is there now is not "new"
+            self._accounts = accounts
+        new = accounts - self._accounts
+        self._accounts |= accounts
         want = bool(self.settings.get("soloist_normalization", False))
         wrong = collect.normalization_mismatch(want)
-        if not wrong or time.time() - self._idle_since < 600:
+        if not wrong:
             return
+        if new and any(w.startswith(tuple(new)) for w in wrong):
+            # A guest's first connection: fix it now and bring their playback straight back,
+            # so it is bit-perfect from the first song (a few seconds' pause, once).
+            playing, active = self._was_playing, bool(self.auth.get("is_active"))
+            log.info("new Spotify account: normalization %s, restarting Soloist", "on" if want else "off")
+            async with self.source_lock:
+                await apply_normalization(want)
+            asyncio.ensure_future(self._resume_after_restart(active, playing))
+            return
+        if self._was_playing or time.time() - self._idle_since < 600:
+            return  # an existing account: only when nobody is listening
         log.info("normalization %s for %d account(s); restarting Soloist", "on" if want else "off", len(wrong))
         async with self.source_lock:
             await apply_normalization(want)
+
+    async def _resume_after_restart(self, active: bool, playing: bool):
+        """After a Soloist restart: take the device back (activate) and resume, as before."""
+        if not active:
+            return
+        for _ in range(40):  # Soloist logs in again with the stored credentials
+            await asyncio.sleep(0.5)
+            if self.soloist_ws and self.auth.get("logged_in"):
+                break
+        else:
+            return
+        await asyncio.sleep(1)
+        try:
+            await self.soloist_cmd({"command": "activate"}, wait=2)
+            if playing:
+                await self.wait_active(8)
+                await self.soloist_cmd({"command": "play"}, wait=2)
+            log.info("Soloist back: active%s", ", playing" if playing else "")
+        except Exception as e:  # noqa: BLE001
+            log.warning("resume after restart: %s", e)
 
     async def refresh_status(self):
         pw, solo = await asyncio.gather(collect.pipewire_info(), collect.soloist_info())
@@ -917,9 +953,9 @@ async def soloist_normalization(request):
 async def apply_normalization(enabled: bool):
     """Write the setting into every account's prefs (Soloist reads them at start)."""
     await user_systemctl("stop", "soloist.service")
-    for p in collect.prefs_paths():
-        if await collect.set_normalization_file(p, enabled):
-            persist(p)
+    for d in collect.account_dirs():
+        if await collect.set_normalization_file(d + "prefs", enabled):
+            persist(d + "prefs")
     await user_systemctl("start", "soloist.service")
 
 
