@@ -488,11 +488,18 @@ class Hub:
 
     async def ml_learn_label(self, name: str):
         """After selecting an input, remember what the display calls it (e.g. USB = "SOtM")."""
+        self._learn_gen = gen = getattr(self, "_learn_gen", 0) + 1
         for _ in range(6):
             await asyncio.sleep(1.5)
+            if gen != self._learn_gen:
+                return  # another input was selected meanwhile; that one learns its own name
             d = await self.ml.read_display()
             if d and d["label"]:
                 labels = dict(self.settings.get("ml_labels") or {})
+                if d["label"].lower() == "unused":
+                    break  # the factory name of every unused input says nothing
+                if labels.get(d["label"]) not in (None, name):
+                    continue  # still showing the previous input (slow, or this input is disabled)
                 if labels.get(d["label"]) != name:
                     labels = {k: v for k, v in labels.items() if v != name}
                     labels[d["label"]] = name
@@ -725,9 +732,17 @@ def _ha_soloist() -> dict:
     }
 
 
+def _ml_bypass() -> bool:
+    """The display shows "Line" instead of a level when the input is in processor bypass
+    (fixed gain, e.g. "Arcam      Line"): the AV receiver sets the volume then."""
+    parts = re.split(r"\s{2,}", (hub.ml_state or {}).get("display") or "", maxsplit=1)
+    return len(parts) > 1 and parts[1].strip().lower() == "line"
+
+
 def _ha_amp() -> dict:
     m = hub.ml_state or {}
     reach = bool(m.get("reachable"))
+    bypass = reach and _ml_bypass()
     inp = m.get("input") if reach else None
     labels = m.get("labels") or {}
     return {
@@ -736,7 +751,8 @@ def _ha_amp() -> dict:
         "input": (labels.get(inp) or m.get("label") or inp) if reach else None,  # what the display calls it, e.g. "SOtM"
         "input_id": inp,  # the panel's name: USB, XLR, ...
         "input_no": ML_INPUTS.index(inp) + 1 if inp in ML_INPUTS else None,  # as on the remote, 1..11
-        "volume_db": m.get("volume_db") if reach else None,
+        "volume_db": m.get("volume_db") if reach and not bypass else None,
+        "bypass": bypass if reach else None,  # fixed gain: the volume is the Arcam's
         "mute": m.get("muted") if reach else None,
         "max_db": float(hub.settings.get("ml_max_db", 40.0)),
     }
@@ -1043,6 +1059,8 @@ async def levinson_action(request):
         if "input" in b:
             await hub.ml.set_input(str(b["input"]))
             asyncio.ensure_future(hub.ml_learn_label(str(b["input"])))
+        if ("volume_db" in b or "volume_step_db" in b) and _ml_bypass():
+            raise web.HTTPConflict(text="Ingången står i bypass. Volymen ställs på Arcam.")
         if "volume_db" in b:
             await hub.ml.set_volume(num(b["volume_db"], 0, 80, "Volym"), hub.settings.get("ml_max_db", 40.0))
         if "volume_step_db" in b:
