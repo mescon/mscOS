@@ -465,12 +465,12 @@ class Hub:
             return
         self._ml_play_t = time.time()
         try:
-            await self.ml_select(USB_INPUT)
+            await self.ml_select(USB_INPUT, unmute=force)
         except LevinsonError as e:
             log.warning("585.5 auto-on failed: %s", e)
         await self.ml_refresh()
 
-    async def ml_select(self, name: str) -> dict:
+    async def ml_select(self, name: str, unmute: bool = False) -> dict:
         """Wake the amplifier if needed and put it on an input, without re-selecting the input
         it is already on (that makes it relock: audible). Raises LevinsonError."""
         async with self.ml_select_lock:
@@ -496,7 +496,9 @@ class Hub:
                             break
             log.info("585.5: %s, %s", "woken" if woke else "already on",
                      f"already on {name}" if already else f"input {name}")
-            return {"woke": woke, "switched": not already}
+            if unmute:  # an explicit "TV/play on the stereo": mute set with the remote should not leave it silent
+                await self.ml.set_mute(False)
+            return {"woke": woke, "switched": not already, "unmuted": unmute}
 
     async def ml_learn_label(self, name: str):
         """After selecting an input, remember what the display calls it (e.g. USB = "SOtM")."""
@@ -1132,9 +1134,9 @@ async def living_room_mode(request):
             if hub.soloist_ws and hub.auth.get("is_active") and hub.playback.get("status") == "playing":
                 await hub.soloist_cmd({"command": "pause"})
                 did["paused_soloist"] = True
-            did |= await hub.ml_select(tv)
+            did |= await hub.ml_select(tv, unmute=True)
         elif mode == "stereo":
-            did |= await hub.ml_select(USB_INPUT)  # Spotify and Roon both play through USB
+            did |= await hub.ml_select(USB_INPUT, unmute=True)  # Spotify and Roon both play through USB
             hub._ml_play_t = time.time()  # the next Spotify start need not do it again
         else:
             d = await hub.ml.read_display()
