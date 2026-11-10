@@ -780,10 +780,14 @@ async def set_source(src: str) -> dict:
 
 
 # --------------------------------------------------------------------------- Spotify stream volume
-# Soloist applies the Spotify volume as PipeWire stream volume on its "Spotify" stream node.
-# volbridge.py keeps that at unity (the slider drives the amplifier instead).
-_spotify_nodes: set[int] = set()
-_spotify_last: int | None = None
+# Soloist applies the Spotify volume as PipeWire stream volume on its "spotify" stream node
+# (channelVolumes = (v/100)^3), and reads channelVolumes back: resetting them makes it report
+# 100 % to Spotify. Setting softVolumes (what audioconvert actually multiplies by) to 1.0
+# leaves channelVolumes, so Soloist sees nothing, and the samples pass untouched. Each new
+# channelVolumes from Soloist re-applies them, so softVolumes is set again after every change.
+# (Verified 2026-11-10: Spotify 50 %, channelVolumes 0.125, softVolumes 1.0 -> bit-perfect 0.0 dB,
+# no echo.) volbridge.py drives this; the slider drives the amplifier instead.
+_spotify_nodes: dict[int, list | None] = {}   # node id -> last channelVolumes seen
 
 
 async def spawn_as_user(cmd: list[str]):
@@ -796,34 +800,36 @@ async def spawn_as_user(cmd: list[str]):
         stderr=asyncio.subprocess.DEVNULL)
 
 
-def attenuated_spotify_stream(o: dict) -> bool:
-    """A pw-dump object: is it Soloist's output stream, with a volume below unity?"""
-    global _spotify_last
+def spotify_stream_changed(o: dict) -> int | None:
+    """A pw-dump object: Soloist's output stream with new channelVolumes? Returns its id."""
     if o.get("type") != "PipeWire:Interface:Node":
-        return False
+        return None
     oid, info = o.get("id"), o.get("info")
     if info is None:  # removed
-        _spotify_nodes.discard(oid)
-        return False
+        _spotify_nodes.pop(oid, None)
+        return None
     props = info.get("props") or {}
     if props:
         if props.get("media.class") == "Stream/Output/Audio" and (
                 props.get("application.process.binary") == "soloist"
                 or str(props.get("node.name", "")).lower() == "spotify"
                 or props.get("application.name") == "Spotify"):
-            _spotify_nodes.add(oid)
+            _spotify_nodes.setdefault(oid, None)
         else:
-            _spotify_nodes.discard(oid)
+            _spotify_nodes.pop(oid, None)
     if oid not in _spotify_nodes:
-        return False
-    _spotify_last = oid
+        return None
     for p in (info.get("params") or {}).get("Props") or []:
         vols = p.get("channelVolumes")
-        if vols and min(vols) < 0.9999:
-            return True
-    return False
+        if vols is not None and vols != _spotify_nodes[oid]:
+            _spotify_nodes[oid] = vols
+            return oid
+    return None
 
 
-async def reset_spotify_stream_volume():
-    for oid in sorted(_spotify_nodes) or ([_spotify_last] if _spotify_last else []):
-        await run(["wpctl", "set-volume", str(oid), "1.0"], as_user=True, timeout=5)
+async def spotify_stream_unity(oid: int | None = None):
+    """softVolumes to 1.0 on the Spotify stream(s): what reaches the DAC is untouched."""
+    for n in ([oid] if oid is not None else list(_spotify_nodes)):
+        ch = len(_spotify_nodes.get(n) or [0, 0]) or 2
+        vols = ", ".join(["1.0"] * ch)
+        await run(["pw-cli", "set-param", str(n), "Props", f"{{ softVolumes: [ {vols} ] }}"], as_user=True, timeout=5)

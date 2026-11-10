@@ -1,12 +1,14 @@
 """Spotify's volume slider drives the Mark Levinson 585.5; the signal stays bit-perfect.
 
 Soloist applies the Spotify volume as PipeWire stream volume (channelVolumes on its
-"Spotify" stream node = (v/100)^3), not in its own samples, and does not re-apply it
-(verified 2026-11-10: Spotify at 70 %, stream reset to 1.0, capture bit-perfect 0.0 dB).
-So the slider can be a remote control for the amplifier:
+"spotify" stream node = (v/100)^3), not in its own samples. It reads channelVolumes back
+(resetting them made it report 100 %), so the panel sets softVolumes to 1.0 instead: the
+stream's channelVolumes stay what Soloist set, the samples pass untouched (verified
+2026-11-10: Spotify 50 %, capture bit-perfect 0.0 dB, Spotify still 50 %). So the slider
+is a remote control for the amplifier:
 
   phone slider -> Soloist volume_changed v -> amplifier at v/100 * ceiling (0.5 dB steps)
-  stream node volume != 1.0               -> reset to 1.0 (always, also for new streams)
+  new channelVolumes on the stream        -> softVolumes 1.0 (also for new streams)
   amplifier changed elsewhere (remote, HA, panel) -> Spotify volume follows
 
 Safety: never above the panel ceiling (ml_max_db); no change on the Arcam bypass input,
@@ -39,7 +41,6 @@ class VolumeBridge:
         self._sent: tuple[int, float] | None = None   # (spotify volume we set, when)
         self._amp_db: float | None = None             # last amplifier level we know of
         self._lock = asyncio.Lock()
-        self._reset_t = 0.0                           # when we last set the stream to unity
 
     # ---- conditions
     def enabled(self) -> bool:
@@ -71,7 +72,6 @@ class VolumeBridge:
         if not isinstance(v, (int, float)) or not self.enabled():
             return
         v = int(round(v))
-        asyncio.ensure_future(self._reset_stream())
         if self._sent and abs(v - self._sent[0]) <= 1 and time.time() - self._sent[1] < ECHO_S:
             return  # our own change
         if time.time() - self._active_t < GRACE_S:
@@ -132,9 +132,6 @@ class VolumeBridge:
             log.info("585.5 %.1f dB -> Spotify %d %%", db, pct)
             await self._set_spotify(pct)
 
-    async def _reset_stream(self):
-        self._reset_t = time.time()
-        await collect.reset_spotify_stream_volume()
 
     # ---- background: amplifier poll and PipeWire stream watch
     async def amp_loop(self):
@@ -147,8 +144,8 @@ class VolumeBridge:
             await asyncio.sleep(POLL_S)
 
     async def stream_loop(self):
-        """Keep the Spotify stream at unity: watch PipeWire (pw-dump -m) and reset any
-        channelVolumes below 1.0, also on a newly created stream."""
+        """Keep the Spotify stream at unity: watch PipeWire (pw-dump -m) and set softVolumes
+        to 1.0 after every new channelVolumes from Soloist, also on a newly created stream."""
         while True:
             if not self.enabled():
                 await asyncio.sleep(10)
@@ -171,8 +168,10 @@ class VolumeBridge:
                         except ValueError:
                             break  # incomplete
                         buf = buf[end:]
-                        if any(collect.attenuated_spotify_stream(o) for o in objs if isinstance(o, dict)):
-                            await self._reset_stream()
+                        for o in objs:
+                            oid = collect.spotify_stream_changed(o) if isinstance(o, dict) else None
+                            if oid is not None:
+                                await collect.spotify_stream_unity(oid)
                     if not self.enabled():
                         break
             except Exception:
