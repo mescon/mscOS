@@ -89,7 +89,7 @@ class Hub:
         self.settings: dict = {"auto_verify": True, "alerts": True, "leds": True, "net_speed": 100,
                                # Mark Levinson 585.5: address ("" = find it), wake + USB on play,
                                # standby after N idle minutes (0 = never), panel volume ceiling
-                               "ml_host": "", "ml_tv_input": "RCA3", "ml_auto_on": True, "ml_auto_off_min": 0, "ml_max_db": 40.0,
+                               "ml_host": "", "ml_tv_input": "RCA3", "arcam_max_vol": 50, "ml_auto_on": True, "ml_auto_off_min": 0, "ml_max_db": 40.0,
                                "source": "spotify"}  # who owns the DAC: spotify | roon
         # 30 s samples, 24 h: the DAC's measured clock and the supply rail
         self.clock = collections.deque(maxlen=24 * 60 * 2)
@@ -1159,7 +1159,9 @@ async def arcam_action(request):
         if "source" in b:
             await hub.arcam.set_source(str(b["source"]))
         if "volume" in b:
-            await hub.arcam.set_volume(int(b["volume"]))
+            # same rule as the 585.5: the panel never goes above the ceiling; the remote can
+            await hub.arcam.set_volume(min(num(b["volume"], 0, 99, "Volym", integer=True),
+                                           int(hub.settings.get("arcam_max_vol", 50))))
         if "mute" in b:
             await hub.arcam.set_mute(bool(b["mute"]))
         await asyncio.sleep(0.6 if "power" not in b else 3)
