@@ -185,8 +185,34 @@ class Levinson:
         self.muted = None if self.muted is None else not self.muted
 
     async def set_mute(self, on: bool):
-        await self.send("!1050" if on else "!1051")
-        self.muted = on
+        """Mute with In Mute (!1050). Out Mute (!1051) is answered OK but does not unmute
+        (2026-11-10, flag stays set), so unmuting presses the Mute key (!1032), which toggles,
+        and only when the display's mute flag says it is muted; then it checks."""
+        if on:
+            await self.send("!1050")
+            self.muted = True
+            for _ in range(6):  # let the display catch up, so a status read right after agrees
+                await asyncio.sleep(0.4)
+                d = await self.read_display()
+                if d and d["muted"]:
+                    break
+            return
+        d = await self.read_display()
+        if d and d["muted"] is False:
+            self.muted = False
+            return
+        if d is None:  # cannot read the flag: never toggle blind
+            await self.send("!1051")
+            return
+        await self.send("!1032")
+        for _ in range(6):
+            await asyncio.sleep(0.4)
+            d = await self.read_display()
+            if d and d["muted"] is not None:
+                self.muted = d["muted"]
+                if not d["muted"]:
+                    return
+        raise LevinsonError("mute gick inte att slå av")
 
     async def read_display(self) -> dict | None:
         """What the front-panel display shows, via the unit's own web remote.
@@ -197,7 +223,9 @@ class Levinson:
             on, USB:  "DD:0:SOtM       10.0 :000010 :100:0000"   (input named "SOtM", 10.0 dB)
             on, line: "DD:0:Arcam      Line :000010 :070:0000"   (fixed-gain input shows "Line")
         Standby is an empty text. Field 3 is NOT a power flag: it read 000000 right after !1039 but
-        000010 in standby entered with the remote (2026-11-09).
+        000010 in standby entered with the remote (2026-11-09). Its 4th digit is the mute flag
+        (2026-11-10): "000010" playing, "000110" muted, on every input (the text itself does not
+        change in bypass: "Arcam      Line" either way).
         """
         try:
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3)) as s:
@@ -212,8 +240,9 @@ class Levinson:
         text = m.group(2).strip()
         on = bool(text)
         parts = re.split(r"\s{2,}", text, maxsplit=1)
+        flags = m.group(3)
         return {"on": on, "text": text, "label": parts[0] if on and text else "",
-                "level": parts[1] if len(parts) > 1 else ""}
+                "level": parts[1] if len(parts) > 1 else "", "muted": flags[3] == "1" if on else None}
 
     async def status(self) -> dict:
         """Volume over the control port; power and input from the display (the protocol
@@ -228,6 +257,8 @@ class Levinson:
         d = await self.read_display()
         if d:
             self.power, self.display = d["on"], d
+            if d["muted"] is not None:
+                self.muted = d["muted"]
         return {"reachable": True, "host": self.host, "answers": answered, **self._known()}
 
     def _known(self) -> dict:
