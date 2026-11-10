@@ -28,7 +28,7 @@ from levinson import USB_INPUT, LevinsonError
 
 log = logging.getLogger("volbridge")
 
-GRACE_S = 6.0      # after the device becomes active: Spotify's own volume restore, not a move
+GRACE_S = 2.0      # after the device becomes active: Spotify's own volume restore, not a move
 ECHO_S = 4.0       # our own set_volume coming back as volume_changed
 POLL_S = 5.0       # amplifier volume poll while Spotify is active
 MAX_UP_DB = 6.0    # largest rise from one slider event (a jump is capped; the slider then follows)
