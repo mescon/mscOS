@@ -10,6 +10,7 @@ Det här gör mscOS för bitperfekt uppspelning utan avbrott på sMS-200Ultra (A
 | FTRACE, KPROBES, PSI, AUTOGROUP och debug-alternativ av | Ingen instrumentering i varmvägen |
 | `rt_group_sched=0 audit=0` vid start | RT_GROUP_SCHED och AUDIT kan inte stängas av i konfigen (AppArmor och Armbian-hookar), så de stängs av vid start |
 | `irqaffinity=0` | Alla avbrott börjar på CPU0, och ljudet flyttas sedan till CPU1 |
+| `loglevel=0` (`verbosity=0`) | Ingen konsolutskrift från kärnan, som i ROCK |
 | `mscos-dsd` | Rå DSD till CM6632A, se [DSD.md](DSD.md) |
 
 ## CPU-delning och avbrott (`device/tune-system.sh`, `device/sotm-tuning`)
@@ -19,6 +20,7 @@ Det här gör mscOS för bitperfekt uppspelning utan avbrott på sMS-200Ultra (A
 - **CPU1** är ljudkärnan. Där körs avbrotten från USB-styrkretsarna (EHCI/OHCI) och, via `user@<uid>.service.d CPUAffinity=1`, ljudanvändarens tjänster PipeWire, WirePlumber och Soloist.
 - **Soloists ljudtrådar** (`pipewire-loop`, `Audio Driver Th`, `Media Mixer Ren`) blir SCHED_FIFO 70 via `soloist-rt`. Annars missar de PipeWires deadline.
 - **Roon Bridge** kör `CPUAffinity=0 1`, eftersom .NET-starten behöver båda kärnorna. Annars startar RoonBridge om RAATServer i en loop.
+- **RAATServer** flyttas till CPU1 av `raat-cpu` (bunden till roonbridge.service) så fort port 9004 svarar. Hela processen flyttas, och nya trådar ärver CPU1. RAAT sätter själv SCHED_FIFO på sina ljudtrådar, och som root lyckas det.
 
 ## Hårdvara som stängs av (`device/sotm-lean.dts`)
 

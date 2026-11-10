@@ -1,0 +1,14 @@
+[Unit]
+Description=mscOS: RAATServer on the audio core (CPU1)
+BindsTo=roonbridge.service
+After=roonbridge.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/raat-cpu
+# the watcher itself belongs with everything else on CPU0
+CPUAffinity=0
+Nice=10
+
+[Install]
+WantedBy=roonbridge.service

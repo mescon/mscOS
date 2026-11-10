@@ -1,7 +1,7 @@
 {
-  "name": "Mark Levinson 585.5",
-  "short_name": "585.5",
-  "description": "Spotify Lossless till Mark Levinson 585.5 via sMS-200Ultra: uppspelning, signalintegritet och system",
+  "name": "mscOS",
+  "short_name": "mscOS",
+  "description": "mscOS på SOtM sMS-200Ultra: Spotify Lossless och Roon till Mark Levinson 585.5, signalväg och system",
   "lang": "sv",
   "start_url": "/",
   "scope": "/",

@@ -1,4 +1,4 @@
-// Mark Levinson 585.5 / sMS-200Ultra panel. One WebSocket for live state, POSTs for actions.
+// mscOS panel (Mark Levinson 585.5 / sMS-200Ultra). One WebSocket for live state, POSTs for actions.
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
 const S = { status: {}, playback: {}, auth: {}, queue: {}, xruns: [], lastTest: null, arcam: {}, sources: [], opts: null,
@@ -308,8 +308,8 @@ function renderSignal() {
 function renderStatus() {
   const st = S.status, sys = st.system || {}, solo = st.soloist || {};
   $("#dev-name").textContent = devName();
-  document.title = devName();
-  $("#dev-sub").textContent = `sMS-200Ultra${sys.pmic_temp_c != null ? `, ${dec(sys.pmic_temp_c)} °C` : ""}`;
+  document.title = `mscOS: ${devName()}`;
+  $("#dev-sub").textContent = `mscOS på sMS-200Ultra${sys.pmic_temp_c != null ? `, ${dec(sys.pmic_temp_c)} °C` : ""}`;
   // Soloist
   const days = solo.days_left;
   spec($("#solo-kv"), [
@@ -335,7 +335,8 @@ function renderStatus() {
   // Device
   const memUsed = sys.mem_total - sys.mem_available;
   spec($("#sys-kv"), [
-    ["System", esc(sys.os || "–")],
+    ["System", esc(sys.mscos ? `mscOS ${sys.mscos}` : "mscOS")],
+    ["Bas", esc(sys.os || "–")],
     ["Kärna", esc(sys.kernel || "–")],
     ["Drifttid", fmtUptime(sys.uptime_s || 0)],
     ["Processor", sys.cpu_mhz ? `${sys.cpu_mhz} MHz, ${esc(sys.governor)}, last ${dec((sys.load || [0])[0], 2)}` : "–"],

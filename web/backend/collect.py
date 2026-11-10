@@ -75,6 +75,7 @@ def system_info() -> dict:
         "hostname": os.uname().nodename,
         "kernel": os.uname().release,
         "os": os_rel.get("PRETTY_NAME", ""),
+        "mscos": dict(re.findall(r'^(\w+)="?([^"\n]*)"?', read("/etc/mscos-release"), re.M)).get("VERSION", ""),
         "uptime_s": int(up),
         "load": [float(x) for x in read("/proc/loadavg", "0 0 0").split()[:3]],
         "pmic_temp_c": pmic_temp(),

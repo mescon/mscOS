@@ -20,6 +20,10 @@ install -m 644 "$HERE/roonbridge.service" /etc/systemd/system/roonbridge.service
 # listening (~6 s) and restarts it in a loop.
 install -d /etc/systemd/system/roonbridge.service.d
 install -m 644 "$HERE/roonbridge.service.d/10-dotnet-startup.conf" /etc/systemd/system/roonbridge.service.d/
+# RAATServer onto the audio core once it is up (follows roonbridge: BindsTo/WantedBy)
+install -m 755 "$HERE/raat-cpu" /usr/local/sbin/raat-cpu
+install -m 644 "$HERE/raat-cpu.service" /etc/systemd/system/raat-cpu.service
 systemctl daemon-reload
+systemctl enable raat-cpu.service
 systemctl disable roonbridge.service 2>/dev/null || true
 echo "Roon Bridge installed. Switch source in the panel (Spelar → Källa)."

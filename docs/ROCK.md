@@ -26,8 +26,8 @@ DSD och DoP sköts i RAAT i user space. mscOS gör redan mer på alla punkter so
 | snd-usb-audio som i mainline | Egen DSD-patch för CM6632A | Inget att hämta från ROCK |
 | .NET: Server GC, TieredCompilation (Core på x86) | Egna `DOTNET_*` för A20 | Ej tillämpligt |
 
-## Förslag som följd av jämförelsen
+## Infört i mscOS efter jämförelsen (2026-11-10)
 
-1. **RT för RAAT i Roon-läge:** kontrollera `sched_setscheduler` i `/var/roon/RAATServer/Logs/` och `ps -eLo tid,cls,rtprio,psr,comm -p $(pgrep RAATServer)`. Saknas FIFO, lägg till en motsvarighet till `soloist-rt`.
-2. **RAAT:s ljudtrådar till CPU1** efter starten, när port 9004 svarar. Då delas CPU:n på samma sätt i Roon-läget som i Spotify-läget.
-3. **`quiet` eller `loglevel=0` på kommandoraden.** Det är valfritt och ger marginell nytta.
+1. **RAATServer på ljudkärnan:** `device/raat-cpu` och `raat-cpu.service` flyttar RAATServer till CPU1 när port 9004 svarar. RoonBridge startar ibland om RAATServer, och den nya processen fångas upp vid nästa koll. Det är testat: affinitetsmask 2, 18 trådar.
+2. **Konsolnivå 0:** `verbosity=0` i `armbianEnv.txt`, så kärnan startar med `loglevel=0`. Det börjar gälla vid nästa omstart.
+3. **RT för RAAT:** RAAT begär det själv, precis som i ROCK. Kontrollera vid första uppspelningen i Roon med `ps -eLo tid,cls,rtprio,psr,comm -p $(pgrep -x RAATServer)` och genom att leta efter `sched_setscheduler` i `/var/roon/RAATServer/Logs/`. Saknas FIFO, gör en motsvarighet till `soloist-rt`.

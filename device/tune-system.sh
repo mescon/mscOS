@@ -20,6 +20,8 @@ add_extraarg() {   # add_extraarg <arg> : append to extraargs= once
 # --- 1. CPU split: audio on CPU1, everything else on CPU0 -----------------------
 add_extraarg irqaffinity=0
 add_extraarg audit=0   # AppArmor keeps CONFIG_AUDIT=y; no audit records on every syscall
+# Console log level 0 (as ROCK): Armbian's boot.cmd passes loglevel=${verbosity}
+sed -i 's/^verbosity=.*/verbosity=0/' "$ENV"
 install -d /etc/systemd/system.conf.d "/etc/systemd/system/user@$UID_.service.d"
 printf '[Manager]\n# Default for all services: CPU0. The audio user gets CPU1 (user@%s drop-in).\nCPUAffinity=0\n' "$UID_" \
     > /etc/systemd/system.conf.d/10-sotm-cpu.conf
