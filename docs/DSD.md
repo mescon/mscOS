@@ -1,6 +1,6 @@
 # Rå DSD till Mark Levinson Nº585.5
 
-Status 2026-11-10: **DSD64 fungerar** i full speed, och PCM och DSD växlar på samma enhet åt båda hållen. Förstärkarens display visade "DSD" i testet, som kördes tyst med mute och volym Off. Ljudet är ännu inte avlyssnat. DSD128 och högre kräver USB high speed, se KB-artikeln.
+Status 2026-11-10: **DSD64 fungerar och är avlyssnat**: musiken låter rätt, och fjärrkontrollen och IP-styrningen fungerar under uppspelningen. Det körs i full speed, och PCM och DSD växlar på samma enhet åt båda hållen. Förstärkarens display visade "DSD" i testet, som kördes tyst med mute och volym Off. Ljudet är ännu inte avlyssnat. DSD128 och högre kräver USB high speed, se KB-artikeln.
 
 ## Varför en patch behövs
 
