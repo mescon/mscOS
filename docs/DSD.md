@@ -1,6 +1,6 @@
 # Rå DSD till Mark Levinson Nº585.5
 
-Status 2026-11-10: **DSD64 fungerar** i full speed. Förstärkarens display visade "DSD" i testet, som kördes tyst med mute och volym Off. Ljudet är ännu inte avlyssnat. DSD128 och högre kräver USB high speed, se KB-artikeln.
+Status 2026-11-10: **DSD64 fungerar** i full speed, och PCM och DSD växlar på samma enhet åt båda hållen. Förstärkarens display visade "DSD" i testet, som kördes tyst med mute och volym Off. Ljudet är ännu inte avlyssnat. DSD128 och högre kräver USB high speed, se KB-artikeln.
 
 ## Varför en patch behövs
 
@@ -36,6 +36,7 @@ Enhetsramen motsvarar ALSA:s `DSD_U32_LE` med två ALSA-ramar per enhetsram och 
 - **Logiken** ligger i en egen fil, `sound/usb/mscos_dsd.c`. Krokarna i befintliga filer är en rad var: quirks, format, clock, endpoint (två) och pcm (två).
 - **Avgränsning:** patchen är aktiv bara för enheter i `mscos_dsd_ids[]` och bara på ett läge med RAW_DATA och 8 byte per subslot. Modulparametern `mscos_dsd=0` stänger av den.
 - **Vad den gör:**
+  - lägger DSD-läget (ändpunkt 0x05) på samma ALSA-enhet som PCM-lägena (0x07). `hw:0,0` erbjuder då S16_LE, S24_3LE och S32_LE i 44,1 och 48 kHz samt DSD_U32_LE i 88,2 och 96 kHz. Varje format har sin egen ändpunkt, som öppnas när formatet väljs;
   - visar läget som stereo `DSD_U32_LE` och dubblar takttabellen, så att DSD64 blir 88 200 Hz;
   - sätter enhetens klocka på halva ALSA-takten;
   - håller varje USB-paket till ett jämnt antal ALSA-ramar och skjuter en eventuell överbliven ram till nästa paket. Lågfördröjningsläget är därför avstängt för det här läget;
@@ -62,11 +63,13 @@ kernel/mscos-dsd/install-module.sh root@192.168.1.200 --remove   # tillbaka till
 ```sh
 python3 tools/dsf2u32le.py fil.dsf /tmp/t.raw 40 20       # 20 s från 0:40, DSD64 stereo
 # på enheten, i Roon-läge (PipeWire ska inte hålla DAC:n), förstärkaren tystad:
-aplay -D hw:0,1 -t raw -f DSD_U32_LE -c 2 -r 88200 /tmp/t.raw
-sed -n '/Status/,/Feedback/p' /proc/asound/card0/stream1    # Momentary freq ≈ 88200
+aplay -D hw:0,0 -t raw -f DSD_U32_LE -c 2 -r 88200 /tmp/t.raw
+sed -n '/Status/,/Feedback/p' /proc/asound/card0/stream0    # Altset 4, Momentary freq ≈ 88200
 ```
 
-Roon Bridge väljer `DSD_U32_LE` på `hw:0,1` som native DSD. Ställ in det i Roon under Settings → Audio → enheten → DSD Playback Strategy: Native.
+Roon ser en enda utgång under **sotm**: "USB2.0 High-Speed True HD Audio". Ställ in den under Settings → Audio → enheten → DSD Playback Strategy: **Native**. PCM spelas som PCM och DSD som rå DSD i samma zon.
+
+Förstärkarens display visar "DSD" när DSD startar och samplingsfrekvensen, till exempel "44.1 kHz", när PCM startar.
 
 ## Säkerhet
 

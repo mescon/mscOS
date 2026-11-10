@@ -7,6 +7,8 @@ Expose it as stereo DSD_U32_LE at twice the device clock, program the clock at
 half the ALSA rate, keep packets to whole device frames and swap the middle
 words of every 16 bytes (L0 R0 L1 R1 -> L0 L1 R0 R1). Wire format read from
 C-Media's macOS driver (CmediaUSBDSD.kext 2.7.16, PrepareDoPContent).
+The DSD altsetting (EP 0x05) is joined to the PCM device of the same
+interface, so one ALSA device offers PCM and native DSD.
 All logic in mscos_dsd.c; hooks are one line each. mscos_dsd=0 disables it.
 
 ---
@@ -114,7 +116,7 @@ diff --git a/sound/usb/Makefile b/sound/usb/Makefile
 diff --git a/sound/usb/mscos_dsd.c b/sound/usb/mscos_dsd.c
 --- a/sound/usb/mscos_dsd.c
 +++ b/sound/usb/mscos_dsd.c
-@@ -0,0 +1,117 @@
+@@ -0,0 +1,132 @@
 +// SPDX-License-Identifier: GPL-2.0-or-later
 +/*
 + * mscOS: native DSD for C-Media CM6632A receivers with a 64-bit raw subslot.
@@ -144,6 +146,11 @@ diff --git a/sound/usb/mscos_dsd.c b/sound/usb/mscos_dsd.c
 + *   - swaps words 1 and 2 of every 16 bytes when the URB is filled.
 + * The endpoint stays in ALSA units, so packet sizes, periods and the asynchronous
 + * feedback (whose format the driver already detects by shifting) need no change.
++ *
++ * The DSD altsetting has its own endpoint (0x05, PCM uses 0x07), which would put it on a
++ * second PCM device. Formats carry their own endpoint, opened at hw_params, so it is
++ * joined to the PCM device of the same interface: one device offers PCM and native DSD,
++ * and players (Roon) need only one zone.
 + *
 + * Everything is limited to the devices in mscos_dsd_ids[] and to an altsetting
 + * that is raw DSD with an 8-byte subslot; mscos_dsd=0 turns it off.
@@ -186,6 +193,16 @@ diff --git a/sound/usb/mscos_dsd.c b/sound/usb/mscos_dsd.c
 +	usb_audio_info(chip, "%u:%d: mscOS native DSD (64-bit subslot as DSD_U32_LE)\n",
 +		       fp->iface, fp->altsetting);
 +	return SNDRV_PCM_FMTBIT_DSD_U32_LE;
++}
++
++bool mscos_dsd_join(struct snd_usb_substream *subs, const struct audioformat *fp)
++{
++	const struct audioformat *first;
++
++	if (!fp->mscos_dsd64 || !subs->ep_num || list_empty(&subs->fmt_list))
++		return false;
++	first = list_first_entry(&subs->fmt_list, struct audioformat, list);
++	return first->iface == fp->iface;
 +}
 +
 +void mscos_dsd_fixup_rates(struct audioformat *fp)
@@ -235,7 +252,7 @@ diff --git a/sound/usb/mscos_dsd.c b/sound/usb/mscos_dsd.c
 diff --git a/sound/usb/mscos_dsd.h b/sound/usb/mscos_dsd.h
 --- a/sound/usb/mscos_dsd.h
 +++ b/sound/usb/mscos_dsd.h
-@@ -0,0 +1,27 @@
+@@ -0,0 +1,30 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +/*
 + * mscOS: native DSD for C-Media CM6632A receivers with a 64-bit raw subslot
@@ -248,11 +265,14 @@ diff --git a/sound/usb/mscos_dsd.h b/sound/usb/mscos_dsd.h
 +
 +struct snd_usb_audio;
 +struct snd_usb_endpoint;
++struct snd_usb_substream;
 +struct audioformat;
 +
 +/* quirks.c: claim the raw-DSD altsetting; returns the ALSA format bits or 0 */
 +u64 mscos_dsd_format(struct snd_usb_audio *chip, struct audioformat *fp,
 +		     unsigned int sample_bytes);
++/* stream.c: offer the DSD altsetting on the PCM device of the same interface */
++bool mscos_dsd_join(struct snd_usb_substream *subs, const struct audioformat *fp);
 +/* format.c: rates in the table are the device clock; ALSA frames run twice as fast */
 +void mscos_dsd_fixup_rates(struct audioformat *fp);
 +/* clock.c: the rate to program into the device clock */
@@ -318,3 +338,23 @@ diff --git a/sound/usb/quirks.c b/sound/usb/quirks.c
  
  	/* Playback Designs */
  	if (USB_ID_VENDOR(chip->usb_id) == 0x23ba &&
+diff --git a/sound/usb/stream.c b/sound/usb/stream.c
+--- a/sound/usb/stream.c
++++ b/sound/usb/stream.c
+@@ -25,6 +25,7 @@
+ #include "format.h"
+ #include "clock.h"
+ #include "stream.h"
++#include "mscos_dsd.h"
+ #include "power.h"
+ #include "media.h"
+ 
+@@ -506,7 +507,7 @@
+ 		if (as->fmt_type != fp->fmt_type)
+ 			continue;
+ 		subs = &as->substream[stream];
+-		if (subs->ep_num == fp->endpoint) {
++		if (subs->ep_num == fp->endpoint || mscos_dsd_join(subs, fp)) {
+ 			list_add_tail(&fp->list, &subs->fmt_list);
+ 			subs->num_formats++;
+ 			subs->formats |= fp->formats;

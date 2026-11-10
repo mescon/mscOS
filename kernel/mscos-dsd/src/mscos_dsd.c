@@ -28,6 +28,11 @@
  * The endpoint stays in ALSA units, so packet sizes, periods and the asynchronous
  * feedback (whose format the driver already detects by shifting) need no change.
  *
+ * The DSD altsetting has its own endpoint (0x05, PCM uses 0x07), which would put it on a
+ * second PCM device. Formats carry their own endpoint, opened at hw_params, so it is
+ * joined to the PCM device of the same interface: one device offers PCM and native DSD,
+ * and players (Roon) need only one zone.
+ *
  * Everything is limited to the devices in mscos_dsd_ids[] and to an altsetting
  * that is raw DSD with an 8-byte subslot; mscos_dsd=0 turns it off.
  */
@@ -69,6 +74,16 @@ u64 mscos_dsd_format(struct snd_usb_audio *chip, struct audioformat *fp,
 	usb_audio_info(chip, "%u:%d: mscOS native DSD (64-bit subslot as DSD_U32_LE)\n",
 		       fp->iface, fp->altsetting);
 	return SNDRV_PCM_FMTBIT_DSD_U32_LE;
+}
+
+bool mscos_dsd_join(struct snd_usb_substream *subs, const struct audioformat *fp)
+{
+	const struct audioformat *first;
+
+	if (!fp->mscos_dsd64 || !subs->ep_num || list_empty(&subs->fmt_list))
+		return false;
+	first = list_first_entry(&subs->fmt_list, struct audioformat, list);
+	return first->iface == fp->iface;
 }
 
 void mscos_dsd_fixup_rates(struct audioformat *fp)
