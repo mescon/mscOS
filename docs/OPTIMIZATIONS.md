@@ -34,6 +34,12 @@ Termosensorn i GPADC saknar fungerande IRQ på kortet, så varje avläsning bloc
 - **Rå hw-enhet:** DAC:n körs i pro-audio-profilen, med S32LE så att 24 bitar går igenom orörda.
 - **Ingen suspend:** DAC:n hålls öppen hela tiden, så att den inte klickar när uppspelningen startar.
 - **Oanvända ljudkort** (A20-codecen och HDMI) är avstängda.
+- **Spotify-reglaget styr 585.5:an** (`web/backend/volbridge.py`).
+  - Soloist sänker volymen genom att sätta `channelVolumes` på sin PipeWire-ström, och läser sedan tillbaka värdet.
+  - Panelen sätter därför `softVolumes` till 1,0 efter varje ändring. Samplen går då orörda till DAC:n, och Soloist märker ingenting.
+  - Reglaget flyttas till förstärkaren: 0–100 % motsvarar 0–40 dB, med högst +6 dB per ändring.
+  - Ändringar med fjärrkontrollen, i HA eller i panelen flyttar reglaget tillbaka.
+  - Verifierat: bitperfekt 24 bitar och 0,0 dB med Spotify på 50 %.
 - **Bitperfekt verifieras** i panelen. Panelen spelar in sinkens monitor och kontrollerar att samplen ligger på 16-bitarsgittret med 0,0 dB förstärkning.
 
 ## Brus och schemaläggning
