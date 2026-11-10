@@ -565,13 +565,14 @@ class Hub:
             await asyncio.sleep(10 if self.clients else 60)
 
     async def arcam_loop(self):
-        while True:
-            try:
-                self.arcam_state = await self.arcam.status()
-            except ArcamError as e:
-                self.arcam_state = {"reachable": False, "error": str(e)}
-            await self.broadcast({"type": "arcam", "arcam": self.arcam_state})
-            await asyncio.sleep(10 if self.clients else 60)
+        """Read the Arcam once at start, then only on demand (/api/arcam). The AVR10 serves one
+        TCP client at a time and Home Assistant (arcam_fmj) keeps a connection open: every
+        connection from here throws HA off for ~5 s, and an off->on missed in that gap is a
+        TV mode that never starts."""
+        try:
+            self.arcam_state = await self.arcam.status()
+        except ArcamError as e:
+            self.arcam_state = {"reachable": False, "error": str(e)}
 
     # ---- jobs: long-running commands with streamed output
     async def run_job(self, name: str, cmd: list[str] | str, as_user=False):

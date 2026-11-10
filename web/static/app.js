@@ -60,6 +60,7 @@ $$("details.fold").forEach((d) => {
     if (d.id === "f-drop") renderSpark();
     if (d.id === "f-clock" && S.dacd?.clock_avg) renderClockChart(S.dacd.clock_avg.series || []);
     if (d.id === "f-opt") loadOpts(true);
+    if (d.id === "f-arcam") arcam({});  // read on demand: HA holds the Arcam's only connection
   });
 });
 
