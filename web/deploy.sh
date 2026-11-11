@@ -18,6 +18,8 @@ fi
 mkdir -p '$P'/backend '$P'/static /var/lib/mscos /etc/mscos'
 rsync -a --delete --exclude __pycache__ "$HERE/backend/" "$HOST:$P/backend/"
 rsync -a --delete "$HERE/static/" "$HOST:$P/static/"
+# the sources' install scripts (they download each player from its publisher, on the device)
+rsync -a --delete "$HERE/../sources/" "$HOST:/usr/lib/mscos/sources/"
 # mscOS release: date and commit of what is deployed (shown in the panel under System)
 VER="$(date +%Y.%m.%d)-$(git -C "$HERE" describe --always --dirty 2>/dev/null || echo unknown)"
 ssh "$HOST" "printf 'NAME=mscOS\nVERSION=%s\nHOME_URL=https://github.com/mescon/mscOS\n' '$VER' > /etc/mscos-release"

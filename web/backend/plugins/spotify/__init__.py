@@ -1,0 +1,44 @@
+"""Spotify Lossless through Soloist, Spotify's own Connect endpoint for developers.
+
+Soloist needs a personal developer key from a Premium account; Spotify's terms say the key
+may not be shared and the program may not be redistributed, so the install script downloads
+it from Spotify on the device and the key is entered in the panel (System -> Spotify).
+The Soloist relay itself (playback state, queue, measured format, the volume bridge) is
+part of the core; this module is what puts it on the source switch.
+"""
+from __future__ import annotations
+
+import os
+
+import collect
+from plugins import SourcePlugin
+
+BIN = "/usr/local/bin/soloist"
+
+
+class Spotify(SourcePlugin):
+    id = "spotify"
+    label = "Spotify"
+    protocol = "Spotify Connect"
+    name = {"sv": "Spotify Lossless (Soloist)", "en": "Spotify Lossless (Soloist)"}
+    description = {"sv": "Spotify Connect i Lossless, bitperfekt. Kräver Premium och en egen utvecklarnyckel från Spotify.",
+                   "en": "Spotify Connect in Lossless, bit-perfect. Needs Premium and your own developer key from Spotify."}
+    user_units = ("soloist.service", "soloist-rt.service")
+    hint = {"sv": "Välj {name} i Spotify-appen", "en": "Choose {name} in the Spotify app"}
+    terms = {"sv": "Soloist hämtas från Spotify till den här enheten. Du behöver Spotify Premium och en egen nyckel, som du skapar på Spotifys utvecklarsida och anger här efteråt. Nyckeln är personlig.",
+             "en": "Soloist is downloaded from Spotify to this device. You need Spotify Premium and a key of your own, which you create on Spotify's developer site and enter here afterwards. The key is personal."}
+    terms_url = "https://developer.spotify.com/documentation/soloist"
+
+    async def installed(self) -> bool:
+        return os.path.exists(BIN) and os.path.exists(collect.SOLOIST_UNIT)
+
+    async def start(self) -> str:
+        if not collect.api_key_info()["set"]:
+            return ""  # installed but no key yet: nothing to start, the panel asks for the key
+        return await super().start()
+
+    async def state(self) -> dict:
+        return {"key_set": collect.api_key_info()["set"]}
+
+
+PLUGIN = Spotify

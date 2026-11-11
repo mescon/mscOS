@@ -3,6 +3,8 @@
 The core knows playback, the signal path, the DAC and the panel. Everything that belongs to
 a particular setup is a module that the user turns on under System -> Modules:
 
+  source       a player that owns the DAC, one at a time: Spotify (Soloist or librespot),
+               Roon Bridge, HQPlayer NAA, ...; the source switch lists the enabled ones
   amp          an amplifier or volume control (Mark Levinson IP, Arcam, ...); at most one
                is the volume: the Spotify slider and the panel's volume drive it
   integration  outside systems (Home Assistant) and scenes (TV mode)
@@ -25,7 +27,7 @@ log = logging.getLogger("plugins")
 
 class Plugin:
     id = ""
-    kind = "integration"          # amp | integration | device
+    kind = "integration"          # source | amp | integration | device
     name: dict[str, str] = {}     # {"sv": ..., "en": ...}
     description: dict[str, str] = {}
     defaults: dict[str, Any] = {}  # its settings, merged into hub.settings (keys owned by the module)
@@ -101,6 +103,64 @@ class AmpPlugin(Plugin):
 
     async def refresh(self) -> None:
         """Read its state and tell the panel."""
+
+
+class SourcePlugin(Plugin):
+    """A player. Only one source runs at a time (it owns the DAC); the core starts and stops
+    them through their systemd units. The software itself is installed on the device by the
+    source's install script (<lib>/sources/<id>/install.sh), from its publisher: mscOS ships
+    no player binaries and no keys."""
+    kind = "source"
+    label = ""                         # on the source switch, e.g. "Roon"
+    protocol = ""                      # tag in the signal chain, e.g. "RAAT"
+    pipewire = True                    # plays through PipeWire; False: opens the DAC itself
+    user_units: tuple[str, ...] = ()   # systemd --user units of the audio user
+    system_units: tuple[str, ...] = ()
+    hint: dict[str, str] = {}          # what the listener does to play, e.g. choose it in the app
+    terms: dict[str, str] = {}         # shown before installing (licence, account needed)
+    terms_url = ""
+
+    async def installed(self) -> bool:
+        return False
+
+    async def active(self) -> bool:
+        import collect
+        if self.user_units:
+            return await collect.units_active(self.user_units, user=True)
+        return await collect.units_active(self.system_units, user=False)
+
+    async def _ctl(self, verb: str) -> str:
+        import collect
+        err = ""
+        rev = verb == "stop"
+        if self.system_units:
+            u = list(reversed(self.system_units)) if rev else list(self.system_units)
+            rc, _, e = await collect.run(["systemctl", verb, *u], timeout=60)
+            err += e if rc else ""
+        if self.user_units:
+            u = list(reversed(self.user_units)) if rev else list(self.user_units)
+            rc, _, e = await collect.run(["systemctl", "--user", verb, *u], as_user=True, timeout=60)
+            err += e if rc else ""
+        return err.strip()
+
+    async def start(self) -> str:
+        """Start playing software; returns an error text, empty when it went well."""
+        return await self._ctl("start")
+
+    async def stop(self) -> str:
+        return await self._ctl("stop")
+
+    async def playing(self) -> bool | None:
+        """Is it playing right now? None: not known here (the core then looks at the DAC)."""
+        return None
+
+    def now_playing(self) -> dict | None:
+        """What plays, for the panel: title, artist, album, image, format. None: not known."""
+        return None
+
+    async def state(self) -> dict:
+        """Extra facts for the panel's status (version, ...)."""
+        return {}
 
 
 def discover() -> dict[str, type[Plugin]]:

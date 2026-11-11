@@ -146,7 +146,7 @@ class Hub:
         self.tests = collections.deque(maxlen=200)  # verification log, manual and automatic
         self.settings: dict = {"auto_verify": True, "alerts": True, "leds": True, "net_speed": 100,
                                "spotify_vol_to_amp": True, "soloist_normalization": False,
-                               "source": "spotify",  # who owns the DAC: spotify | roon
+                               "source": "",  # the source module that owns the DAC (one at a time)
                                "language": "en"}  # system language (alerts); the panel follows the browser
         # 30 s samples, 24 h: the DAC's measured clock and the supply rail
         self.clock = collections.deque(maxlen=24 * 60 * 2)
@@ -186,6 +186,19 @@ class Hub:
                 self.save_settings()
             except OSError:
                 pass
+        if self.settings.get("plugins_v", 1) < 2:  # sources became modules: turn on what is installed
+            en = self.settings["plugins"]
+            if os.path.exists(collect.SOLOIST_UNIT) and "spotify" not in en:
+                en.append("spotify")
+                self.settings.setdefault("source", "spotify")
+                self.settings["source"] = self.settings["source"] or "spotify"
+            if os.path.exists("/opt/RoonBridge/start.sh") and "roon" not in en:
+                en.append("roon")
+            self.settings["plugins_v"] = 2
+            try:
+                self.save_settings()
+            except OSError:
+                pass
         self.available_plugins = found
         for pid in self.settings["plugins"]:
             cls = found.get(pid)
@@ -199,6 +212,63 @@ class Hub:
             except Exception:
                 log.exception("module %s failed to start", pid)
         log.info("modules: %s", ", ".join(self.plugins) or "none")
+        if self.settings.get("source") not in self.sources:  # its module was turned off
+            self.settings["source"] = next(iter(self.sources), "")
+
+    @property
+    def sources(self) -> dict:
+        """The enabled source modules, by id."""
+        return {i: p for i, p in self.plugins.items() if p.kind == "source"}
+
+    @property
+    def source(self):
+        """The source that owns the DAC now, or None."""
+        return self.sources.get(self.settings.get("source") or "")
+
+    @property
+    def soloist(self) -> bool:
+        """Is Spotify Lossless (Soloist) the current source?"""
+        return self.settings.get("source") == "spotify"
+
+    async def switch_source(self, src: str) -> dict:
+        """Hand the DAC to one source: stop every other one, then PipeWire if the new one
+        opens the DAC itself, wait for the DAC to be free, and start it."""
+        new = self.sources.get(src)
+        if src and new is None:
+            raise RuntimeError(T("Okänd källa"))
+        if new and not await new.installed():
+            raise RuntimeError(T("{name} är inte installerat", name=new.name.get(i18n.current(), new.label)))
+        err, direct_before = "", False
+        for s in self.sources.values():
+            if s is not new and await s.active():
+                direct_before = direct_before or not s.pipewire
+                err += await s.stop()
+        via_pw = bool(new and new.pipewire)
+        released = True
+        if not via_pw:
+            err += await collect.pipewire("stop")
+        if not via_pw or direct_before:
+            released = await collect._wait_released()
+        if via_pw:
+            err += await collect.pipewire("start")
+        e2 = await new.start() if new else ""
+        ok_ = not e2
+        self.settings["source"] = src
+        await asyncio.get_running_loop().run_in_executor(None, self.save_settings)
+        self._was_playing = False
+        self._idle_since = time.time()
+        if src != "spotify":
+            self.playback, self.queue = {}, {}
+        return {"ok": ok_, "source": src, "dac_released": released, "error": (err + e2)[:300]}
+
+    def source_changed(self, plugin) -> None:
+        """A source module reports new state (what plays): tell the panel, note play starts."""
+        if plugin is not self.source:
+            return
+        np = plugin.now_playing()
+        if np is not None:
+            self._set_playing(bool(np.get("playing")))
+        asyncio.ensure_future(self.broadcast({"type": "now", "source": plugin.id, "now": np}))
 
     @property
     def amp(self):
@@ -242,7 +312,9 @@ class Hub:
 
     def features(self) -> dict:
         """What this installation has, so the panel shows only that."""
-        f = {"amp": "none", "arcam": False, "plugins": list(self.plugins)}
+        f = {"amp": "none", "arcam": False, "plugins": list(self.plugins),
+             "sources": [{"id": i, "label": p.label, "name": p.name, "protocol": p.protocol, "pipewire": p.pipewire,
+                          "hint": p.hint, "terms": p.terms, "terms_url": p.terms_url} for i, p in self.sources.items()]}
         for p in self.plugins.values():
             f.update(p.features())
         return f
@@ -250,11 +322,17 @@ class Hub:
     def summary(self) -> dict:
         """One cheap snapshot (in-memory state only, plus the DAC's /proc state) for automations."""
         d = collect.dac_info()
-        src = self.settings.get("source", "spotify")
+        src = self.settings.get("source", "")
         solo = _ha_soloist()
-        # PipeWire keeps the DAC open (ALSA RUNNING) also in silence, so with Spotify "running"
-        # means Soloist is playing here; Roon Bridge opens the DAC only while it plays.
-        running = (d.get("state") == "RUNNING") if src == "roon" else (solo["status"] == "playing" if solo["reachable"] else None)
+        # PipeWire keeps the DAC open (ALSA RUNNING) also in silence, so with a source that
+        # plays through it "running" is what the source says; Roon Bridge and NAA open the
+        # DAC only while they play.
+        if src == "spotify":
+            running = solo["status"] == "playing" if solo["reachable"] else None
+        elif self.source and self.source.pipewire:
+            running = self._was_playing
+        else:
+            running = d.get("state") == "RUNNING"
         out = {"ts": time.time(), "source": src, "soloist": solo}
         for p in self.plugins.values():
             out.update(p.summary())
@@ -399,8 +477,10 @@ class Hub:
                 if n % 6 == 0:
                     await self.sample_xruns()
                 await self.maybe_auto_verify()
-                if self.settings.get("source") == "roon":
-                    self._set_playing(collect.dac_info().get("state") == "RUNNING")
+                cur = self.source
+                if cur and not self.soloist:
+                    p = await cur.playing()
+                    self._set_playing(collect.dac_info().get("state") == "RUNNING" if p is None else p)
                 await self.keep_normalization()
                 if n % 720 == 0 and n:  # hourly: keep SD-card writes rare
                     await asyncio.get_running_loop().run_in_executor(None, self.save)
@@ -413,7 +493,7 @@ class Hub:
         """A guest's new account starts with Spotify's normalization on (-5 dB, not
         bit-perfect). Fix every account's prefs, but only after 10 quiet minutes: Soloist
         reads them at start, and a restart would cut off someone listening."""
-        if self.settings.get("source") != "spotify":
+        if not self.soloist:
             return
         accounts = set(collect.account_dirs())
         if self._accounts is None:  # first look: what is there now is not "new"
@@ -472,7 +552,11 @@ class Hub:
             log.warning("resume after restart: %s", e)
 
     async def refresh_status(self):
-        pw, solo = await asyncio.gather(collect.pipewire_info(), collect.soloist_info())
+        pw = await collect.pipewire_info()
+        solo = await collect.soloist_info() if "spotify" in self.plugins else {}
+        srcs = {}
+        for i, p in self.sources.items():
+            srcs[i] = {"installed": await p.installed(), "active": await p.active(), **await p.state()}
         if time.monotonic() - getattr(self, "_usb_err_t", -1e9) > 60:
             self._usb_err = await collect.usb_errors_since_boot()
             self._usb_err_t = time.monotonic()
@@ -484,8 +568,9 @@ class Hub:
             "soloist": solo,
             "usb_errors": self._usb_err,
             "supply": collect.supply(),
-            "source": self.settings.get("source", "spotify"),
-            "roon": {"installed": await collect.roon_installed(), "active": await collect.roon_active()},
+            "source": self.settings.get("source", ""),
+            "sources": srcs,
+            "now": self.source.now_playing() if self.source else None,
             "leds": collect.leds_state(),
             "pw_top": self.last_err,
         }
@@ -551,7 +636,7 @@ class Hub:
         if self._held("dac", not dac.get("present"), 60):
             await self.alert("dac", T("DAC:en hittas inte"),
                              T("DAC:en syns inte längre på USB. Kontrollera kabeln och att DAC:en är på."))
-        if self._held("soloist", self.settings.get("source") == "spotify"
+        if self._held("soloist", self.soloist and collect.api_key_info()["set"]
                       and solo.get("service") not in (None, "active"), 120):
             await self.alert("soloist", T("Soloist har stannat"),
                              T("Spotify-tjänsten är {state}. Starta om den under System i panelen.", state=solo.get("service")))
@@ -569,7 +654,7 @@ class Hub:
         if getattr(self, "_quality_busy", False):
             return
         uri = (self.playback.get("item") or {}).get("uri")
-        if not uri or self.settings.get("source") != "spotify":
+        if not uri or not self.soloist:
             log.info("track quality: no track")
             return
         self._quality_busy = True
@@ -693,7 +778,7 @@ class Hub:
 
     # ---- playback on this device: modules react (the amplifier wakes and selects its input)
     def _on_playback_change(self):
-        if self.settings.get("source") != "spotify":
+        if not self.soloist:
             return
         # Choosing "Mark Levinson 585.5" in the Spotify app already wakes the amplifier and
         # selects its input, before anything plays (the module has a 90 s guard, so play right after
@@ -800,6 +885,7 @@ async def ws_handler(request):
         "type": "hello", "status": hub.status, "playback": hub.playback, "auth": hub.auth,
         "queue": hub.queue, "xruns": list(hub.xruns)[-2880:], "last_test": hub.last_test,
         "features": hub.features(), "names": hub.names(), **{k: v for p in hub.plugins.values() for k, v in p.hello().items()}, "quality": hub.track_quality,
+        "now": hub.source.now_playing() if hub.source else None,
         "tests": list(hub.tests)[-30:], "settings": {**hub.settings, "alerts_configured": bool(hub.features().get("ha_alerts"))},
         "jobs": {k: {kk: vv for kk, vv in v.items()} for k, v in hub.jobs.items()},
     }))
@@ -842,8 +928,8 @@ async def soloist_command(request):
         await hub.soloist_cmd(msg)  # the panel's own buttons: fire and forget, as before
         return ok()
     # From Home Assistant (voice assistants): say what actually happened.
-    if hub.settings.get("source") == "roon":
-        raise web.HTTPConflict(text=T("Stereon är inställd på Roon"))
+    if not hub.soloist:
+        raise web.HTTPConflict(text=T("Källan är inte Spotify Lossless"))
     if not hub.soloist_ws:
         raise web.HTTPServiceUnavailable(text=T("Soloist svarar inte"))
     if not hub.auth.get("logged_in"):
@@ -1021,30 +1107,41 @@ async def audio_test(request):
     return ok(seconds=secs)
 
 
-# ---- Source switch: Spotify | Roon
+# ---- Source switch: one source module at a time owns the DAC
 @routes.post("/api/source")
 async def set_source(request):
     src = (await body(request)).get("source")
-    if src not in ("spotify", "roon"):
-        raise web.HTTPBadRequest(text=T("Välj spotify eller roon"))
+    if src not in hub.sources:
+        raise web.HTTPBadRequest(text=T("Okänd källa"))
     if hub.source_lock.locked():
         raise web.HTTPConflict(text=T("Byter redan källa"))
     async with hub.source_lock:
         try:
-            r = await collect.set_source(src)
+            r = await hub.switch_source(src)
         except RuntimeError as e:
-            raise web.HTTPConflict(text=T(str(e)))
+            raise web.HTTPConflict(text=str(e))
         if not r["ok"]:
             raise web.HTTPInternalServerError(text=T("Bytet misslyckades: {error}", error=r["error"]))
-        hub.settings["source"] = src
-        await asyncio.get_running_loop().run_in_executor(None, hub.save_settings)
-        hub._was_playing = False
-        hub._idle_since = time.time()
-        if src == "roon":
-            hub.playback, hub.queue = {}, {}
     await hub.broadcast({"type": "settings", "settings": hub.settings})
     await hub.refresh_status()
     return ok(**r)
+
+
+@routes.post("/api/sources/install")
+async def source_install(request):
+    """Download and set up a source's player on this device, from its publisher (the
+    module's install script). Output is streamed to the panel as a job."""
+    b = await body(request)
+    p = hub.sources.get(b.get("id"))
+    if p is None:
+        raise web.HTTPNotFound(text=T("Okänd källa"))
+    script = os.path.join(collect.LIB, "sources", p.id, "install.sh")
+    if not os.path.exists(script):
+        raise web.HTTPNotFound(text=T("Installationsskriptet saknas: {path}", path=script))
+    if overlay_active():
+        raise web.HTTPConflict(text=T("Stäng av skrivskyddet först. Med skrivskyddat system försvinner installationen vid omstart."))
+    await hub.run_job(f"install-{p.id}", [script])
+    return ok()
 
 
 # ---- DAC detail (Eunhasu's /dacinfo/, interpreted)
@@ -1100,18 +1197,25 @@ async def set_settings(request):
 
 
 # ---- modules: which are installed, which are on
-def _plugin_list() -> list[dict]:
+KIND_ORDER = {"source": 0, "amp": 1, "device": 2, "integration": 3}
+
+
+async def _plugin_list() -> list[dict]:
     out = []
-    for pid, cls in sorted(hub.available_plugins.items(), key=lambda kv: (kv[1].kind, kv[0])):
-        out.append({"id": pid, "kind": cls.kind, "name": cls.name, "description": cls.description,
-                    "requires": list(cls.requires), "enabled": pid in hub.settings.get("plugins", []),
-                    "running": pid in hub.plugins})
+    for pid, cls in sorted(hub.available_plugins.items(), key=lambda kv: (KIND_ORDER.get(kv[1].kind, 9), kv[0])):
+        d = {"id": pid, "kind": cls.kind, "name": cls.name, "description": cls.description,
+             "requires": list(cls.requires), "enabled": pid in hub.settings.get("plugins", []),
+             "running": pid in hub.plugins}
+        if cls.kind == "source":  # its player is installed on the device, from its publisher
+            d.update(terms=cls.terms, terms_url=cls.terms_url,
+                     installed=await hub.plugins[pid].installed() if pid in hub.plugins else None)
+        out.append(d)
     return out
 
 
 @routes.get("/api/plugins")
 async def plugins_list(request):
-    return web.json_response({"plugins": _plugin_list(), "restart_needed": _plugins_restart_needed()})
+    return web.json_response({"plugins": await _plugin_list(), "restart_needed": _plugins_restart_needed()})
 
 
 def _plugins_restart_needed() -> bool:
@@ -1134,7 +1238,12 @@ async def plugins_set(request):
         if cls.kind == "amp":  # one volume: another amplifier module goes off
             en = [p for p in en if hub.available_plugins.get(p) is None or hub.available_plugins[p].kind != "amp"]
         en.append(pid)
-    else:  # what needs an amplifier goes with the last one
+    else:
+        cur = hub.plugins.get(pid)
+        if cur is not None and cur.kind == "source" and await cur.active():
+            async with hub.source_lock:  # a source that is turned off stops playing now
+                await cur.stop()
+        # what needs an amplifier goes with the last one
         if hub.available_plugins[pid].kind == "amp":
             en = [p for p in en if "amp" not in hub.available_plugins.get(p, pluginlib.Plugin).requires]
     hub.settings["plugins"] = en
@@ -1142,7 +1251,7 @@ async def plugins_set(request):
     if b.get("restart"):
         log.info("modules now %s; restarting the panel", en)
         asyncio.get_running_loop().call_later(0.5, lambda: os._exit(0))  # systemd starts it again
-    return ok(plugins=_plugin_list(), restart_needed=_plugins_restart_needed())
+    return ok(plugins=await _plugin_list(), restart_needed=_plugins_restart_needed())
 
 
 @routes.post("/api/alerts/test")
@@ -1253,10 +1362,17 @@ async def poweroff(request):
 
 @routes.post("/api/system/restart-audio")
 async def restart_audio(request):
-    rc, _, err = await collect.run(["systemctl", "--user", "restart", "pipewire.service", "wireplumber.service",
-                                    "soloist.service"], as_user=True, timeout=60)
-    if rc:
-        raise web.HTTPInternalServerError(text=T("Omstarten misslyckades: {error}", error=err.strip()[:200]))
+    cur = hub.source
+    async with hub.source_lock:
+        err = await cur.stop() if cur else ""
+        if not cur or cur.pipewire:
+            rc, _, e = await collect.run(["systemctl", "--user", "restart", "pipewire.service", "wireplumber.service"],
+                                         as_user=True, timeout=60)
+            err += e.strip() if rc else ""
+        if cur:
+            err += await cur.start()
+    if err:
+        raise web.HTTPInternalServerError(text=T("Omstarten misslyckades: {error}", error=err[:200]))
     return ok()
 
 
@@ -1309,7 +1425,9 @@ async def overlay(request):
 @routes.get("/api/logs")
 async def get_logs(request):
     q = request.query
-    text = await collect.logs(q.get("source", "soloist"), int(q.get("lines", 200)), q.get("errors") == "1")
+    cur = hub.source
+    text = await collect.logs(q.get("source", "player"), int(q.get("lines", 200)), q.get("errors") == "1",
+                              (cur.user_units, cur.system_units) if cur else ((), ()))
     return web.Response(text=text, content_type="text/plain", charset="utf-8")
 
 
@@ -1322,7 +1440,7 @@ async def index(request):
 PROTECTED = ("/api/system/", "/api/logs", "/api/soloist/apikey", "/api/soloist/name", "/api/soloist/normalization",
              "/api/soloist/restart", "/api/soloist/update", "/api/settings", "/api/alerts/", "/api/tests/",
              "/api/auth/password",
-             "/api/source",  # stops/starts the audio stacks as root
+             "/api/source",  # stops/starts the audio stacks as root (also /api/sources/install)
              "/api/plugins/")  # turns modules on and off (restarts the panel)
 
 
@@ -1427,18 +1545,22 @@ async def on_startup(app):
         """Bring up the saved source. Spotify normally starts with the soloist session by itself;
         start it only if it is not running (e.g. Roon mode was ended by editing settings)."""
         await asyncio.sleep(5)  # let the user session come up first
-        src = hub.settings.get("source", "spotify")
-        if src == "spotify":
-            rc, out, _ = await collect.run(["systemctl", "--user", "is-active", "soloist.service"], as_user=True, timeout=10)
-            if out.strip() == "active":
-                return
+        cur = hub.source
+        others = [s for s in hub.sources.values() if s is not cur and await s.active()]
+        if cur is None or (not others and await cur.active()) or not await cur.installed():
+            return
         async with hub.source_lock:
-            r = await collect.set_source(src)
-            log.info("source at startup: %s", r)
+            try:
+                r = await hub.switch_source(cur.id)
+                log.info("source at startup: %s", r)
+            except RuntimeError as e:
+                log.warning("source at startup: %s", e)
     asyncio.ensure_future(restore())
     app["tasks"] = [asyncio.create_task(c) for p in hub.plugins.values() for c in p.tasks()]
-    app["tasks"] += [asyncio.create_task(c) for c in (hub.soloist_loop(), hub.sample_loop(),
-                                                         hub.vol.amp_loop(), hub.vol.stream_loop())]
+    core = [hub.sample_loop()]
+    if "spotify" in hub.plugins:  # the Soloist relay and its volume bridge
+        core += [hub.soloist_loop(), hub.vol.amp_loop(), hub.vol.stream_loop()]
+    app["tasks"] += [asyncio.create_task(c) for c in core]
 
 
 async def on_cleanup(app):

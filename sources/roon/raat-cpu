@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# mscOS: put RAATServer (Roon's audio endpoint) on the audio core (AUDIO_CPU in the board
+# profile), next to the USB host-controller IRQs, like PipeWire and the Spotify players.
+#
+# roonbridge.service starts on all cores: RoonBridge (.NET) waits only ~6 s for RAATServer
+# to open port 9004 and kills it otherwise, and on one small core its start takes longer
+# (~9 s on an Allwinner A20). So the move happens after 9004 answers. All existing threads
+# move (taskset -a); threads RAAT creates later inherit the core. RoonBridge may respawn
+# RAATServer: the new process is picked up on the next check. RAAT raises its own audio
+# threads to SCHED_FIFO (logged in /var/roon/RAATServer/Logs). This only changes the CPU.
+# Run by raat-cpu.service, which is bound to roonbridge.service.
+. /etc/mscos/board.conf 2>/dev/null || true
+[ -n "${AUDIO_CPU:-}" ] || exit 0
+moved=
+while :; do
+    pid=$(pgrep -x RAATServer | head -n1)
+    if [[ -n $pid && $pid != "$moved" ]] && ss -Hltn 'sport = :9004' | grep -q .; then
+        if taskset -a -c -p "$AUDIO_CPU" "$pid" >/dev/null 2>&1; then
+            moved=$pid
+            echo "RAATServer $pid on CPU$AUDIO_CPU ($(ls /proc/"$pid"/task | wc -l) threads)"
+        fi
+    fi
+    sleep 5
+done

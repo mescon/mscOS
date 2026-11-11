@@ -66,3 +66,7 @@ unused = [k for k in have if k not in seen]
 print(json.dumps(missing, ensure_ascii=False, indent=0))
 print(f"# {len(seen)} keys, {len(missing)} missing, {len(unused)} unused", file=sys.stderr)
 if unused: print("# unused:", unused[:20], file=sys.stderr)
+if "--prune" in sys.argv and unused:  # drop translations of texts that no longer exist
+    json.dump({k: v for k, v in have.items() if k in seen}, open(sys.argv[2], "w"), ensure_ascii=False, indent=1)
+    open(sys.argv[2], "a").write("\n")
+    print(f"# pruned {len(unused)}", file=sys.stderr)

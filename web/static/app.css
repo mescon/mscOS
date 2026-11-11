@@ -441,7 +441,7 @@ pre.console {
 .source-row .fine { margin: 0; flex: 1; min-width: 12em; }
 .seg.source button { min-width: 6.5em; }
 .seg.source.busy { opacity: .5; pointer-events: none; }
-body.src-roon .spotify-only, body:not(.src-roon) .roon-only { display: none !important; }
+body.src-other .spotify-only, body:not(.src-other) .roon-only { display: none !important; }
 
 @media (min-width: 1024px) {
   :root { --gutter: 32px; }
@@ -479,3 +479,5 @@ body.src-roon .spotify-only, body:not(.src-roon) .roon-only { display: none !imp
 .mod-t small { font-size: .75rem; color: var(--engraved); letter-spacing: .04em; }
 .mod-t > span { font-size: .875rem; color: var(--engraved); }
 .mods input:disabled + .toggle-ui { opacity: .5; }
+.mod-install { margin: 8px 0 0 56px; display: grid; gap: 8px; justify-items: start; }
+.mod-install .fine { margin: 0; }

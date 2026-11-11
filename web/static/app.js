@@ -106,14 +106,16 @@ function renderFeatures() {
   $("#f-arcam").hidden = !f.arcam;
   $("#f-ml").hidden = !amp;
   $("#f-alerts").hidden = !(f.plugins || []).includes("homeassistant");
+  $("#f-spotify").hidden = !(f.plugins || []).includes("spotify");  // Soloist: key, name, updates
 }
 function handle(m) {
   switch (m.type) {
     case "hello":
-      Object.assign(S, { status: m.status || {}, playback: m.playback || {}, auth: m.auth || {}, queue: m.queue || {}, xruns: m.xruns || [], lastTest: m.last_test, arcam: m.arcam || {}, sources: m.arcam_sources || [], tests: m.tests || [], settings: m.settings || {}, quality: m.quality || {}, features: m.features || { amp: "levinson", arcam: true }, names: m.names || {} });
+      Object.assign(S, { status: m.status || {}, playback: m.playback || {}, auth: m.auth || {}, queue: m.queue || {}, xruns: m.xruns || [], lastTest: m.last_test, arcam: m.arcam || {}, sources: m.arcam_sources || [], tests: m.tests || [], settings: m.settings || {}, quality: m.quality || {}, features: m.features || { amp: "levinson", arcam: true }, names: m.names || {}, now: m.now || null });
       ML.state = m.levinson || {}; ML.inputs = m.ml_inputs || [];
       renderFeatures(); renderAll(); break;
-    case "status": S.status = m.status; renderStatus(); renderSignal(); if (roonMode()) renderPlay(); else renderSource(); break;
+    case "now": if (m.source === srcId()) { S.now = m.now; renderPlay(); renderSignal(); } break;
+    case "status": S.status = m.status; if (roonMode()) S.now = m.status.now ?? null; renderStatus(); renderSignal(); if (roonMode()) renderPlay(); else renderSource(); break;
     case "soloist": soloistEvent(m.event); break;
     case "xrun": S.xruns.push(m.point); if (S.xruns.length > 2880) S.xruns.shift(); renderSpark(); renderSignal(); break;
     case "arcam": S.arcam = m.arcam; renderArcam(); break;
@@ -148,24 +150,64 @@ const coverOf = (e, size = "large") => { const c = deco(e).visual_identity?.cove
 const artistsOf = (e) => (deco(e).creators || []).map((c) => nameOf(c.entity)).filter(Boolean).join(", ");
 const devName = () => S.status.soloist?.device_name || "mscOS";  // the name in the Spotify app
 const outName = () => S.names?.output || devName();
+// Sources are modules (features.sources); one at a time owns the DAC. "spotify" is Soloist,
+// which the panel follows in detail; every other source gets the general view.
+const sources = () => S.features?.sources || [];
+const srcId = () => S.settings?.source || S.status.source || "";
+const SRC = () => sources().find((s) => s.id === srcId()) || null;
+const srcState = (id = srcId()) => (S.status.sources || {})[id] || {};
+const srcHint = (s = SRC()) => (s ? loc(s.hint).replace("{name}", srcState(s.id).device_name || outName()) : "");
 function renderSource() {
-  const roon = roonMode(), r = S.status.roon || {};
-  document.body.classList.toggle("src-roon", roon);
-  $$("#source button").forEach((b) => b.setAttribute("aria-checked", b.dataset.v === (roon ? "roon" : "spotify")));
-  const rb = $("#source button[data-v=roon]");
-  rb.disabled = r.installed === false;
-  $("#source-note").textContent = roon
-    ? tr("Spotify är avstängt. Roon Bridge äger DAC:en.")
-    : r.installed === false ? tr("Roon Bridge är inte installerat.") : tr("Roon är avstängt. Spotify äger DAC:en.");
+  const cur = srcId(), list = sources(), seg = $("#source");
+  document.body.classList.toggle("src-other", roonMode());
+  const sig = list.map((s) => s.id).join();
+  if (seg.dataset.sig !== sig) {  // one button per enabled source; no switch for a single one
+    seg.dataset.sig = sig;
+    seg.innerHTML = list.map((s) => `<button role="radio" data-v="${esc(s.id)}" title="${esc(loc(s.name))}"><i aria-hidden="true"></i>${esc(s.label)}</button>`).join("");
+    seg.hidden = list.length < 2;
+  }
+  $$("#source button").forEach((b) => {
+    b.setAttribute("aria-checked", b.dataset.v === cur);
+    b.disabled = srcState(b.dataset.v).installed === false;
+  });
+  const s = SRC();
+  $("#source-note").textContent = !list.length ? tr("Ingen källa är påslagen.") : s ? tr`${loc(s.name)} äger DAC:en.` : "";
 }
 function renderPlay() {
   renderSource();
   if (roonMode()) {
-    const d = S.status.dac || {}, running = d.state === "RUNNING";
-    $("#np-title").textContent = running ? tr("Spelar via Roon") : "Roon";
-    $("#np-artist").textContent = running ? tr`${fmtWord(d.hw_params?.format)}, ${khz(parseInt(d.hw_params?.rate) || 44100)} kHz till ${outName()}` : tr("Välj den här enheten i Roon-appen");
-    $("#np-album").textContent = ""; $("#np-format").hidden = true;
-    $("#np-cover").hidden = true; $("#cover-empty").hidden = false; $("#vol-warn").hidden = true;
+    const s = SRC(), stt = srcState(), d = S.status.dac || {}, now = S.now;
+    const fe = $("#np-format"), cover = $("#np-cover");
+    $("#vol-warn").hidden = true;
+    if (!s) {  // no source module is on
+      $("#np-title").textContent = tr("Ingen källa");
+      $("#np-artist").textContent = tr("Slå på en källa under System, Moduler.");
+      $("#np-album").textContent = ""; fe.hidden = true; cover.hidden = true; $("#cover-empty").hidden = false;
+      return;
+    }
+    if (stt.installed === false) {
+      $("#np-title").textContent = s.label;
+      $("#np-artist").textContent = tr`${loc(s.name)} är inte installerat. Installera det under System, Moduler.`;
+      $("#np-album").textContent = ""; fe.hidden = true; cover.hidden = true; $("#cover-empty").hidden = false;
+      return;
+    }
+    if (now) {  // the source tells what plays (librespot)
+      $("#np-title").textContent = now.title || s.label;
+      $("#np-artist").textContent = now.artist || "";
+      $("#np-album").textContent = now.album || "";
+      fe.hidden = !now.codec;
+      fe.textContent = now.codec ? `${CODEC[now.codec] || now.codec}${now.bitrate ? `, ${now.bitrate} kbit/s` : ""}` : "";
+      fe.classList.remove("warn");
+      if (now.image) { if (cover.src !== now.image) cover.src = now.image; cover.hidden = false; $("#cover-empty").hidden = true; }
+      else { cover.hidden = true; $("#cover-empty").hidden = false; }
+      return;
+    }
+    // a source that opens the DAC itself (Roon, HQPlayer): the DAC shows what arrives
+    const running = !s.pipewire && d.state === "RUNNING";
+    $("#np-title").textContent = running ? tr`Spelar via ${s.label}` : s.label;
+    $("#np-artist").textContent = running ? tr`${fmtWord(d.hw_params?.format)}, ${khz(parseInt(d.hw_params?.rate) || 44100)} kHz till ${outName()}` : srcHint(s);
+    $("#np-album").textContent = ""; fe.hidden = true;
+    cover.hidden = true; $("#cover-empty").hidden = false;
     return;
   }
   const p = S.playback, it = p.item, playing = p.status === "playing";
@@ -239,23 +281,28 @@ scrub.addEventListener("keydown", (e) => {
 $("#vol-reset").addEventListener("click", () => cmd("set_volume", { volume: 100 }));
 
 // ------------------------------------------------------------------ signal: the chain, readout, seal
-const roonMode = () => (S.settings?.source || S.status.source) === "roon";
+// Every source but Soloist ("spotify") gets the general view; the name is from when Roon was the only other one.
+const roonMode = () => srcId() !== "spotify";
+const CODEC = { vorbis: "Ogg Vorbis", flac: "FLAC", mp3: "MP3", aac: "AAC" };
 function chainRoon() {
-  const st = S.status, dac = st.dac || {}, roon = st.roon || {};
-  const running = dac.state === "RUNNING", rate = running ? parseInt(dac.hw_params?.rate) || null : null;
+  const st = S.status, dac = st.dac || {}, s = SRC() || { label: tr("Ingen källa"), name: {}, protocol: "", pipewire: true };
+  const roon = { ...srcState(), label: s.label, name: loc(s.name) || s.label };
+  const now = S.now, lossy = !!(now && now.codec && now.codec !== "flac");
+  const running = s.pipewire ? !!(now && now.playing) : dac.state === "RUNNING";
+  const rate = dac.state === "RUNNING" ? parseInt(dac.hw_params?.rate) || null : null;
   const stages = [
-    { k: "roon", name: "Roon", tag: "RAAT", state: !roon.active ? "bad" : running ? "ok" : "idle",
-      facts: roon.active ? tr("Roon Bridge är igång") : tr("Roon Bridge kör inte"),
-      note: roon.active ? (running ? tr("Spelar") : tr("Välj den här enheten i Roon-appen")) : tr("Byt källa igen eller starta om enheten") },
+    { k: "roon", name: s.label, tag: s.protocol, state: !roon.active ? "bad" : running ? "ok" : "idle",
+      facts: roon.installed === false ? tr`${roon.name} är inte installerat` : roon.active ? tr`${roon.name} är igång` : tr`${roon.name} kör inte`,
+      note: roon.active ? (running ? (now?.codec ? `${CODEC[now.codec] || now.codec}${now.bitrate ? `, ${now.bitrate} kbit/s` : ""}` : tr("Spelar")) : srcHint(s)) : tr("Byt källa igen eller starta om enheten") },
     { k: "usb", name: "USB", tag: dac.usb_speed === "high" ? "high speed" : dac.present ? "full speed" : "",
       state: !dac.present ? "bad" : running ? "ok" : "idle",
       facts: dac.present ? tr`Asynkron överföring, ${dac.usb_speed === "high" ? "USB 2.0" : "USB 1.1"}` : tr("Ingen DAC ansluten"),
-      note: dac.present ? (dac.usb_speed === "high" ? tr("Upp till 192 kHz och DSD64 via DoP.") : tr`Upp till ${khz(dac.max_rate || 48000)} kHz. Roon räknar om högre upplösningar.`) : tr("Kontrollera USB-kabeln") },
+      note: dac.present ? (dac.usb_speed === "high" ? tr("Upp till 192 kHz och DSD64 via DoP.") : tr`Upp till ${khz(dac.max_rate || 48000)} kHz. Högre upplösningar räknas om av källan.`) : tr("Kontrollera USB-kabeln") },
     { k: "dac", name: outName(), tag: tr("DAC"), state: !dac.present ? "bad" : running ? "ok" : "idle",
       facts: running ? `${fmtWord(dac.hw_params.format)}, ${khz(rate)} kHz` : dac.present ? tr("Ansluten, vilar") : tr("Inte ansluten"),
-      note: running ? tr("Tar emot signalen direkt från Roon Bridge") : tr("Väntar på Roon") },
+      note: running ? (s.pipewire ? tr`Tar emot signalen från ${roon.name} via PipeWire` : tr`Tar emot signalen direkt från ${roon.name}`) : tr`Väntar på ${s.label}` },
   ];
-  return { stages, running, playing: running, rate, issues: [], t: null, dac, xrunHour: 0, roon };
+  return { stages, running, playing: running, rate, issues: [], t: null, dac, xrunHour: 0, roon, lossy, direct: !s.pipewire };
 }
 function chain() {
   if (roonMode()) return chainRoon();
@@ -323,8 +370,10 @@ function renderSignal() {
   const seal = $("#seal"); let head, sub, cls = "";
   if (!c.dac.present) { head = tr("Ingen DAC"); sub = tr("Kontrollera USB-kabeln till DAC:en."); cls = "warn"; }
   else if (c.roon) {
-    head = c.roon.active ? (c.running ? tr("Roon spelar") : tr("Roon, redo")) : tr("Roon Bridge kör inte");
-    sub = c.running ? tr`Roon Bridge äger DAC:en: ${fmtWord(c.dac.hw_params?.format)}, ${khz(c.rate)} kHz.` : tr("Välj den här enheten i Roon-appen.");
+    head = c.roon.active ? (c.running ? tr`${c.roon.label} spelar` : tr`${c.roon.label}, redo`) : tr`${c.roon.name} kör inte`;
+    sub = !c.running ? srcHint() + "."
+      : c.lossy ? tr`${CODEC[S.now.codec] || S.now.codec}${S.now.bitrate ? `, ${S.now.bitrate} kbit/s` : ""}: komprimerat ljud, inte Lossless.`
+      : c.direct ? tr`${c.roon.name} äger DAC:en: ${fmtWord(c.dac.hw_params?.format)}, ${khz(c.rate)} kHz.` : tr`${c.roon.name} spelar via PipeWire.`;
     cls = c.roon.active ? "" : "warn";
   }
   else if (c.issues.length) { head = tr("Signalen ändras"); sub = c.issues.join(", ").replace(/^./, (x) => x.toUpperCase()) + "."; cls = "warn"; }
@@ -395,9 +444,10 @@ function renderStatus() {
 function renderSysHead() {
   const st = S.status, solo = st.soloist || {}, dac = st.dac || {}, sys = st.system || {}, m = ML.state || {};
   if (!st.system) return;
-  const roon = roonMode(), issues = [];
+  const roon = roonMode(), issues = [], sname = roon ? (SRC() ? loc(SRC().name) : "") : "Soloist";
   if (!dac.present) issues.push(tr("DAC:n hittas inte"));
-  if (roon ? !(st.roon || {}).active : solo.service !== "active") issues.push(roon ? tr("Roon Bridge kör inte") : tr("Soloist kör inte"));
+  if (roon ? SRC() && !srcState().active : solo.service !== "active") issues.push(tr`${sname} kör inte`);
+  if (!SRC()) issues.push(tr("ingen källa är påslagen"));
   if (solo.days_left != null && solo.days_left < 14) issues.push(tr`Spotify-bygget går ut om ${solo.days_left} dagar`);
   if (m.host && m.reachable === false) issues.push(tr("förstärkaren svarar inte"));
   const t = $("#sys-title");
@@ -405,7 +455,7 @@ function renderSysHead() {
   t.classList.toggle("warn", issues.length > 0);
   $("#sys-sum").textContent = issues.length
     ? issues.join(", ").replace(/^./, (c) => c.toUpperCase()) + "."
-    : tr`${roon ? "Roon Bridge" : "Soloist"} igång${m.reachable ? tr(", förstärkaren ansluten") : ""}${S.settings?.alerts ? tr(", larm till telefonen på") : ""}. Drifttid ${fmtUptime(sys.uptime_s || 0)}.`;
+    : tr`${sname} igång${m.reachable ? tr(", förstärkaren ansluten") : ""}${S.settings?.alerts ? tr(", larm till telefonen på") : ""}. Drifttid ${fmtUptime(sys.uptime_s || 0)}.`;
 }
 function fmtDate(s) {
   if (!s || s === "n/a") return "–";
@@ -520,6 +570,7 @@ function jobEvent(m) {
   }
   jobOut.hidden = false;
   if (m.line) { jobOut.textContent += m.line; jobOut.scrollTop = jobOut.scrollHeight; }
+  if (m.done && m.name.startsWith("install-")) loadMods();
   if (m.done) { jobOut.textContent += m.rc === 0 ? tr("\nKlart.\n") : tr`\nAvslutades med fel (${m.rc}).\n`; toast(m.rc === 0 ? tr("Klart") : tr("Misslyckades, se utskriften")); }
 }
 function startJob(url, title, data) { jobOut.hidden = false; jobOut.textContent = `${title}\n`; return post(url, data).catch(() => {}); }
@@ -922,11 +973,12 @@ $("#source").addEventListener("click", async (e) => {
   const b = e.target.closest("button"); if (!b || b.getAttribute("aria-checked") === "true") return;
   const src = b.dataset.v, seg = $("#source");
   seg.classList.add("busy");
-  toast(src === "roon" ? tr("Stänger av Spotify och startar Roon…") : tr("Stänger av Roon och startar Spotify…"));
+  const to = sources().find((s) => s.id === src);
+  toast(tr`Byter källa till ${loc(to?.name) || src}…`);
   try {
     const r = await post("/api/source", { source: src });
-    S.settings = { ...S.settings, source: r.source };
-    toast(src === "roon" ? tr("Roon är aktivt. Välj den här enheten i Roon-appen.") : tr`Spotify är aktivt. Välj ${devName()} i Spotify-appen.`);
+    S.settings = { ...S.settings, source: r.source }; S.now = null;
+    toast(src === "spotify" ? tr`Spotify är aktivt. Välj ${devName()} i Spotify-appen.` : tr`${to.label} är aktivt. ${srcHint(to)}.`);
   } catch {}
   seg.classList.remove("busy");
   renderPlay(); renderSignal();
@@ -962,7 +1014,7 @@ $("#theme").addEventListener("click", (e) => {
 });
 
 // ---- modules: what is installed, on/off (applies when the panel restarts)
-const KINDS = { amp: tr("Förstärkare"), integration: "Integration", device: tr("Enhet") };
+const KINDS = { source: tr("Källa"), amp: tr("Förstärkare"), integration: "Integration", device: tr("Enhet") };
 const lang = () => (document.documentElement.lang || "sv").slice(0, 2);
 const loc = (o) => (o && (o[lang()] || o.en || o.sv)) || "";
 let MODS = { plugins: [], restart_needed: false };
@@ -972,13 +1024,26 @@ function renderMods() {
   $("#mods").innerHTML = MODS.plugins.map((p) => `
     <li><label class="toggle"><input type="checkbox" data-mod="${esc(p.id)}" ${p.enabled ? "checked" : ""}>
       <span class="toggle-ui" aria-hidden="true"></span>
-      <span class="mod-t"><b>${esc(loc(p.name))}</b><small>${esc(KINDS[p.kind] || p.kind)}${p.enabled !== p.running ? ", efter omstart" : ""}</small>
-      <span>${esc(loc(p.description))}</span></span></label></li>`).join("");
+      <span class="mod-t"><b>${esc(loc(p.name))}</b><small>${esc(KINDS[p.kind] || p.kind)}${p.enabled !== p.running ? tr(", efter omstart") : p.installed === false ? tr(", inte installerad") : ""}</small>
+      <span>${esc(loc(p.description))}</span></span></label>${modInstall(p)}</li>`).join("");
   const locked = document.body.classList.contains("locked");
   $$("#mods input").forEach((i) => { i.disabled = locked; });
   $("#mods-locked").hidden = !locked;
   $("#mods-restart").hidden = !MODS.restart_needed;
 }
+// A source's player is not part of mscOS: it is downloaded to the device from its publisher.
+function modInstall(p) {
+  if (p.kind !== "source" || !p.running || p.installed !== false) return "";
+  return `<div class="mod-install admin"><p class="fine">${esc(loc(p.terms))}${p.terms_url ? ` <a href="${esc(p.terms_url)}" target="_blank" rel="noopener noreferrer">${tr("Läs mer")}</a>` : ""}</p>
+    <button class="btn" data-install="${esc(p.id)}">${tr("Installera")}</button></div>`;
+}
+$("#mods").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-install]"); if (!b) return;
+  b.disabled = true;
+  const p = MODS.plugins.find((x) => x.id === b.dataset.install);
+  startJob("/api/sources/install", tr`Installerar ${loc(p?.name)}…`, { id: b.dataset.install });
+  $("#f-update").open = true; jobOut.scrollIntoView({ block: "nearest" });
+});
 async function loadMods() { try { MODS = await (await fetch("/api/plugins")).json(); renderMods(); } catch {} }
 $("#f-mods").addEventListener("toggle", (e) => { if (e.target.open) loadMods(); });
 $("#mods").addEventListener("change", async (e) => {

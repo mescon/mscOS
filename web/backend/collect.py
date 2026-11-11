@@ -14,8 +14,24 @@ import socket
 
 from i18n import N_, T, decimal
 
-SVC_USER = "soloist"
-SOLOIST_HOME = "/var/lib/soloist"
+
+
+def _audio_user() -> tuple[str, str]:
+    """The user that owns the audio session (PipeWire and the players): MSCOS_AUDIO_USER,
+    else "mscos"; "soloist" on installs from before sources were modules."""
+    import pwd
+    for name in (os.environ.get("MSCOS_AUDIO_USER"), "mscos", "soloist"):
+        try:
+            if name:
+                return name, pwd.getpwnam(name).pw_dir
+        except KeyError:
+            pass
+    return "mscos", "/var/lib/mscos-audio"
+
+
+SVC_USER, AUDIO_HOME = _audio_user()
+SOLOIST_HOME = AUDIO_HOME
+LIB = os.environ.get("MSCOS_LIB", "/usr/lib/mscos")  # install scripts of the sources live here
 SOLOIST_UNIT = f"{SOLOIST_HOME}/.config/systemd/user/soloist.service"
 NET_IF = "end0"
 BUILD_VALID_DAYS = 90
@@ -393,11 +409,16 @@ async def apt_upgradable() -> list[str]:
     return [l.split("/")[0] for l in out.splitlines() if "/" in l]
 
 
-async def logs(source: str, lines: int = 200, errors_only: bool = False) -> str:
+async def logs(source: str, lines: int = 200, errors_only: bool = False, player=((), ())) -> str:
+    """player: the current source's (user units, system units)."""
     lines = max(10, min(int(lines), 2000))
     uid = await soloist_uid()
+    if not all(re.fullmatch(r"[\w@.\-]+", u) for u in (*player[0], *player[1])):
+        return ""
+    pl = (f"journalctl _UID={uid} " + " ".join(f"--user-unit {u}" for u in player[0])) if player[0] else \
+        ("journalctl " + " ".join(f"-u {u}" for u in player[1])) if player[1] else None
     q = {
-        "soloist": f"journalctl _UID={uid} --user-unit soloist.service",
+        "player": pl, "soloist": pl,
         "audio": f"journalctl _UID={uid} --user-unit pipewire.service --user-unit wireplumber.service",
         "kernel": "journalctl -k -b",
         "web": "journalctl -u mscos-panel.service",
@@ -824,8 +845,6 @@ async def usb_reconnect() -> dict:
 # One player owns the DAC at a time. Spotify = the soloist user's PipeWire stack + Soloist;
 # Roon = Roon Bridge talking to ALSA directly (needed for DSD). The socket is stopped too, or
 # the panel's own pw-dump/pw-top calls would re-activate PipeWire and grab the DAC again.
-SPOTIFY_UNITS = ["pipewire.socket", "pipewire.service", "wireplumber.service", "soloist.service", "soloist-rt.service"]
-ROON_UNIT = "roonbridge.service"
 
 
 def pcm_closed() -> bool:
@@ -841,32 +860,22 @@ async def _wait_released(secs: float = 6) -> bool:
     return pcm_closed()
 
 
-async def roon_installed() -> bool:
-    return os.path.exists("/opt/RoonBridge/start.sh") and os.path.exists(f"/etc/systemd/system/{ROON_UNIT}")
+PIPEWIRE_UNITS = ["pipewire.socket", "pipewire.service", "wireplumber.service"]
 
 
-async def roon_active() -> bool:
-    rc, out, _ = await run(["systemctl", "is-active", ROON_UNIT], timeout=5)
+async def pipewire(verb: str) -> str:
+    """start | stop the audio user's PipeWire session; returns stderr."""
+    units = PIPEWIRE_UNITS if verb == "start" else list(reversed(PIPEWIRE_UNITS))
+    _, _, err = await run(["systemctl", "--user", verb, *units], as_user=True, timeout=60)
+    return err.strip()
+
+
+async def units_active(units, user: bool) -> bool:
+    if not units:
+        return False
+    cmd = ["systemctl", *(["--user"] if user else []), "is-active", units[0]]
+    _, out, _ = await run(cmd, as_user=user, timeout=8)
     return out.strip() == "active"
-
-
-async def set_source(src: str) -> dict:
-    """Hand the DAC to Spotify or to Roon. Returns what is running afterwards."""
-    if src == "roon":
-        if not await roon_installed():
-            raise RuntimeError(N_("Roon Bridge är inte installerat"))
-        rc, _, err = await run(["systemctl", "--user", "stop", *reversed(SPOTIFY_UNITS)], as_user=True, timeout=60)
-        released = await _wait_released()
-        rc2, _, err2 = await run(["systemctl", "start", ROON_UNIT], timeout=60)
-        ok_ = rc2 == 0
-        detail = (err + err2).strip()
-    else:
-        rc, _, err = await run(["systemctl", "stop", ROON_UNIT], timeout=60)
-        released = await _wait_released()
-        rc2, _, err2 = await run(["systemctl", "--user", "start", *SPOTIFY_UNITS], as_user=True, timeout=60)
-        ok_ = rc2 == 0
-        detail = (err + err2).strip()
-    return {"ok": ok_, "source": src, "dac_released": released, "roon_active": await roon_active(), "error": detail[:300]}
 
 
 # --------------------------------------------------------------------------- Spotify stream volume

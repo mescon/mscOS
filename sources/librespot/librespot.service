@@ -1,0 +1,11 @@
+[Unit]
+Description=Spotify Connect (go-librespot, Ogg Vorbis)
+After=pipewire.service wireplumber.service network-online.target
+Wants=pipewire.service wireplumber.service
+
+[Service]
+# config.yml is written by the mscOS panel (module Spotify Connect)
+ExecStart=/usr/local/bin/go-librespot --config_dir %h/.config/go-librespot
+Restart=always
+RestartSec=5
+Nice=-10

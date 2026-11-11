@@ -28,8 +28,6 @@
     <p><span id="dev-name"></span> <span id="dev-sub">ansluter…</span></p>
   </div>
   <div class="source" role="radiogroup" aria-label="Källa" id="source">
-    <button role="radio" data-v="spotify" aria-checked="true"><i aria-hidden="true"></i>Spotify</button>
-    <button role="radio" data-v="roon" aria-checked="false"><i aria-hidden="true"></i>Roon</button>
   </div>
   <p class="vh" id="source-note" aria-live="polite"></p>
 </header>
@@ -232,7 +230,7 @@
         <div class="fold-body">
           <p class="lead">Spelar in exakt det som går till DAC:en och kontrollerar varje sampel mot Spotifys FLAC-raster, och att inga avbrott finns.</p>
           <div class="verify" id="test-result"></div>
-          <p class="notice roon-only">Verifieringen spelar in PipeWires utgång och fungerar därför bara med Spotify än. I Roon-läge äger Roon Bridge DAC:en direkt.</p>
+          <p class="notice roon-only">Verifieringen mäter Spotify Lossless och fungerar därför bara med den källan.</p>
           <div class="verify-run spotify-only">
             <div class="seg" role="radiogroup" aria-label="Testlängd" id="test-secs">
               <button role="radio" data-v="15" aria-checked="false">15 s</button>
