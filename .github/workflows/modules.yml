@@ -1,0 +1,15 @@
+# The catalogue (modules/index.json) must match the modules: the panel installs from it.
+name: modules
+on:
+  pull_request:
+    paths: ["modules/**", "tools/module-index.py"]
+  push:
+    branches: [main]
+    paths: ["modules/**", "tools/module-index.py"]
+jobs:
+  index:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/module-index.py --check
+      - run: python3 -m compileall -q modules

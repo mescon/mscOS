@@ -11,16 +11,16 @@ a particular setup is a module that the user turns on under System -> Modules:
   integration  outside systems (Home Assistant) and scenes (TV mode)
   device       board or DAC extras (native DSD for C-Media CM6632A)
 
-A module is a package here with a class derived from Plugin, named in its PLUGIN variable.
+A module is a directory under modules/ in the repository: a Python package with a class
+derived from Plugin, named in its PLUGIN variable, and a module.json (id, version, kind, name).
 It declares its own settings (defaults), may add HTTP routes, background tasks, fields in
 the panel's hello message, and reacts to core events through the hooks below. Modules
 never import each other; they find one another through the hub (hub.amp, hub.plugin(id)).
 """
 from __future__ import annotations
 
-import importlib
 import logging
-import pkgutil
+import re
 from typing import Any
 
 log = logging.getLogger("plugins")
@@ -34,6 +34,8 @@ class Plugin:
     defaults: dict[str, Any] = {}  # its settings, merged into hub.settings (keys owned by the module)
     requires: tuple[str, ...] = ()  # other module kinds/ids it needs, e.g. ("amp",)
     external: dict | None = None    # set for a module installed beside mscOS: its module.json
+    module_dir = ""                 # where its files are (its install script, units, ...)
+    module_version = ""             # from its module.json
     # Settings the panel shows under the module (Modules view) and saves through /api/settings:
     #   {"key": ..., "type": "text" | "number" | "select" | "toggle" | "secret",
     #    "label": {sv, en}, "help": {sv, en}, "options": [[value, {sv, en}], ...] (select),
@@ -182,7 +184,7 @@ class AmpPlugin(Plugin):
 class SourcePlugin(Plugin):
     """A player. Only one source runs at a time (it owns the DAC); the core starts and stops
     them through their systemd units. The software itself is installed on the device by the
-    source's install script (<lib>/sources/<id>/install.sh), from its publisher: mscOS ships
+    source's install script (install.sh in the module's directory), from its publisher: mscOS ships
     no player binaries and no keys."""
     kind = "source"
     label = ""                         # on the source switch, e.g. "Roon"
@@ -287,56 +289,80 @@ class SourcePlugin(Plugin):
 SHIPPED: set[str] = set()  # ids of the modules that come with mscOS (filled by discover)
 
 
-def _discover_external(found: dict) -> None:
-    """Modules installed beside mscOS (<state>/plugins/<id>): see extmods.py. A shipped
-    module is never replaced by one of these."""
+def _modules_dir() -> str:
+    """Where the modules that come with mscOS are: <lib>/modules installed, the repository's
+    modules/ in a checkout. MSCOS_MODULES overrides."""
+    import os
+    here = os.path.dirname(os.path.abspath(__file__))
+    for d in (os.environ.get("MSCOS_MODULES"), os.path.join(os.environ.get("MSCOS_LIB", "/usr/lib/mscos"), "modules"),
+              os.path.normpath(os.path.join(here, "..", "..", "..", "modules"))):
+        if d and os.path.isdir(d):
+            return d
+    return ""
+
+
+def _vkey(v: str) -> tuple:
+    return tuple(int(x) if x.isdigit() else 0 for x in re.split(r"[.+~-]", v or "0"))
+
+
+def _load_dir(root: str, found: dict, external: bool) -> None:
+    """Load every module package in a directory. One installed beside mscOS replaces the one
+    that came with it only when it is a newer version (an update from the catalogue)."""
     import importlib.util
+    import json
     import os
     import sys
     import extmods
-    if not os.path.isdir(extmods.DIR):
-        return
-    for name in sorted(os.listdir(extmods.DIR)):
-        path = os.path.join(extmods.DIR, name)
-        if name.startswith(".") or not os.path.isfile(os.path.join(path, "__init__.py")) or name in found:
-            continue
-        if not extmods.safe_dir(path):
-            log.warning("module %s is not loaded: its files must belong to root and be writable by root only", name)
+    for name in sorted(os.listdir(root)):
+        path = os.path.join(root, name)
+        if name.startswith((".", "_")) or not os.path.isfile(os.path.join(path, "__init__.py")):
             continue
         try:
-            spec = importlib.util.spec_from_file_location(f"mscos_ext_{name}", os.path.join(path, "__init__.py"),
+            with open(os.path.join(path, "module.json")) as f:
+                man = json.load(f)
+        except (OSError, ValueError):
+            man = {}
+        man = man if isinstance(man, dict) else {}
+        if external:
+            if name in found and _vkey(str(man.get("version", ""))) <= _vkey(found[name].module_version):
+                continue
+            if not extmods.safe_dir(path):
+                log.warning("module %s is not loaded: its files must belong to root and be writable by root only", name)
+                continue
+        try:
+            modname = f"mscos_{'ext' if external else 'mod'}_{name}"
+            spec = importlib.util.spec_from_file_location(modname, os.path.join(path, "__init__.py"),
                                                           submodule_search_locations=[path])
             mod = importlib.util.module_from_spec(spec)
-            sys.modules[spec.name] = mod
+            sys.modules[modname] = mod
             spec.loader.exec_module(mod)
         except Exception:  # a broken module must not take the panel down
             log.exception("module %s failed to load", name)
             continue
         cls = getattr(mod, "PLUGIN", None)
         if isinstance(cls, type) and issubclass(cls, Plugin) and cls.id == name:
-            cls.external = extmods.manifest_of(path) or {"id": name, "version": ""}
-            found[cls.id] = cls
+            cls.module_dir, cls.module_version = path, str(man.get("version", ""))
+            cls.external = ({"id": name, "version": cls.module_version, "source": man.get("source"), "replaces": name in found}
+                            if external else None)
+            found[name] = cls
         else:
             log.warning("module %s: PLUGIN must be a Plugin class whose id is the directory's name", name)
 
 
 def discover() -> dict[str, type[Plugin]]:
-    """All modules: those shipped in this package, then the ones installed beside mscOS."""
+    """All modules: those that come with mscOS, then the ones installed beside it
+    (<state>/plugins, see extmods.py)."""
+    import os
+    import extmods
     found: dict[str, type[Plugin]] = {}
-    for m in pkgutil.iter_modules(__path__):
-        if not m.ispkg:
-            continue
-        try:
-            mod = importlib.import_module(f"{__name__}.{m.name}")
-        except Exception:  # a broken module must not take the panel down
-            log.exception("module %s failed to load", m.name)
-            continue
-        cls = getattr(mod, "PLUGIN", None)
-        if isinstance(cls, type) and issubclass(cls, Plugin) and cls.id:
-            found[cls.id] = cls
+    root = _modules_dir()
+    if root:
+        _load_dir(root, found, external=False)
+    SHIPPED.clear()
     SHIPPED.update(found)
-    try:
-        _discover_external(found)
-    except Exception:  # noqa: BLE001
-        log.exception("modules beside mscOS")
+    if os.path.isdir(extmods.DIR):
+        try:
+            _load_dir(extmods.DIR, found, external=True)
+        except Exception:  # noqa: BLE001
+            log.exception("modules beside mscOS")
     return found

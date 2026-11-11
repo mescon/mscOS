@@ -275,9 +275,15 @@
     </div>
     <p class="notice" id="mods-locked">Logga in under <a href="#v-me">Profil</a> för att ändra.</p>
     <div id="mods"></div>
+    <section class="mod-group admin" id="mod-cat">
+      <h3>Katalogen</h3>
+      <p class="fine">Projektets alla moduler, också nya och nyare än de som följde med din version av mscOS. Hämtas från projektets sida när du trycker.</p>
+      <div class="row"><button class="btn" id="cat-load">Bläddra i katalogen</button></div>
+      <ul class="modlist" id="cat-list"></ul>
+    </section>
     <section class="mod-group admin" id="mod-add">
-      <h3>Lägg till en modul</h3>
-      <p class="fine">Moduler som inte följer med mscOS installeras från sin utgivare: klistra in adressen till modulens module.json. En modul körs inuti panelen med full åtkomst till enheten. Installera bara moduler från någon du litar på.</p>
+      <h3>Lägg till en modul från en annan utgivare</h3>
+      <p class="fine">Klistra in adressen till modulens module.json. En modul körs inuti panelen med full åtkomst till enheten. Installera bara moduler från någon du litar på.</p>
       <form class="row" id="mod-add-form">
         <input id="mod-add-url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://…/module.json" aria-label="Adress till modulens module.json">
         <button class="btn">Installera</button>

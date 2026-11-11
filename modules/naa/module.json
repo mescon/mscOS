@@ -1,0 +1,13 @@
+{
+ "id": "naa",
+ "version": "1.0.0",
+ "kind": "source",
+ "name": {
+  "sv": "HQPlayer NAA",
+  "en": "HQPlayer NAA"
+ },
+ "description": {
+  "sv": "Enheten som nätverksutgång för HQPlayer (Qobuz, Tidal och egna filer via HQPlayer, även DSD).",
+  "en": "This device as the network output of HQPlayer (Qobuz, Tidal and your own files through HQPlayer, DSD too)."
+ }
+}

@@ -39,7 +39,7 @@ for f in ("app.js", "setup.js"):
     keys += js_keys(open(f"{root}/{f}").read())
 
 import glob, ast
-for f in glob.glob(f"{root}/../backend/**/*.py", recursive=True):
+for f in glob.glob(f"{root}/../backend/**/*.py", recursive=True) + glob.glob(f"{root}/../../modules/**/*.py", recursive=True):
     for node in ast.walk(ast.parse(open(f).read())):
         if isinstance(node, ast.Call) and getattr(node.func, "id", "") in ("T", "N_") and node.args:
             for c in ast.walk(node.args[0]):  # also both arms of T("a" if x else "b")

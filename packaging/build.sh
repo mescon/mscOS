@@ -7,7 +7,7 @@
 #
 # Packages (all architecture-independent; players are downloaded on the device):
 #   mscos-core       audio user, PipeWire configuration, board profiles, boot-time tuning
-#   mscos-panel      the control panel, its modules and the sources' install scripts
+#   mscos-panel      the control panel and the modules (with the sources' install scripts)
 #   mscos-dsd-dkms   native DSD for C-Media CM6632A on kernels without the mscOS patch
 #   mscos            depends on core and panel
 set -euo pipefail
@@ -27,10 +27,12 @@ stage_core() {  # <dir>
     printf 'NAME=mscOS\nVERSION=%s\nBUILD=%s\nHOME_URL=https://github.com/mescon/mscOS\n' "$VERSION" "$COMMIT" > "$1/etc/mscos-release"
 }
 stage_panel() {  # <dir>
-    install -d "$1/usr/lib/mscos/panel" "$1/usr/lib/mscos/sources" "$1/usr/lib/systemd/system"
+    install -d "$1/usr/lib/mscos/panel" "$1/usr/lib/mscos/modules" "$1/usr/lib/systemd/system"
     cp -r "$ROOT/web/backend" "$ROOT/web/static" "$1/usr/lib/mscos/panel/"
     find "$1/usr/lib/mscos/panel" -name __pycache__ -prune -exec rm -rf {} +
-    cp -r "$ROOT"/sources/. "$1/usr/lib/mscos/sources/"
+    cp -r "$ROOT"/modules/. "$1/usr/lib/mscos/modules/"
+    find "$1/usr/lib/mscos/modules" -name __pycache__ -prune -exec rm -rf {} +
+    rm -f "$1/usr/lib/mscos/modules/index.json" "$1/usr/lib/mscos/modules/README.md"
     install -m 644 "$ROOT/web/mscos-panel.service" "$1/usr/lib/systemd/system/"
 }
 stage_dkms() {  # <dir>

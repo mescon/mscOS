@@ -1,0 +1,13 @@
+{
+ "id": "tvmode",
+ "version": "1.0.0",
+ "kind": "integration",
+ "name": {
+  "sv": "TV-läge",
+  "en": "TV mode"
+ },
+ "description": {
+  "sv": "Förstärkaren växlar mellan den här enheten och AV-receiverns ingång.",
+  "en": "The amplifier switches between this device and the AV receiver's input."
+ }
+}

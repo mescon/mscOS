@@ -12,7 +12,7 @@ belongs to a particular setup is a module, turned on under **Modules**:
 
 A module is a Python package in `web/backend/plugins/<id>/` whose `__init__.py` defines a
 class derived from `Plugin` (or `SourcePlugin`, `AmpPlugin`) and names it in `PLUGIN`. The
-base classes in `web/backend/plugins/__init__.py` document every hook; in short:
+base classes in `web/backend/plugins/__init__.py` document every hook, and the modules themselves are in [`modules/`](../modules); in short:
 
 ```python
 from plugins import Plugin
@@ -54,7 +54,7 @@ NAA, needed for DSD and for sample rates other than 44.1 kHz). The core starts a
 the units; it stops every other source first, and PipeWire too when the new source wants
 the DAC for itself.
 
-The player itself is not part of mscOS. `sources/<id>/install.sh` downloads it on the
+The player itself is not part of mscOS. `modules/<id>/install.sh` downloads it on the
 device from its publisher, and the panel runs that script when the user presses Install
 (the module's `terms` text is shown first). Units are never enabled at boot: the panel
 starts the chosen source.
@@ -91,6 +91,16 @@ A module needs no page of its own. The panel draws these from what the module re
 A `secret` option (an address with a token, a key) is stored in a root-only file on the
 device, never in the settings and never sent back to the panel; read it with
 `self.hub.secret(key)`.
+
+## The catalogue
+
+`modules/index.json` lists every module in the repository with its version and the checksum
+of each file (`tools/module-index.py` writes it). The panel reads it from the project's
+repository when the user presses Browse the catalogue or Check for updates, and can install
+a module that is new, or newer than the one that came with the installed mscOS. Such a
+module is kept in `/var/lib/mscos/plugins/` and replaces the shipped one only while it is
+newer; removing it goes back to the shipped one. `MSCOS_CATALOGUE` in `/etc/mscos/site.env`
+points the panel at another catalogue (a fork, a mirror).
 
 ## Modules of your own
 

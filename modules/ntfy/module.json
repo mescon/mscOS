@@ -1,0 +1,13 @@
+{
+ "id": "ntfy",
+ "version": "1.0.0",
+ "kind": "notify",
+ "name": {
+  "sv": "ntfy",
+  "en": "ntfy"
+ },
+ "description": {
+  "sv": "Larm till telefonen via ntfy-appen. Kräver inget konto: välj ett svårgissat ämne.",
+  "en": "Alerts to the phone through the ntfy app. No account needed: choose a topic that is hard to guess."
+ }
+}

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import collections
+import hashlib
 import json
 import ipaddress
 import logging
@@ -715,12 +716,13 @@ async def source_install(request):
     p = hub.sources.get(b.get("id"))
     if p is None:
         raise web.HTTPNotFound(text=T("Okänd källa"))
-    script = os.path.join(collect.LIB, "sources", p.id, "install.sh")
+    script = os.path.join(p.module_dir, "install.sh")
     if not os.path.exists(script):
         raise web.HTTPNotFound(text=T("Installationsskriptet saknas: {path}", path=script))
     if overlay_active():
         raise web.HTTPConflict(text=T("Stäng av skrivskyddet först. Med skrivskyddat system försvinner installationen vid omstart."))
-    await hub.run_job(f"install-{p.id}", [script])
+    # the shared helpers come with mscOS, also for a module installed beside it
+    await hub.run_job(f"install-{p.id}", ["env", f"MSCOS_COMMON={os.path.join(pluginlib._modules_dir(), 'common.sh')}", "bash", script])
     return ok()
 
 
@@ -855,6 +857,7 @@ async def _plugin_list() -> list[dict]:
     out = []
     for pid, cls in sorted(hub.available_plugins.items(), key=lambda kv: (KIND_ORDER.get(kv[1].kind, 9), kv[0])):
         d = {"id": pid, "kind": cls.kind, "name": cls.name, "description": cls.description, "external": cls.external,
+             "module_version": cls.module_version, "module_latest": _module_latest.get(pid),
              "latest": _latest.get(pid),
              "requires": list(cls.requires), "enabled": pid in hub.settings.get("plugins", []),
              "running": pid in hub.plugins}
@@ -877,6 +880,7 @@ async def _plugin_list() -> list[dict]:
 
 
 _latest: dict[str, str] = {}   # source id -> newest version at its publisher
+_module_latest: dict[str, str] = {}  # module id -> a newer version of the module in the catalogue
 _latest_t = 0.0
 
 
@@ -901,7 +905,7 @@ async def plugins_check(request):
     async with ClientSession(timeout=ClientTimeout(total=15)) as http:  # modules installed beside mscOS
         for pid, cls in hub.available_plugins.items():
             src = (cls.external or {}).get("source")
-            if not src:
+            if not src or src == "catalogue":
                 continue
             try:
                 async with http.get(src) as r:
@@ -909,6 +913,16 @@ async def plugins_check(request):
             except Exception as e:  # noqa: BLE001
                 log.warning("newest version of %s: %s", pid, type(e).__name__)
                 failed.append(pid)
+        try:  # the project's catalogue: a newer version of a module than this device has
+            for m in await fetch_catalogue(http):
+                cls = hub.available_plugins.get(m["id"])
+                if cls and pluginlib._vkey(m["version"]) > pluginlib._vkey(cls.module_version):
+                    _module_latest[m["id"]] = m["version"]
+                else:
+                    _module_latest.pop(m["id"], None)
+        except (OSError, ValueError, asyncio.TimeoutError) as e:
+            log.warning("catalogue: %s", e)
+            failed.append("catalogue")
     _latest_t = time.time()
     return web.json_response({"plugins": await _plugin_list(), "restart_needed": _plugins_restart_needed(),
                               "checked": int(_latest_t), "failed": failed, "mscos": hub.status.get("system", {}).get("mscos", "")})
@@ -959,21 +973,98 @@ async def plugins_set(request):
     return ok(plugins=await _plugin_list(), restart_needed=_plugins_restart_needed())
 
 
+# ---- the catalogue: modules/index.json in the project's repository
+def catalogue_url() -> str:
+    """MSCOS_CATALOGUE, else modules/index.json on the main branch of the repository named
+    in /etc/mscos-release (HOME_URL)."""
+    if env("CATALOGUE"):
+        return env("CATALOGUE")
+    home = dict(re.findall(r'^(\w+)="?([^"\n]*)"?', collect.read("/etc/mscos-release"), re.M)).get("HOME_URL", "")
+    m = re.fullmatch(r"https://github\.com/([\w.-]+/[\w.-]+?)/?", home)
+    return f"https://raw.githubusercontent.com/{m.group(1)}/main/modules/index.json" if m else ""
+
+
+_catalogue: tuple[float, list] = (0.0, [])
+
+
+async def fetch_catalogue(http) -> list[dict]:
+    global _catalogue
+    url = catalogue_url()
+    # the project's own address is always HTTPS; one set by the device's owner (MSCOS_CATALOGUE,
+    # a mirror on the local network) is taken as given
+    if not url.startswith("https://") and not (env("CATALOGUE") and url.startswith("http://")):
+        raise OSError("no catalogue address")
+    async with http.get(url) as r:
+        if r.status != 200:
+            raise OSError(f"HTTP {r.status}")
+        d = json.loads(await r.text())
+    mods = [m for m in d.get("modules", []) if isinstance(m, dict) and extmods.ID.fullmatch(str(m.get("id", "")))
+            and extmods.VERSION.fullmatch(str(m.get("version", ""))) and isinstance(m.get("files"), list)]
+    _catalogue = (time.time(), mods)
+    return mods
+
+
+@routes.post("/api/plugins/catalogue")
+async def plugins_catalogue(request):
+    """What the project's catalogue has: for each module, whether this device has it and
+    whether the catalogue's is newer. Asks the repository; only when the user does."""
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=20)) as http:
+            mods = await fetch_catalogue(http)
+    except (OSError, ValueError, asyncio.TimeoutError) as e:
+        raise web.HTTPBadGateway(text=T("Katalogen kunde inte hämtas: {why}", why=e if isinstance(e, OSError) else type(e).__name__))
+    out = []
+    for m in mods:
+        cls = hub.available_plugins.get(m["id"])
+        out.append({k: m.get(k) for k in ("id", "version", "kind", "name", "description")}
+                   | {"installed": cls.module_version if cls else None,
+                      "newer": cls is None or pluginlib._vkey(m["version"]) > pluginlib._vkey(cls.module_version)})
+    return ok(modules=out)
+
+
 @routes.post("/api/plugins/install")
 async def plugins_install(request):
-    """Install or update a module that does not come with mscOS, from the address of its
-    module.json. A module runs inside the panel as root: the page says so before this."""
-    url = str((await body(request)).get("url", "")).strip()
-    if not url.startswith("https://") or len(url) > 500:
-        raise web.HTTPBadRequest(text=T("Ange adressen till modulens module.json (https)."))
+    """Install or update a module: from the project's catalogue ({"id": ...}), or one that
+    is published elsewhere, from the address of its module.json ({"url": ...}). A module
+    runs inside the panel as root: the page says so before this."""
+    b = await body(request)
     if overlay_active():
         raise web.HTTPConflict(text=T("Stäng av skrivskyddet först. Med skrivskyddat system försvinner installationen vid omstart."))
+    global _ext_changed
+    if "id" in b:
+        try:
+            async with ClientSession(timeout=ClientTimeout(total=60)) as http:
+                m = next((x for x in await fetch_catalogue(http) if x["id"] == b["id"]), None)
+                if m is None:
+                    raise web.HTTPNotFound(text=T("Modulen finns inte i katalogen."))
+                base, files, total = catalogue_url().rsplit("/", 1)[0], [], 0
+                for f in m["files"][:200]:
+                    path, want = str(f.get("path", "")), str(f.get("sha256", ""))
+                    if not re.fullmatch(r"[\w.-]+(/[\w.-]+)*", path) or ".." in path.split("/"):
+                        raise ValueError("path")
+                    async with http.get(f"{base}/{m['id']}/{path}") as r:
+                        data = await r.content.read(extmods.MAX_BYTES + 1) if r.status == 200 else None
+                    if data is None or hashlib.sha256(data).hexdigest() != want:
+                        raise ValueError(f"{path}: sha256")
+                    total += len(data)
+                    if total > extmods.MAX_BYTES:
+                        raise ValueError("too large")
+                    files.append((path, data, bool(f.get("exec"))))
+            await asyncio.to_thread(extmods.install_files, m["id"], m["version"], "catalogue", files)
+        except ValueError as e:
+            raise web.HTTPBadRequest(text=T("Modulen kunde inte installeras: {why}", why=e))
+        except (OSError, asyncio.TimeoutError) as e:
+            raise web.HTTPBadGateway(text=T("Modulen kunde inte hämtas: {why}", why=type(e).__name__))
+        log.info("module %s %s installed from the catalogue", m["id"], m["version"])
+        _ext_changed = True
+        return ok(id=m["id"], version=m["version"])
+    url = str(b.get("url", "")).strip()
+    if not url.startswith("https://") or len(url) > 500:
+        raise web.HTTPBadRequest(text=T("Ange adressen till modulens module.json (https)."))
     try:
         async with ClientSession(timeout=ClientTimeout(total=60)) as http:
             async with http.get(url) as r:
                 m = extmods.check_manifest(json.loads(await r.text()), remote=True)
-            if m["id"] in pluginlib.SHIPPED:
-                raise ValueError("id")
             async with http.get(m["archive"]) as r:
                 data = await r.content.read(extmods.MAX_BYTES + 1)
         await asyncio.to_thread(extmods.unpack, data, m["sha256"], m["id"], url, m["version"])
@@ -982,7 +1073,6 @@ async def plugins_install(request):
     except (OSError, asyncio.TimeoutError) as e:
         raise web.HTTPBadGateway(text=T("Modulen kunde inte hämtas: {why}", why=type(e).__name__))
     log.info("module %s %s installed from its publisher", m["id"], m["version"])
-    global _ext_changed
     _ext_changed = True
     return ok(id=m["id"], version=m["version"])
 

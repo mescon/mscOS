@@ -1125,16 +1125,21 @@ const KIND_HELP = { source: tr("En källa i taget äger DAC:en. Du byter överst
 const lang = () => (document.documentElement.lang || "sv").slice(0, 2);
 const loc = (o) => (o && (o[lang()] || o.en || o.sv)) || "";
 let MODS = { plugins: [], restart_needed: false };
-const modUpdate = (p) => !p.external && p.kind === "source" && !!p.installed && p.updates === "manual" && !!p.latest && p.latest !== p.version;
+const modUpdate = (p) => p.kind === "source" && !!p.installed && p.updates === "manual" && !!p.latest && p.latest !== p.version;
 function modVersion(p) {
-  if (p.external) {
+  if (p.external && p.external.source !== "catalogue") {
     const v = p.external.version ? tr`Egen modul, version ${p.external.version}` : tr("Egen modul");
     return p.latest && p.latest !== p.external.version ? tr`${v}, ${p.latest} finns` : v;
   }
-  if (p.kind !== "source") return MODS.mscos ? tr`Följer med mscOS ${MODS.mscos}` : tr("Följer med mscOS");
+  const mv = p.external ? tr`Modul ${p.module_version}, från katalogen` : p.module_version ? tr`Modul ${p.module_version}` : "";
+  const mod = p.module_latest ? tr`${mv}, ${p.module_latest} finns` : mv;
+  if (p.kind !== "source") return mod;
+  return [mod, playerVersion(p)].filter(Boolean).join(". ");
+}
+function playerVersion(p) {
   if (p.installed === false) return tr("Inte installerad");
   if (p.installed == null) return "";
-  const v = p.version ? tr`Version ${p.version}` : tr("Installerad, okänd version");
+  const v = p.version ? tr`Spelare ${p.version}` : tr("Spelaren är installerad, okänd version");
   if (p.updates === "self") return tr`${v}, uppdaterar sig själv`;
   if (modUpdate(p)) return tr`${v}, ${p.latest} finns`;
   return p.latest ? tr`${v}, den senaste` : v;
@@ -1152,7 +1157,8 @@ function modCard(p, open) {
       <label class="toggle"><input type="checkbox" data-mod="${esc(p.id)}" ${p.enabled ? "checked" : ""}><span class="toggle-ui" aria-hidden="true"></span><span class="vh">${esc(loc(p.name))}</span></label>
     </div>
     <p class="mod-meta">${meta.map((t) => `<span>${esc(t)}</span>`).join("")}</p>
-    ${p.external ? `<div class="mod-install admin row wrap">${p.external.source && p.latest && p.latest !== p.external.version ? `<button class="btn primary" data-ext-update="${esc(p.external.source)}">${tr`Uppdatera till ${p.latest}`}</button>` : ""}<button class="btn" data-ext-remove="${esc(p.id)}">${tr("Ta bort modulen")}</button></div>` : ""}
+    ${p.module_latest ? `<div class="mod-install admin"><button class="btn primary" data-cat-install="${esc(p.id)}">${tr`Uppdatera modulen till ${p.module_latest}`}</button></div>` : ""}
+    ${p.external ? `<div class="mod-install admin row wrap">${p.external.source && p.external.source !== "catalogue" && p.latest && p.latest !== p.external.version ? `<button class="btn primary" data-ext-update="${esc(p.external.source)}">${tr`Uppdatera till ${p.latest}`}</button>` : ""}<button class="btn" data-ext-remove="${esc(p.id)}">${p.external.replaces ? tr("Återgå till den som följde med mscOS") : tr("Ta bort modulen")}</button></div>` : ""}
     ${modUpdate(p) ? `<div class="mod-install admin"><button class="btn primary" data-install="${esc(p.id)}" data-update="1">${tr`Uppdatera till ${p.latest}`}</button></div>` : ""}${modInstall(p)}
     ${more ? `<details class="mod-more"${open ? " open" : ""}><summary>${tr("Inställningar")}</summary><div class="mod-body">${modOptions(p)}${logbox}</div></details>` : ""}
   </li>`;
@@ -1173,7 +1179,7 @@ function renderMods() {
   $("#mods-locked").hidden = !locked;
   $("#mods-restart").hidden = !MODS.restart_needed;
   const on = MODS.plugins.filter((p) => p.enabled).length;
-  const ups = MODS.plugins.filter((p) => modUpdate(p) || (p.external && p.latest && p.latest !== p.external.version)).length;
+  const ups = MODS.plugins.filter((p) => modUpdate(p) || p.module_latest || (p.external && p.external.source !== "catalogue" && p.latest && p.latest !== p.external.version)).length;
   $("#mods-sum").textContent = tr`${on} av ${MODS.plugins.length} moduler är på.` + " "
     + (ups ? (ups === 1 ? tr("En uppdatering finns.") : tr`${ups} uppdateringar finns.`) : MODS.checked ? tr`Inga uppdateringar, kontrollerat ${clock(MODS.checked)}.` : "");
   const badge = $("#nav-mods"); badge.hidden = !ups && !MODS.restart_needed;
@@ -1215,6 +1221,25 @@ async function extInstall(url) {
   try { const r = await post("/api/plugins/install", { url }); toast(tr`${r.id} ${r.version} är installerad. Starta om panelen för att ladda den.`); $("#mod-add-url").value = ""; } catch {}
   loadMods();
 }
+// the project's catalogue: every module in the repository, also new ones and newer versions
+async function catInstall(id) {
+  try { const r = await post("/api/plugins/install", { id }); toast(tr`${r.id} ${r.version} är installerad. Starta om panelen för att ladda den.`); } catch {}
+  loadMods(); if ($("#cat-list").children.length) $("#cat-load").click();
+}
+$("#cat-load").addEventListener("click", async (e) => {
+  const b = e.currentTarget, list = $("#cat-list"); b.disabled = true;
+  try {
+    const r = await post("/api/plugins/catalogue");
+    const news = r.modules.filter((m) => m.newer);
+    list.innerHTML = news.length ? news.map((m) => `<li class="mod off"><div class="mod-head"><i class="mod-led" aria-hidden="true"></i>
+        <div class="mod-t"><b>${esc(loc(m.name))}</b><span>${esc(loc(m.description))}</span></div></div>
+        <p class="mod-meta"><span>${esc(KINDS[m.kind] || m.kind)}</span><span>${m.installed ? tr`Modul ${m.version}, du har ${m.installed}` : tr`Modul ${m.version}`}</span></p>
+        <div class="mod-install"><button class="btn primary" data-cat-install="${esc(m.id)}">${m.installed ? tr("Uppdatera") : tr("Installera")}</button></div></li>`).join("")
+      : `<li class="fine">${tr`Alla ${r.modules.length} moduler i katalogen finns redan här, i samma eller nyare version.`}</li>`;
+  } catch { list.innerHTML = ""; }
+  b.disabled = false;
+});
+document.addEventListener("click", (e) => { const b = e.target.closest("button[data-cat-install]"); if (b) { b.disabled = true; catInstall(b.dataset.catInstall); } });
 $("#mod-add-form").addEventListener("submit", (e) => { e.preventDefault(); const u = $("#mod-add-url").value.trim(); if (u) extInstall(u); });
 $("#mods").addEventListener("click", async (e) => {
   const up = e.target.closest("button[data-ext-update]"), rm = e.target.closest("button[data-ext-remove]");
@@ -1231,7 +1256,7 @@ $("#mods-check").addEventListener("click", async (e) => {
   const b = e.currentTarget; b.disabled = true; b.textContent = tr("Söker…");
   try {
     MODS = await post("/api/plugins/check"); renderMods();
-    const n = MODS.plugins.filter(modUpdate).length;
+    const n = MODS.plugins.filter((p) => modUpdate(p) || p.module_latest).length;
     toast(n ? (n === 1 ? tr("En uppdatering finns.") : tr`${n} uppdateringar finns.`) : (MODS.failed || []).length ? tr("Kunde inte nå alla utgivare. Försök igen senare.") : tr("Alla moduler är aktuella."));
   } catch {}
   b.disabled = false; b.textContent = tr("Sök uppdateringar");

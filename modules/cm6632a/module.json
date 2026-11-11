@@ -1,0 +1,13 @@
+{
+ "id": "cm6632a",
+ "version": "1.0.0",
+ "kind": "device",
+ "name": {
+  "sv": "Nativ DSD för CM6632A",
+  "en": "Native DSD for CM6632A"
+ },
+ "description": {
+  "sv": "DSD64 och DSD128 utan omvandling till DAC:ar med C-Media CM6632A (Mark Levinson Nº585, Nº585.5). För Roon och HQPlayer.",
+  "en": "DSD64 and DSD128 without conversion to DACs with a C-Media CM6632A (Mark Levinson Nº585, Nº585.5). For Roon and HQPlayer."
+ }
+}

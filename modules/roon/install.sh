@@ -3,7 +3,7 @@
 # at boot: the panel's source switch starts and stops it, so that only one player at a time
 # owns the DAC (Roon opens it directly, which DSD needs).
 HERE=$(cd "$(dirname "$0")" && pwd)
-. "$HERE/../common.sh"
+. "${MSCOS_COMMON:-$HERE/../common.sh}"
 case $ARCH in armhf) A=armv7hf ;; arm64) A=armv8 ;; amd64) A=x64 ;; esac
 
 apt-get install -y -q --no-install-recommends libasound2t64 libicu76 bzip2 curl ca-certificates

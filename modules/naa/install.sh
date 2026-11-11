@@ -6,7 +6,7 @@
 # starts and stops it, so that only one player at a time owns the DAC.
 #   NAA_SERIES=5 installs the newest 5.x (for HQPlayer 4 and 5 hosts that need the older protocol).
 HERE=$(cd "$(dirname "$0")" && pwd)
-. "$HERE/../common.sh"
+. "${MSCOS_COMMON:-$HERE/../common.sh}"
 BASE=https://www.signalyst.eu/bins/naa/linux/trixie
 SERIES=${NAA_SERIES:-}
 

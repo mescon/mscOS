@@ -4,7 +4,7 @@
 # since each build expires after 90 days. It starts once a key has been entered in the panel
 # (System -> Spotify): the key is personal and is never part of mscOS.
 HERE=$(cd "$(dirname "$0")" && pwd)
-. "$HERE/../common.sh"
+. "${MSCOS_COMMON:-$HERE/../common.sh}"
 DEVICE_NAME=${DEVICE_NAME:-mscOS}
 
 echo "Downloading Soloist from Spotify…"

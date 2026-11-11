@@ -52,8 +52,8 @@ part of mscOS. See [docs/PLATFORM-PLAN.md](docs/PLATFORM-PLAN.md) (Swedish) for 
 
 | Path | What |
 |---|---|
-| `web/` | the panel: `backend/` (Python, aiohttp), `static/` (a PWA without a build step), `backend/plugins/` (modules) |
-| `sources/` | per source: the script that downloads its player on the device, and its systemd units |
+| `web/` | the panel: `backend/` (Python, aiohttp) and `static/` (a PWA without a build step) |
+| `modules/` | one directory per module: sources (with the script that downloads the player on the device), amplifiers, alerts, integrations. [Contributing a module](modules/README.md) |
 | `core/` | system setup (`mscos-setup`), board detection, boot-time tuning, PipeWire configuration |
 | `boards/` | board profiles: what differs between boards (audio core, interrupts, sensors) |
 | `kernel/` | kernel configuration and the native-DSD patch (`mscos-dsd/`, also as DKMS) |
@@ -75,7 +75,7 @@ Swedish is the source language of the panel: texts are written in Swedish in the
 `en.json`, translate the values and add the language to `LANGS` in `web/static/i18n.js` and
 `web/backend/i18n.py`.
 
-A module is a Python package in `web/backend/plugins/`; see [docs/MODULES.md](docs/MODULES.md).
+A module is a directory in `modules/`; see [modules/README.md](modules/README.md) for how to contribute one and [docs/MODULES.md](docs/MODULES.md) for what a module can do. `tools/module-index.py` rebuilds the catalogue the panel browses.
 
 ## Rules for this repository
 

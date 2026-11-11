@@ -3,7 +3,7 @@
 # an independent open-source Spotify Connect client, on this device. Ogg Vorbis, 320 kbit/s
 # at most. Downloads the latest release from GitHub; the panel writes its configuration.
 HERE=$(cd "$(dirname "$0")" && pwd)
-. "$HERE/../common.sh"
+. "${MSCOS_COMMON:-$HERE/../common.sh}"
 REPO=devgianlu/go-librespot
 # The "armv6" build is ARMv7 hard-float code in practice (GOARM=6, VFP): right for armhf.
 case $ARCH in armhf) A=armv6 ;; arm64) A=arm64 ;; amd64) A=x86_64 ;; esac

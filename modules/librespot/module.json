@@ -1,0 +1,13 @@
+{
+ "id": "librespot",
+ "version": "1.0.0",
+ "kind": "source",
+ "name": {
+  "sv": "Spotify Connect (librespot)",
+  "en": "Spotify Connect (librespot)"
+ },
+ "description": {
+  "sv": "Spotify Connect utan nyckel: välj enheten i Spotify-appen. Ogg Vorbis 320 kbit/s, inte Lossless. Kräver Premium.",
+  "en": "Spotify Connect without a key: choose the device in the Spotify app. Ogg Vorbis 320 kbit/s, not Lossless. Needs Premium."
+ }
+}

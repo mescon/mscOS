@@ -1,0 +1,340 @@
+{
+ "format": 1,
+ "modules": [
+  {
+   "id": "arcam",
+   "version": "1.0.0",
+   "kind": "integration",
+   "name": {
+    "sv": "Arcam AV-receiver",
+    "en": "Arcam AV receiver"
+   },
+   "description": {
+    "sv": "Ström, källa, volym och mute för en Arcam-receiver i nätverket.",
+    "en": "Power, source, volume and mute for an Arcam receiver on the network."
+   },
+   "files": [
+    {
+     "path": "__init__.py",
+     "sha256": "ea36d00e4a19a8b3b529c5f720ef3344cf50b06b0270a72206ed75c6ad92f937",
+     "exec": false
+    },
+    {
+     "path": "driver.py",
+     "sha256": "0072b4b16f466ecfc1eddf4f3c2dd5621dfb950f2fe2278b042b8b31316ee0c3",
+     "exec": false
+    },
+    {
+     "path": "module.json",
+     "sha256": "74a0ba00ad291cfc0e8327ab4ae2dd4a8d292e8a674908f25299f2f7eb4c66a4",
+     "exec": false
+    }
+   ]
+  },
+  {
+   "id": "cm6632a",
+   "version": "1.0.0",
+   "kind": "device",
+   "name": {
+    "sv": "Nativ DSD för CM6632A",
+    "en": "Native DSD for CM6632A"
+   },
+   "description": {
+    "sv": "DSD64 och DSD128 utan omvandling till DAC:ar med C-Media CM6632A (Mark Levinson Nº585, Nº585.5). För Roon och HQPlayer.",
+    "en": "DSD64 and DSD128 without conversion to DACs with a C-Media CM6632A (Mark Levinson Nº585, Nº585.5). For Roon and HQPlayer."
+   },
+   "files": [
+    {
+     "path": "__init__.py",
+     "sha256": "6721a727119ce6a62fa155b4187f5664d7b1e23a5bf04c27b2b166a27f97c3bc",
+     "exec": false
+    },
+    {
+     "path": "module.json",
+     "sha256": "945c6c03068fb77d1077098c00a8dab638bac72e11e9b429ae41076eab4bf74a",
+     "exec": false
+    }
+   ]
+  },
+  {
+   "id": "homeassistant",
+   "version": "1.0.0",
+   "kind": "integration",
+   "name": {
+    "sv": "Home Assistant",
+    "en": "Home Assistant"
+   },
+   "description": {
+    "sv": "Tillstånd för sensorer (/api/ha) och larm till telefonen via en webhook.",
+    "en": "State for sensors (/api/ha) and alerts to the phone through a webhook."
+   },
+   "files": [
+    {
+     "path": "__init__.py",
+     "sha256": "3c9d4ae528d1873cb75560b272b669906dc2d22a0a98b6654967dd675f2e9659",
+     "exec": false
+    },
+    {
+     "path": "module.json",
+     "sha256": "dfe4025c945bdd837519f3058629a07182ebf5b1090a9cd87f0cee99b7c094f4",
+     "exec": false
+    }
+   ]
+  },
+  {
+   "id": "levinson",
+   "version": "1.0.0",
+   "kind": "amp",
+   "name": {
+    "sv": "Mark Levinson Nº585/585.5",
+    "en": "Mark Levinson Nº585/585.5"
+   },
+   "description": {
+    "sv": "Volym, ingångar, standby och mute över nätverket (TCP 7701).",
+    "en": "Volume, inputs, standby and mute over the network (TCP 7701)."
+   },
+   "files": [
+    {
+     "path": "__init__.py",
+     "sha256": "424c05f62b360c406640ccc385f2e981f510ccf3ffa6f7a877356b49fe25fe7f",
+     "exec": false
+    },
+    {
+     "path": "driver.py",
+     "sha256": "ce89ff752182bc245687c991f9dbee3f4e2af2951a910f2e7344123a68af0a5d",
+     "exec": false
+    },
+    {
+     "path": "module.json",
+     "sha256": "dc8b867285efb7a54de3390f5d7c2aed26a8889e430196b3c02aeed19cf8f8d7",
+     "exec": false
+    }
+   ]
+  },
+  {
+   "id": "librespot",
+   "version": "1.0.0",
+   "kind": "source",
+   "name": {
+    "sv": "Spotify Connect (librespot)",
+    "en": "Spotify Connect (librespot)"
+   },
+   "description": {
+    "sv": "Spotify Connect utan nyckel: välj enheten i Spotify-appen. Ogg Vorbis 320 kbit/s, inte Lossless. Kräver Premium.",
+    "en": "Spotify Connect without a key: choose the device in the Spotify app. Ogg Vorbis 320 kbit/s, not Lossless. Needs Premium."
+   },
+   "files": [
+    {
+     "path": "__init__.py",
+     "sha256": "77d3ffcad4fe5823fcbf8196542fcaed9eadf773f8460a61f255ef62275eaa19",
+     "exec": false
+    },
+    {
+     "path": "install.sh",
+     "sha256": "2bbe704db9ab281199ceb7cc2638480e8731a336958561d02aef5c27c8f4fa00",
+     "exec": true
+    },
+    {
+     "path": "librespot.service",
+     "sha256": "9e321acaa609586305a826e267e8c8b42bf53be1ae253a85047ca7ccdfc8bc21",
+     "exec": false
+    },
+    {
+     "path": "module.json",
+     "sha256": "87953012b04ed13c9fe7f57ead458d0b366215ff9a863b73cc93b2fcd8cf7b6a",
+     "exec": false
+    }
+   ]
+  },
+  {
+   "id": "naa",
+   "version": "1.0.0",
+   "kind": "source",
+   "name": {
+    "sv": "HQPlayer NAA",
+    "en": "HQPlayer NAA"
+   },
+   "description": {
+    "sv": "Enheten som nätverksutgång för HQPlayer (Qobuz, Tidal och egna filer via HQPlayer, även DSD).",
+    "en": "This device as the network output of HQPlayer (Qobuz, Tidal and your own files through HQPlayer, DSD too)."
+   },
+   "files": [
+    {
+     "path": "__init__.py",
+     "sha256": "e5d178372707b8668c98c6645d7fdef0634d44f13ee8e65fc54df75f7d485404",
+     "exec": false
+    },
+    {
+     "path": "install.sh",
+     "sha256": "1c3f74fcfb7e971155926c0224d99039ecd70bf92a9d2f03884b093fc52daf6b",
+     "exec": true
+    },
+    {
+     "path": "module.json",
+     "sha256": "bd80e5dfb14d4a48901490f892faa63fb8b7e8523dc54fa4a8ba1990a85bdf2b",
+     "exec": false
+    }
+   ]
+  },
+  {
+   "id": "ntfy",
+   "version": "1.0.0",
+   "kind": "notify",
+   "name": {
+    "sv": "ntfy",
+    "en": "ntfy"
+   },
+   "description": {
+    "sv": "Larm till telefonen via ntfy-appen. Kräver inget konto: välj ett svårgissat ämne.",
+    "en": "Alerts to the phone through the ntfy app. No account needed: choose a topic that is hard to guess."
+   },
+   "files": [
+    {
+     "path": "__init__.py",
+     "sha256": "58fbad94d7b19fc5e41cfcc4ae40b4eabc6661f549ca2ef2d46fcd76104ebb81",
+     "exec": false
+    },
+    {
+     "path": "module.json",
+     "sha256": "0f7e3ea964ba7136aa0ee197f62d55534667b1b87d1c711e4d65eb3ce9096deb",
+     "exec": false
+    }
+   ]
+  },
+  {
+   "id": "roon",
+   "version": "1.0.0",
+   "kind": "source",
+   "name": {
+    "sv": "Roon Bridge",
+    "en": "Roon Bridge"
+   },
+   "description": {
+    "sv": "Enheten som Roon-utgång. Alla format DAC:en klarar, även DSD. Kräver en Roon-server i nätverket.",
+    "en": "This device as a Roon output. Every format the DAC takes, DSD too. Needs a Roon server on the network."
+   },
+   "files": [
+    {
+     "path": "__init__.py",
+     "sha256": "781698e4107b8915f1295a72fc994e880c9d3ba6054770082042b5674e1cc442",
+     "exec": false
+    },
+    {
+     "path": "install.sh",
+     "sha256": "50c2f62cb4b562ff8279228629951c31fc6e2878881b21ba6ac7e3124a7197fb",
+     "exec": true
+    },
+    {
+     "path": "module.json",
+     "sha256": "a3deb7345aa560b931e4d7cc366f51a137e6a8f70f78905c029545167e496964",
+     "exec": false
+    },
+    {
+     "path": "raat-cpu",
+     "sha256": "f7d0ed75decd5b93c614e840e51c34b8bf80593f16d7e3b799ade86e18263349",
+     "exec": false
+    },
+    {
+     "path": "raat-cpu.service",
+     "sha256": "9e25ff91083c26a80ef6a56dd82776c988ed1ff2827c04abd59bd8361748910a",
+     "exec": false
+    },
+    {
+     "path": "roonbridge.service",
+     "sha256": "5d0dcb10f344f0626dcadb078c7fec0e667f81746b436f32661447e5a8ddb4df",
+     "exec": false
+    },
+    {
+     "path": "roonbridge.service.d/10-dotnet-startup.conf",
+     "sha256": "95ea2f73592706ad9353ad1cf3f9ae36861463e84963e6f79715636cb1d92617",
+     "exec": false
+    }
+   ]
+  },
+  {
+   "id": "spotify",
+   "version": "1.0.0",
+   "kind": "source",
+   "name": {
+    "sv": "Spotify Lossless (Soloist)",
+    "en": "Spotify Lossless (Soloist)"
+   },
+   "description": {
+    "sv": "Spotify Connect i Lossless, bitperfekt. Kräver Premium och en egen utvecklarnyckel från Spotify.",
+    "en": "Spotify Connect in Lossless, bit-perfect. Needs Premium and your own developer key from Spotify."
+   },
+   "files": [
+    {
+     "path": "__init__.py",
+     "sha256": "14662cc34c8515dc921144b226bce8870817c4b01cd2cb545bec947979051848",
+     "exec": false
+    },
+    {
+     "path": "install.sh",
+     "sha256": "24e0e1bd210a22cd9869f487387f3b6d691f7e56d123b36c0b7ffbf2e7b33f43",
+     "exec": true
+    },
+    {
+     "path": "module.json",
+     "sha256": "f1110645ad0115c0a77bbb3d29b03fc6d0357627f8474dd809918008e0a240e3",
+     "exec": false
+    },
+    {
+     "path": "soloist-rt",
+     "sha256": "1fd9af50b0362b6a9f649f896061feb3d9392ca0d13b01ffe04d15c763341393",
+     "exec": true
+    },
+    {
+     "path": "soloist-rt.service",
+     "sha256": "c5fe0138f29bd7220c8be77cc5bfdaac98489b235d9e6cfd97742456f637f166",
+     "exec": false
+    },
+    {
+     "path": "soloist-update",
+     "sha256": "52cfeba980ab6e244a300c0459a53f22e56130f132ca243aeab9647e3df4f22b",
+     "exec": true
+    },
+    {
+     "path": "soloist-update.service",
+     "sha256": "9e58aee9422fc4b41ebbed159297093b6fded91425132379a230a7d49ab1bd3b",
+     "exec": false
+    },
+    {
+     "path": "soloist-update.timer",
+     "sha256": "5627b5de2f7401c3c1f7e663b108b902b003923061da302aee2c618cf127fe58",
+     "exec": false
+    },
+    {
+     "path": "soloist.service",
+     "sha256": "4583dae40f554801041ef02a52ad2a7f82174e3b27e139600a8af3765f8a7ebd",
+     "exec": false
+    }
+   ]
+  },
+  {
+   "id": "tvmode",
+   "version": "1.0.0",
+   "kind": "integration",
+   "name": {
+    "sv": "TV-läge",
+    "en": "TV mode"
+   },
+   "description": {
+    "sv": "Förstärkaren växlar mellan den här enheten och AV-receiverns ingång.",
+    "en": "The amplifier switches between this device and the AV receiver's input."
+   },
+   "files": [
+    {
+     "path": "__init__.py",
+     "sha256": "564ded0f5ecc28c50c600b4542eb69d028412fd6f5a141e943eb0a8918fc131c",
+     "exec": false
+    },
+    {
+     "path": "module.json",
+     "sha256": "fc041154a38360e609b070448aaa538349f381cb0a0a6d1022a65313ed979dd7",
+     "exec": false
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,13 @@
+{
+ "id": "arcam",
+ "version": "1.0.0",
+ "kind": "integration",
+ "name": {
+  "sv": "Arcam AV-receiver",
+  "en": "Arcam AV receiver"
+ },
+ "description": {
+  "sv": "Ström, källa, volym och mute för en Arcam-receiver i nätverket.",
+  "en": "Power, source, volume and mute for an Arcam receiver on the network."
+ }
+}

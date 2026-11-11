@@ -60,7 +60,7 @@ def check_manifest(m: dict, remote: bool = False) -> dict:
     out = {"id": m["id"], "version": str(m["version"])}
     for k in ("source", "archive"):
         v = m.get(k)
-        if v is not None:
+        if v is not None and not (k == "source" and v == "catalogue"):
             if not (isinstance(v, str) and v.startswith("https://") and len(v) < 500):
                 raise ValueError(k)
             out[k] = v
@@ -114,6 +114,42 @@ def unpack(data: bytes, sha256: str, mid: str, source: str, version: str, dest_r
             json.dump({"id": mid, "version": version, "source": source}, f)
         final = os.path.join(dest_root, mid)
         old = os.path.join(dest_root, f".{mid}.old")
+        shutil.rmtree(old, ignore_errors=True)
+        if os.path.exists(final):
+            os.rename(final, old)
+        os.rename(new, final)
+        shutil.rmtree(old, ignore_errors=True)
+        return final
+    except Exception:
+        shutil.rmtree(new, ignore_errors=True)
+        raise
+
+
+def install_files(mid: str, version: str, source: str, files: list[tuple[str, bytes, bool]], dest_root: str = DIR) -> str:
+    """Install a module from the catalogue: its files (path, content, executable), already
+    checked against the catalogue's checksums."""
+    if not ID.fullmatch(mid):
+        raise ValueError("id")
+    new = os.path.join(dest_root, f".{mid}.new")
+    shutil.rmtree(new, ignore_errors=True)
+    os.makedirs(new, mode=0o755)
+    try:
+        for rel, data, executable in files:
+            name = os.path.normpath(rel)
+            if name in (".", "") or name.startswith(("..", "/")) or "\x00" in name or name == "module.json":
+                if name == "module.json":
+                    continue  # written below, with where it came from
+                raise ValueError("path")
+            target = os.path.join(new, name)
+            os.makedirs(os.path.dirname(target), mode=0o755, exist_ok=True)
+            with open(target, "wb") as f:
+                f.write(data)
+            os.chmod(target, 0o755 if executable else 0o644)
+        if not os.path.isfile(os.path.join(new, "__init__.py")):
+            raise ValueError("no __init__.py")
+        with open(os.path.join(new, "module.json"), "w") as f:
+            json.dump({"id": mid, "version": version, "source": source}, f)
+        final, old = os.path.join(dest_root, mid), os.path.join(dest_root, f".{mid}.old")
         shutil.rmtree(old, ignore_errors=True)
         if os.path.exists(final):
             os.rename(final, old)

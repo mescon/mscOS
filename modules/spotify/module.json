@@ -1,0 +1,13 @@
+{
+ "id": "spotify",
+ "version": "1.0.0",
+ "kind": "source",
+ "name": {
+  "sv": "Spotify Lossless (Soloist)",
+  "en": "Spotify Lossless (Soloist)"
+ },
+ "description": {
+  "sv": "Spotify Connect i Lossless, bitperfekt. Kräver Premium och en egen utvecklarnyckel från Spotify.",
+  "en": "Spotify Connect in Lossless, bit-perfect. Needs Premium and your own developer key from Spotify."
+ }
+}

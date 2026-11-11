@@ -1,0 +1,13 @@
+{
+ "id": "homeassistant",
+ "version": "1.0.0",
+ "kind": "integration",
+ "name": {
+  "sv": "Home Assistant",
+  "en": "Home Assistant"
+ },
+ "description": {
+  "sv": "Tillstånd för sensorer (/api/ha) och larm till telefonen via en webhook.",
+  "en": "State for sensors (/api/ha) and alerts to the phone through a webhook."
+ }
+}

@@ -1,0 +1,13 @@
+{
+ "id": "roon",
+ "version": "1.0.0",
+ "kind": "source",
+ "name": {
+  "sv": "Roon Bridge",
+  "en": "Roon Bridge"
+ },
+ "description": {
+  "sv": "Enheten som Roon-utgång. Alla format DAC:en klarar, även DSD. Kräver en Roon-server i nätverket.",
+  "en": "This device as a Roon output. Every format the DAC takes, DSD too. Needs a Roon server on the network."
+ }
+}
