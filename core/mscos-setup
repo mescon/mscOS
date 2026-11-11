@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+# mscOS system setup: the audio user and its PipeWire session, and the board's tuning.
+# Run as root; idempotent. The mscos-core package runs it when installed, and an image
+# build runs it with MSCOS_BOARD=<profile> (the build machine is not the board).
+# Kernel arguments, the CPU split and a device tree overlay take effect at the next boot.
+set -euo pipefail
+LIB=${MSCOS_LIB:-/usr/lib/mscos}
+SHARE=${MSCOS_SHARE:-/usr/share/mscos}
+LIVE=no; [ -d /run/systemd/system ] && LIVE=yes   # no: inside an image build
+
+# --- 1. The audio user: owns the PipeWire session and the players that run in it ----------
+if id -u soloist >/dev/null 2>&1; then U=soloist   # an install from before sources were modules
+else
+    U=mscos
+    id -u "$U" >/dev/null 2>&1 || useradd --system --create-home --home-dir /var/lib/mscos-audio \
+        --shell /usr/sbin/nologin --groups audio "$U"
+fi
+getent group pipewire >/dev/null && usermod -aG pipewire "$U"   # Debian: rtprio 95 for @pipewire
+UID_=$(id -u "$U"); GID_=$(id -g "$U"); H=$(getent passwd "$U" | cut -d: -f6)
+install -d /var/lib/systemd/linger && touch "/var/lib/systemd/linger/$U"   # its session starts at boot
+if ! getent group pipewire >/dev/null; then   # no such group: the limits directly
+    printf '%s - rtprio 95\n%s - nice -19\n%s - memlock unlimited\n' "$U" "$U" "$U" > /etc/security/limits.d/95-mscos-audio.conf
+fi
+
+# --- 2. PipeWire: 44.1 kHz, no resampling, the USB DAC as a raw device -------------------
+as_user() { install -o "$U" -g "$U" "$@"; }
+as_user -d "$H/.config" "$H/.config/pipewire" "$H/.config/pipewire/pipewire.conf.d" \
+    "$H/.config/wireplumber" "$H/.config/wireplumber/wireplumber.conf.d" "$H/.config/systemd" "$H/.config/systemd/user"
+as_user -m 644 "$SHARE/pipewire/10-bitperfect.conf" "$H/.config/pipewire/pipewire.conf.d/10-bitperfect.conf"
+as_user -m 644 "$SHARE/pipewire/50-usb-dac.conf" "$H/.config/wireplumber/wireplumber.conf.d/50-usb-dac.conf"
+# PipeWire and WirePlumber start with the session (Debian enables them for every user; make sure).
+for w in sockets.target.wants/pipewire.socket:/usr/lib/systemd/user/pipewire.socket \
+         pipewire.service.wants/wireplumber.service:/usr/lib/systemd/user/wireplumber.service; do
+    d=$H/.config/systemd/user/${w%%:*}
+    as_user -d "$(dirname "$d")"
+    [ -e "$d" ] || { ln -s "${w#*:}" "$d"; chown -h "$U:$U" "$d"; }
+done
+# The players' stream cache in RAM: no writes to the SD card while playing.
+CACHE="$H/.cache"
+as_user -d "$CACHE"
+grep -q " $CACHE tmpfs " /etc/fstab || \
+    echo "tmpfs $CACHE tmpfs rw,nosuid,nodev,noatime,size=400M,mode=0755,uid=$UID_,gid=$GID_ 0 0" >> /etc/fstab
+
+# --- 3. The board ---------------------------------------------------------------------------
+if [ -n "${MSCOS_BOARD:-}" ]; then "$LIB/bin/mscos-board" "$MSCOS_BOARD" >/dev/null
+elif [ "$LIVE" = yes ]; then "$LIB/bin/mscos-board" >/dev/null
+fi
+if [ ! -e /etc/mscos/board.conf ]; then
+    # An image build that did not name the board: finish on the device at first boot.
+    systemctl enable mscos-firstboot.service >/dev/null 2>&1 || true
+    BOARD_DONE=no
+else
+    BOARD_DONE=yes
+    . /etc/mscos/board.conf
+    [ -r /etc/mscos/board.local.conf ] && . /etc/mscos/board.local.conf
+    NCPU=${MSCOS_NCPU:-$(nproc --all)}
+    case $AUDIO_CPU in last) [ "$NCPU" -gt 1 ] && AUDIO_CPU=$((NCPU - 1)) || AUDIO_CPU= ;; esac
+    SYS_CPUS=
+    if [ -n "$AUDIO_CPU" ]; then
+        for c in $(seq 0 $((NCPU - 1))); do [ "$c" = "$AUDIO_CPU" ] || SYS_CPUS="$SYS_CPUS $c"; done
+        SYS_CPUS=${SYS_CPUS# }
+    fi
+
+    # Kernel arguments. rt_group_sched=0: with CONFIG_RT_GROUP_SCHED every systemd cgroup has a
+    # zero real-time budget and PipeWire silently stays SCHED_OTHER. audit=0: no audit record on
+    # every system call. irqaffinity: interrupts start on the system cores.
+    ARGS="rt_group_sched=0 audit=0"
+    [ -z "$AUDIO_CPU" ] || ARGS="$ARGS irqaffinity=$(echo "$SYS_CPUS" | tr ' ' ,)"
+    if [ -f /boot/armbianEnv.txt ]; then                      # Armbian with U-Boot
+        ENV=/boot/armbianEnv.txt
+        for a in $ARGS; do
+            k=${a%%=*}
+            if grep -q '^extraargs=' "$ENV"; then
+                if grep -q "^extraargs=.*\b$k=" "$ENV"; then sed -i "s|\(^extraargs=.*\)\b$k=[^ ]*|\1$a|" "$ENV"
+                else sed -i "s|^extraargs=\(.*\)|extraargs=\1 $a|" "$ENV"; fi
+            else echo "extraargs=$a" >> "$ENV"; fi
+        done
+        sed -i 's/^verbosity=.*/verbosity=0/' "$ENV"
+    elif [ -f /boot/firmware/cmdline.txt ]; then              # Raspberry Pi firmware
+        C=/boot/firmware/cmdline.txt
+        for a in $ARGS; do
+            k=${a%%=*}
+            if grep -q "\b$k=" "$C"; then sed -i "s|\b$k=[^ ]*|$a|" "$C"; else sed -i "1s|\$| $a|" "$C"; fi
+        done
+    elif [ -d /etc/default/grub.d ]; then                     # GRUB (PCs)
+        echo "GRUB_CMDLINE_LINUX_DEFAULT=\"\$GRUB_CMDLINE_LINUX_DEFAULT $ARGS\"" > /etc/default/grub.d/mscos.cfg
+        [ "$LIVE" = no ] || update-grub >/dev/null 2>&1 || true
+    fi
+
+    # The CPU split for services: the system on its cores, the audio user's session on the audio core.
+    install -d /etc/systemd/system.conf.d "/etc/systemd/system/user@$UID_.service.d"
+    rm -f /etc/systemd/system.conf.d/10-sotm-cpu.conf
+    if [ -n "$AUDIO_CPU" ]; then
+        printf '[Manager]\n# Default for all services: the system cores. The audio user gets the audio core.\nCPUAffinity=%s\n' "$SYS_CPUS" \
+            > /etc/systemd/system.conf.d/10-mscos-cpu.conf
+        printf '[Service]\n# PipeWire and the players on the audio core, next to the USB interrupts.\nCPUAffinity=%s\n' "$AUDIO_CPU" \
+            > "/etc/systemd/system/user@$UID_.service.d/10-audio-cpu.conf"
+    else
+        rm -f /etc/systemd/system.conf.d/10-mscos-cpu.conf "/etc/systemd/system/user@$UID_.service.d/10-audio-cpu.conf"
+    fi
+    if [ -n "$WATCHDOG" ]; then   # reboot by itself if the system hangs
+        printf '[Manager]\nRuntimeWatchdogSec=%s\nRebootWatchdogSec=10min\n' "$WATCHDOG" > /etc/systemd/system.conf.d/20-watchdog.conf
+    fi
+    if [ -n "$CPU_FIXED_KHZ" ] && [ -e /etc/default/cpufrequtils ]; then   # Armbian's own cpufreq service
+        printf 'ENABLE=true\nGOVERNOR=performance\nMIN_SPEED=%s\nMAX_SPEED=%s\n' "$CPU_FIXED_KHZ" "$CPU_FIXED_KHZ" > /etc/default/cpufrequtils
+    fi
+
+    # Device tree overlay (Armbian): hardware the board does not have gets no driver and no clock.
+    if [ -n "$DT_OVERLAY" ] && [ -f /boot/armbianEnv.txt ] && command -v dtc >/dev/null; then
+        install -d /boot/overlay-user
+        dtc -q -@ -I dts -O dtb -o "/boot/overlay-user/$DT_OVERLAY.dtbo" "$SHARE/boards/dts/$DT_OVERLAY.dts"
+        if grep -q '^user_overlays=' /boot/armbianEnv.txt; then
+            grep -q "^user_overlays=.*\b$DT_OVERLAY\b" /boot/armbianEnv.txt || sed -i "s/^user_overlays=\(.*\)/user_overlays=\1 $DT_OVERLAY/" /boot/armbianEnv.txt
+        else
+            echo "user_overlays=$DT_OVERLAY" >> /boot/armbianEnv.txt
+        fi
+    fi
+fi
+
+# --- 4. Nothing unscheduled while music plays --------------------------------------------------
+# apt, man-db and filesystem checks run from the panel or not at all; trim and logrotate at night.
+for t in apt-daily.timer apt-daily-upgrade.timer man-db.timer e2scrub_all.timer dpkg-db-backup.timer; do
+    systemctl disable "$t" >/dev/null 2>&1 || true
+    [ "$LIVE" = no ] || systemctl stop "$t" >/dev/null 2>&1 || true
+done
+sed -i 's|^@daily root /usr/lib/armbian/armbian-apt-updates|#&|' /etc/cron.d/armbian-updates 2>/dev/null || true
+for t in fstrim:'Mon *-*-* 04:45:00' logrotate:'*-*-* 04:40:00'; do
+    install -d "/etc/systemd/system/${t%%:*}.timer.d"
+    rm -f "/etc/systemd/system/${t%%:*}.timer.d/10-sotm.conf"
+    printf '[Timer]\nOnCalendar=\nOnCalendar=%s\nRandomizedDelaySec=0\n' "${t#*:}" \
+        > "/etc/systemd/system/${t%%:*}.timer.d/10-mscos.conf"
+done
+
+# --- 5. Services --------------------------------------------------------------------------------
+if [ -e /etc/systemd/system/sotm-tuning.service ]; then   # its name before board profiles
+    systemctl disable sotm-tuning.service >/dev/null 2>&1 || true
+    rm -f /etc/systemd/system/sotm-tuning.service /usr/local/sbin/sotm-tuning
+fi
+systemctl enable mscos-tuning.service >/dev/null 2>&1 || true
+[ "$LIVE" = no ] || systemctl daemon-reload
+[ "$BOARD_DONE" = no ] || install -D /dev/null /var/lib/mscos/.board-applied
+echo "mscOS setup done (audio user $U, board $(basename "$(readlink -f /etc/mscos/board.conf 2>/dev/null)" .conf)). Restart to apply kernel arguments and the CPU split."

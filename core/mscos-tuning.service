@@ -1,0 +1,13 @@
+[Unit]
+Description=mscOS audio tuning (CPU and interrupt split, clock, thermal polling)
+# After Armbian's own optimizer, which moves interrupts around on some boards.
+After=armbian-hardware-optimize.service systemd-modules-load.service systemd-udev-settle.service
+Before=systemd-user-sessions.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/mscos/bin/mscos-tuning
+
+[Install]
+WantedBy=multi-user.target

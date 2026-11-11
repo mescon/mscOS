@@ -1,0 +1,60 @@
+#!/bin/sh
+# mscOS boot-time audio tuning, from the board profile. Run by mscos-tuning.service before
+# the audio user's session starts.
+#
+# CPU split (AUDIO_CPU): one core for audio, the USB host controllers' interrupts and the
+# audio user's services (PipeWire and the players, through CPUAffinity on user@<uid>);
+# everything else (network, storage, the panel, kernel workers) on the other cores. The 1 kHz
+# USB-audio completion interrupts then never queue behind ethernet or the SD card.
+[ -e /etc/mscos/board.conf ] || /usr/lib/mscos/bin/mscos-board >/dev/null
+. /etc/mscos/board.conf
+[ -r /etc/mscos/board.local.conf ] && . /etc/mscos/board.local.conf
+
+NCPU=$(nproc --all)
+case $AUDIO_CPU in last) [ "$NCPU" -gt 1 ] && AUDIO_CPU=$((NCPU - 1)) || AUDIO_CPU= ;; esac
+[ -n "$AUDIO_CPU" ] && [ "$AUDIO_CPU" -ge "$NCPU" ] && AUDIO_CPU=
+
+# 1. A thermal sensor whose reads block the CPU: stop the kernel polling it.
+if [ -n "$THERMAL_OFF" ]; then
+    for z in /sys/class/thermal/thermal_zone*; do
+        [ -e "$z/type" ] && [ "$(cat "$z/type")" = "$THERMAL_OFF" ] && echo disabled > "$z/mode"
+    done
+fi
+
+# 2. CPU clock: no frequency scaling.
+for p in /sys/devices/system/cpu/cpufreq/policy*; do
+    [ -w "$p/scaling_governor" ] || continue
+    echo performance > "$p/scaling_governor" 2>/dev/null
+    if [ -n "$CPU_FIXED_KHZ" ]; then
+        echo "$CPU_FIXED_KHZ" > "$p/scaling_max_freq" 2>/dev/null
+        echo "$CPU_FIXED_KHZ" > "$p/scaling_min_freq" 2>/dev/null
+    fi
+done
+
+# 3. Interrupts: everything on the system cores, the USB host controllers on the audio core.
+if [ -n "$AUDIO_CPU" ]; then
+    ALL=$(( (1 << NCPU) - 1 ))
+    AUDIO_MASK=$(printf '%x' $((1 << AUDIO_CPU)))
+    SYS_MASK=$(printf '%x' $((ALL & ~(1 << AUDIO_CPU))))
+    echo "$SYS_MASK" > /proc/irq/default_smp_affinity
+    for d in /proc/irq/[0-9]*; do
+        echo "$SYS_MASK" > "$d/smp_affinity" 2>/dev/null
+    done
+    grep -E "$USB_IRQ_MATCH" /proc/interrupts | awk -F: '{gsub(/ /, "", $1); print $1}' | while read -r irq; do
+        echo "$AUDIO_MASK" > "/proc/irq/$irq/smp_affinity" 2>/dev/null
+    done
+    # Unbound kernel workqueues and network receive processing stay off the audio core.
+    [ -w /sys/devices/virtual/workqueue/cpumask ] && echo "$SYS_MASK" > /sys/devices/virtual/workqueue/cpumask
+    for q in /sys/class/net/*/queues/rx-*/rps_cpus; do [ -w "$q" ] && echo "$SYS_MASK" > "$q" 2>/dev/null; done
+fi
+
+# 4. Ethernet link speed: only that speed advertised (autonegotiation kept). The panel can
+#    change it (System -> Device); its choice in settings.json wins.
+IF=$(ip -o route show default 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "dev") {print $(i + 1); exit}}')
+[ -n "$IF" ] || IF=$(ls /sys/class/net | grep -E '^(en|eth)' | head -n1)
+SPEED=$(sed -n 's/.*"net_speed": *\([0-9]*\).*/\1/p' /var/lib/mscos/settings.json 2>/dev/null)
+SPEED=${SPEED:-$NET_SPEED}
+if [ -n "$IF" ] && [ "$SPEED" = 100 ] && command -v ethtool >/dev/null; then
+    ethtool -s "$IF" advertise 0x008 2>/dev/null
+fi
+true

@@ -11,3 +11,4 @@ kernel/*.log
 __pycache__/
 *.pyc
 kernel/mscos-dsd/out/
+packaging/out/

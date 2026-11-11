@@ -23,7 +23,7 @@ install -m 644 "$HERE/roonbridge.service" /etc/systemd/system/roonbridge.service
 if [ -n "${AUDIO_CPU:-}" ]; then
     install -d /etc/systemd/system/roonbridge.service.d
     install -m 644 "$HERE/roonbridge.service.d/10-dotnet-startup.conf" /etc/systemd/system/roonbridge.service.d/
-    printf '[Service]\nCPUAffinity=\nCPUAffinity=0-%s\n' "$(($(nproc) - 1))" > /etc/systemd/system/roonbridge.service.d/20-all-cpus.conf
+    printf '[Service]\nCPUAffinity=\nCPUAffinity=0-%s\n' "$(($(nproc --all) - 1))" > /etc/systemd/system/roonbridge.service.d/20-all-cpus.conf
     install -m 755 "$HERE/raat-cpu" /usr/local/sbin/raat-cpu
     install -m 644 "$HERE/raat-cpu.service" /etc/systemd/system/raat-cpu.service
     systemctl daemon-reload

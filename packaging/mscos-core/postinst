@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+if [ "$1" = configure ]; then
+    /usr/lib/mscos/bin/mscos-setup || echo "mscos-core: setup did not finish; run /usr/lib/mscos/bin/mscos-setup" >&2
+fi

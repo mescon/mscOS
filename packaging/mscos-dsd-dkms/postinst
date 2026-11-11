@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+V=@VERSION@
+if [ "$1" = configure ]; then
+    dkms add -m mscos-dsd -v "$V" >/dev/null 2>&1 || true
+    if [ -d /run/systemd/system ]; then
+        dkms build -m mscos-dsd -v "$V" && dkms install -m mscos-dsd -v "$V" --force || \
+            echo "mscos-dsd-dkms: the module was not built for $(uname -r); the stock driver stays in use" >&2
+    fi
+fi

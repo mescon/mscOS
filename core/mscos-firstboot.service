@@ -1,0 +1,13 @@
+[Unit]
+Description=mscOS: finish setup for this board (first boot)
+ConditionPathExists=!/var/lib/mscos/.board-applied
+After=local-fs.target
+Before=mscos-tuning.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/mscos/bin/mscos-setup
+ExecStartPost=/bin/systemctl --no-block reboot
+
+[Install]
+WantedBy=multi-user.target

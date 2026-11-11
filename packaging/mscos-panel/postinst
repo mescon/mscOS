@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+if [ "$1" = configure ]; then
+    install -d -m 755 /var/lib/mscos /etc/mscos
+    systemctl enable mscos-panel.service >/dev/null 2>&1 || true
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload
+        systemctl restart mscos-panel.service || true
+    fi
+fi

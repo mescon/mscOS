@@ -1,0 +1,13 @@
+Package: mscos-panel
+Version: @VERSION@
+Architecture: all
+Section: sound
+Priority: optional
+Maintainer: mescon <mescon@users.noreply.github.com>
+Homepage: https://github.com/mescon/mscOS
+Depends: mscos-core (>= @VERSION@), python3 (>= 3.11), python3-aiohttp, python3-websockets, python3-numpy
+Description: mscOS control panel
+ The web panel (a PWA, in Swedish and English) for an mscOS streamer: what plays and
+ in which format, the signal path and its verification, sources (Spotify, Roon,
+ HQPlayer NAA) and modules for amplifiers and home automation. Players are downloaded
+ on the device from their publishers; no keys or player binaries are included.

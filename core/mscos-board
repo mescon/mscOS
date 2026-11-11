@@ -1,0 +1,39 @@
+#!/bin/sh
+# Choose the board profile: /etc/mscos/board.conf -> /usr/share/mscos/boards/<profile>.conf.
+#   mscos-board            keep the current choice, or detect one
+#   mscos-board detect     detect again
+#   mscos-board <profile>  use that profile
+# Detection matches each profile's BOARD_MATCH against the device tree model, or
+# "pc: <vendor> <product>" from DMI on a PC. No match: the generic profile.
+set -eu
+DIR=${MSCOS_BOARDS:-/usr/share/mscos/boards}
+LINK=/etc/mscos/board.conf
+mkdir -p /etc/mscos
+
+model() {
+    if [ -r /proc/device-tree/model ]; then tr -d '\0' < /proc/device-tree/model
+    elif [ -r /sys/class/dmi/id/product_name ]; then
+        echo "pc: $(cat /sys/class/dmi/id/sys_vendor 2>/dev/null) $(cat /sys/class/dmi/id/product_name 2>/dev/null)"
+    fi
+}
+detect() {
+    m=$(model)
+    for f in "$DIR"/*.conf; do
+        [ "$(basename "$f")" = generic.conf ] && continue
+        BOARD_MATCH=; . "$f"
+        if [ -n "$BOARD_MATCH" ] && [ -n "$m" ] && echo "$m" | grep -Eq "$BOARD_MATCH"; then basename "$f" .conf; return; fi
+    done
+    echo generic
+}
+
+case ${1:-} in
+    "") [ -e "$LINK" ] && { basename "$(readlink -f "$LINK")" .conf; exit 0; }; p=$(detect) ;;
+    detect) p=$(detect) ;;
+    *) p=$1 ;;
+esac
+[ -r "$DIR/$p.conf" ] || { echo "mscos-board: no profile $p in $DIR" >&2; exit 1; }
+ln -sfn "$DIR/$p.conf" "$LINK"
+# The name the panel shows for the streamer, unless the user has set one.
+BOARD_NAME=; . "$LINK"
+[ -z "$BOARD_NAME" ] || [ -s /etc/mscos/board-name ] || echo "$BOARD_NAME" > /etc/mscos/board-name
+echo "$p"

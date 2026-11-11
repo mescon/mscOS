@@ -2,9 +2,13 @@
 # Install/refresh Spotify Soloist (builds expire 90 days after build date).
 # Only replaces the binary when the downloaded build differs, then restarts the user service.
 set -euo pipefail
-URL=https://soloist-builds.spotifycdn.com/soloist_release_arm32.tar.gz
+case $(dpkg --print-architecture) in
+    armhf) A=arm32 ;; arm64) A=arm64 ;; amd64) A=x86_64 ;;
+    *) echo "Soloist has no build for $(dpkg --print-architecture)" >&2; exit 1 ;;
+esac
+URL=https://soloist-builds.spotifycdn.com/soloist_release_$A.tar.gz
 DST=/usr/local/bin/soloist
-SVC_USER=soloist
+if id -u mscos >/dev/null 2>&1; then SVC_USER=mscos; else SVC_USER=soloist; fi
 
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 curl --fail --location --silent --show-error --retry 3 -o "$tmp/s.tar.gz" "$URL"
@@ -22,5 +26,6 @@ echo "soloist installed: $("$DST" --version)"
 
 if [[ ${1:-} != --no-restart ]]; then
     uid=$(id -u "$SVC_USER")
-    runuser -u "$SVC_USER" -- env XDG_RUNTIME_DIR=/run/user/$uid systemctl --user restart soloist.service
+    # only if it is running: another source may own the DAC
+    runuser -u "$SVC_USER" -- env XDG_RUNTIME_DIR=/run/user/$uid systemctl --user try-restart soloist.service
 fi

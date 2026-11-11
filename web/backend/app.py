@@ -319,7 +319,7 @@ class Hub:
 
     def features(self) -> dict:
         """What this installation has, so the panel shows only that."""
-        f = {"amp": "none", "arcam": False, "plugins": list(self.plugins),
+        f = {"amp": "none", "arcam": False, "plugins": list(self.plugins), "leds": bool(collect._leds()),
              "sources": [{"id": i, "label": p.label, "name": p.name, "protocol": p.protocol, "pipewire": p.pipewire,
                           "hint": p.hint, "terms": p.terms, "terms_url": p.terms_url} for i, p in self.sources.items()]}
         for p in self.plugins.values():
@@ -1099,8 +1099,10 @@ async def soloist_apikey(request):
 
 @routes.get("/api/optimizations")
 async def get_optimizations(request):
+    cur = hub.source
     items = await asyncio.to_thread(collect.optimizations, hub.status, hub.playback, hub.vol.enabled(),
-                                    hub.names()["output"])
+                                    hub.names()["output"],
+                                    {"id": cur.id, "pipewire": cur.pipewire, "label": cur.label} if cur else None)
     return web.json_response({"t": int(time.time()), "items": items})
 
 

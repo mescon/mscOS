@@ -107,6 +107,7 @@ function renderFeatures() {
   $("#f-ml").hidden = !amp;
   $("#f-alerts").hidden = !(f.plugins || []).includes("homeassistant");
   $("#f-spotify").hidden = !(f.plugins || []).includes("spotify");  // Soloist: key, name, updates
+  const led = $("#leds").closest("label"); led.hidden = f.leds === false; led.nextElementSibling.hidden = f.leds === false;
 }
 function handle(m) {
   switch (m.type) {

@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Deploy the control panel to a device from a checkout (development; released installs get
-# the mscos-panel package, which uses the same paths). Usage: web/deploy.sh [root@host]
+# Development install: put this checkout on a device, at the same paths the packages use
+# (packaging/build.sh --stage lays the files out). Usage: web/deploy.sh [root@host]
+# Released installs use the packages instead (packaging/build.sh, or the image).
 set -euo pipefail
 HOST=${1:-${MSCOS_HOST:-root@mscos.local}}
 HERE=$(cd "$(dirname "$0")" && pwd)
-P=/usr/lib/mscos/panel
+STAGE=$(mktemp -d); trap 'rm -rf "$STAGE"' EXIT
+"$HERE/../packaging/build.sh" --stage "$STAGE" >/dev/null
 # An install from before the panel was mscos-panel: move its state and secrets, drop the old unit.
 ssh "$HOST" 'set -e
 if [ -e /etc/systemd/system/sotm-web.service ]; then
@@ -15,13 +17,10 @@ if [ -e /etc/systemd/system/sotm-web.service ]; then
     [ ! -e /etc/mscos/site.env ] || sed -i "s/^SOTM_/MSCOS_/" /etc/mscos/site.env
     rm -rf /etc/systemd/system/sotm-web.service /opt/sotm-web
 fi
-mkdir -p '$P'/backend '$P'/static /var/lib/mscos /etc/mscos'
-rsync -a --delete --exclude __pycache__ "$HERE/backend/" "$HOST:$P/backend/"
-rsync -a --delete "$HERE/static/" "$HOST:$P/static/"
-# the sources' install scripts (they download each player from its publisher, on the device)
-rsync -a --delete "$HERE/../sources/" "$HOST:/usr/lib/mscos/sources/"
-# mscOS release: date and commit of what is deployed (shown in the panel under System)
-VER="$(date +%Y.%m.%d)-$(git -C "$HERE" describe --always --dirty 2>/dev/null || echo unknown)"
-ssh "$HOST" "printf 'NAME=mscOS\nVERSION=%s\nHOME_URL=https://github.com/mescon/mscOS\n' '$VER' > /etc/mscos-release"
-scp -q "$HERE/mscos-panel.service" "$HOST:/etc/systemd/system/mscos-panel.service"
+rm -f /etc/systemd/system/mscos-panel.service   # now in /usr/lib/systemd/system
+mkdir -p /usr/lib/mscos /usr/share/mscos /var/lib/mscos /etc/mscos'
+rsync -a --delete "$STAGE/usr/lib/mscos/" "$HOST:/usr/lib/mscos/"
+rsync -a --delete "$STAGE/usr/share/mscos/" "$HOST:/usr/share/mscos/"
+rsync -a "$STAGE/usr/lib/systemd/system/" "$HOST:/usr/lib/systemd/system/"
+rsync -a "$STAGE/etc/mscos-release" "$HOST:/etc/mscos-release"
 ssh "$HOST" 'systemctl daemon-reload && systemctl enable mscos-panel.service >/dev/null 2>&1; systemctl restart mscos-panel.service; sleep 3; systemctl is-active mscos-panel.service'

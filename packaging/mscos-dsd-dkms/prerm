@@ -1,0 +1,3 @@
+#!/bin/sh
+set -e
+dkms remove -m mscos-dsd -v @VERSION@ --all >/dev/null 2>&1 || true

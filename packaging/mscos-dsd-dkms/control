@@ -1,0 +1,13 @@
+Package: mscos-dsd-dkms
+Version: @VERSION@
+Architecture: all
+Section: kernel
+Priority: optional
+Maintainer: mescon <mescon@users.noreply.github.com>
+Homepage: https://github.com/mescon/mscOS
+Depends: dkms, git, patch, ca-certificates
+Description: mscOS: native DSD for C-Media CM6632A USB receivers (DKMS)
+ Builds snd-usb-audio with the mscOS patch for the running kernel: raw DSD in a 64-bit
+ subslot, as used by the Mark Levinson No585 and No585.5. Fetches sound/usb of the
+ matching upstream kernel release when building. Not needed on mscOS images, whose
+ kernel already has the patch. Needs the kernel headers of the running kernel.

@@ -1,0 +1,11 @@
+Package: mscos
+Version: @VERSION@
+Architecture: all
+Section: metapackages
+Priority: optional
+Maintainer: mescon <mescon@users.noreply.github.com>
+Homepage: https://github.com/mescon/mscOS
+Depends: mscos-core (>= @VERSION@), mscos-panel (>= @VERSION@)
+Description: mscOS: a music OS for network streamers
+ Installs the mscOS base and its control panel. After installation, open
+ http://<hostname>.local in a browser to set it up.
