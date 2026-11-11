@@ -622,7 +622,7 @@ async function refreshAuth() {
 }
 function renderAccess() {
   const a = S.access;
-  document.body.classList.toggle("locked", !a.logged_in);
+  document.body.classList.toggle("locked", !a.logged_in); renderMods();
   $("#login-form").hidden = !(a.configured && !a.logged_in);
   $("#setup-form").hidden = a.configured;
   $("#session").hidden = !a.logged_in;
@@ -957,3 +957,35 @@ $("#theme").addEventListener("click", (e) => {
   try { if (theme === "auto") localStorage.removeItem("theme"); else localStorage.setItem("theme", theme); } catch (e2) {}
   applyTheme(theme);
 });
+
+// ---- modules: what is installed, on/off (applies when the panel restarts)
+const KINDS = { amp: "Förstärkare", integration: "Integration", device: "Enhet" };
+const lang = () => (document.documentElement.lang || "sv").slice(0, 2);
+const loc = (o) => (o && (o[lang()] || o.en || o.sv)) || "";
+let MODS = { plugins: [], restart_needed: false };
+function renderMods() {
+  const on = MODS.plugins.filter((p) => p.enabled);
+  fv("mods", on.length ? `${on.length} på` : "Inga");
+  $("#mods").innerHTML = MODS.plugins.map((p) => `
+    <li><label class="toggle"><input type="checkbox" data-mod="${esc(p.id)}" ${p.enabled ? "checked" : ""}>
+      <span class="toggle-ui" aria-hidden="true"></span>
+      <span class="mod-t"><b>${esc(loc(p.name))}</b><small>${esc(KINDS[p.kind] || p.kind)}${p.enabled !== p.running ? ", efter omstart" : ""}</small>
+      <span>${esc(loc(p.description))}</span></span></label></li>`).join("");
+  const locked = document.body.classList.contains("locked");
+  $$("#mods input").forEach((i) => { i.disabled = locked; });
+  $("#mods-locked").hidden = !locked;
+  $("#mods-restart").hidden = !MODS.restart_needed;
+}
+async function loadMods() { try { MODS = await (await fetch("/api/plugins")).json(); renderMods(); } catch {} }
+$("#f-mods").addEventListener("toggle", (e) => { if (e.target.open) loadMods(); });
+$("#mods").addEventListener("change", async (e) => {
+  const i = e.target.closest("input[data-mod]"); if (!i) return;
+  try { await post("/api/plugins/set", { id: i.dataset.mod, enabled: i.checked }); } catch {}
+  loadMods();
+});
+$("#mods-apply").addEventListener("click", async () => {
+  const first = MODS.plugins[0]; if (!first) return;
+  try { await post("/api/plugins/set", { id: first.id, enabled: first.enabled, restart: true }); toast("Panelen startar om…"); } catch {}
+  setTimeout(() => location.reload(), 6000);
+});
+loadMods();

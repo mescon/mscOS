@@ -469,3 +469,13 @@ body.src-roon .spotify-only, body:not(.src-roon) .roon-only { display: none !imp
 .names input { min-height: 44px; padding: 0 12px; border: 1px solid var(--btn-line); border-radius: 2px; background: transparent; font-size: 1rem; color: var(--ink); }
 .names input::placeholder { color: var(--engraved); opacity: .8; }
 .names .btn { justify-self: start; }
+
+/* modules: a switch, the name with its kind, one line of description */
+.mods { list-style: none; margin: 8px 0 0; padding: 0; }
+.mods li { padding: 12px 0; border-top: 1px solid var(--hair); }
+.mods .toggle { align-items: flex-start; }
+.mod-t { display: grid; gap: 2px; min-width: 0; }
+.mod-t b { font-weight: 500; }
+.mod-t small { font-size: .75rem; color: var(--engraved); letter-spacing: .04em; }
+.mod-t > span { font-size: .875rem; color: var(--engraved); }
+.mods input:disabled + .toggle-ui { opacity: .5; }

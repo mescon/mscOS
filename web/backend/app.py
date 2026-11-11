@@ -1081,6 +1081,52 @@ async def set_settings(request):
     return ok(settings=hub.settings)
 
 
+# ---- modules: which are installed, which are on
+def _plugin_list() -> list[dict]:
+    out = []
+    for pid, cls in sorted(hub.available_plugins.items(), key=lambda kv: (kv[1].kind, kv[0])):
+        out.append({"id": pid, "kind": cls.kind, "name": cls.name, "description": cls.description,
+                    "requires": list(cls.requires), "enabled": pid in hub.settings.get("plugins", []),
+                    "running": pid in hub.plugins})
+    return out
+
+
+@routes.get("/api/plugins")
+async def plugins_list(request):
+    return web.json_response({"plugins": _plugin_list(), "restart_needed": _plugins_restart_needed()})
+
+
+def _plugins_restart_needed() -> bool:
+    return set(hub.settings.get("plugins", [])) != set(hub.plugins)
+
+
+@routes.post("/api/plugins/set")
+async def plugins_set(request):
+    """Turn a module on or off. Takes effect when the panel restarts (restart: true does it
+    now): a module adds routes and tasks, which are set up once at start."""
+    b = await body(request)
+    pid = b.get("id")
+    if pid not in hub.available_plugins:
+        raise web.HTTPNotFound(text="Okänd modul")
+    en = [p for p in hub.settings.get("plugins", []) if p != pid]
+    if b.get("enabled"):
+        cls = hub.available_plugins[pid]
+        if "amp" in cls.requires and not any(hub.available_plugins[p].kind == "amp" for p in en if p in hub.available_plugins):
+            raise web.HTTPConflict(text="Modulen behöver en förstärkarmodul. Slå på en förstärkare först.")
+        if cls.kind == "amp":  # one volume: another amplifier module goes off
+            en = [p for p in en if hub.available_plugins.get(p) is None or hub.available_plugins[p].kind != "amp"]
+        en.append(pid)
+    else:  # what needs an amplifier goes with the last one
+        if hub.available_plugins[pid].kind == "amp":
+            en = [p for p in en if "amp" not in hub.available_plugins.get(p, pluginlib.Plugin).requires]
+    hub.settings["plugins"] = en
+    await asyncio.get_running_loop().run_in_executor(None, hub.save_settings)
+    if b.get("restart"):
+        log.info("modules now %s; restarting the panel", en)
+        asyncio.get_running_loop().call_later(0.5, lambda: os._exit(0))  # systemd starts it again
+    return ok(plugins=_plugin_list(), restart_needed=_plugins_restart_needed())
+
+
 @routes.post("/api/alerts/test")
 async def alerts_test(request):
     if not any(p.features().get("ha_alerts") for p in hub.plugins.values()):
@@ -1258,7 +1304,8 @@ async def index(request):
 PROTECTED = ("/api/system/", "/api/logs", "/api/soloist/apikey", "/api/soloist/name", "/api/soloist/normalization",
              "/api/soloist/restart", "/api/soloist/update", "/api/settings", "/api/alerts/", "/api/tests/",
              "/api/auth/password",
-             "/api/source")  # stops/starts the audio stacks as root
+             "/api/source",  # stops/starts the audio stacks as root
+             "/api/plugins/")  # turns modules on and off (restarts the panel)
 
 
 def _peer(request) -> str:
