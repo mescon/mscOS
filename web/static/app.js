@@ -1,21 +1,23 @@
 // mscOS panel. One WebSocket for live state, POSTs for actions.
+import { tr, initI18n, decSep, LANG, LANGS, chosenLang, setLang } from "./i18n.js";
+await initI18n();  // before anything renders: texts below are looked up as they are built
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
 const S = { status: {}, playback: {}, auth: {}, queue: {}, xruns: [], lastTest: null, arcam: {}, sources: [], opts: null,
   tests: [], settings: {}, access: { configured: true, logged_in: false } };
 
-// ------------------------------------------------------------------ formatting (Swedish)
-const dec = (n, d = 1) => Number(n).toFixed(d).replace(".", ",");
+// ------------------------------------------------------------------ formatting
+const dec = (n, d = 1) => Number(n).toFixed(d).replace(".", decSep());
 const khz = (hz) => dec(hz / 1000, 1);
 const fmtTime = (ms) => { if (!(ms >= 0)) return "0:00"; const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 const fmtBytes = (b) => b > 1e9 ? `${dec(b / 1e9)} GB` : `${Math.round(b / 1e6)} MB`;
 const fmtUptime = (s) => { const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return d ? `${d} d ${h} h` : h ? `${h} h ${m} min` : `${m} min`; };
-const clock = (t) => new Date(t * 1000).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
+const clock = (t) => new Date(t * 1000).toLocaleTimeString(LANG === "sv" ? "sv-SE" : "en-GB", { hour: "2-digit", minute: "2-digit" });
 const stamp = (t) => new Date(t * 1000).toLocaleString("sv-SE", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 // ALSA sample formats in plain words. S32_LE = each sample sent as a 32-bit number; Spotify's
 // 24-bit audio sits unchanged in it (the last 8 bits are zero), as the verification confirms.
-const FMT = { S16_LE: "16 bit", S24_3LE: "24 bit", S24_LE: "24 bit", S32_LE: "32 bit", S32LE: "32 bit", F32LE: "32 bit flyttal" };
+const FMT = { S16_LE: "16 bit", S24_3LE: "24 bit", S24_LE: "24 bit", S32_LE: "32 bit", S32LE: "32 bit", F32LE: tr("32 bit flyttal") };
 const fmtWord = (f) => FMT[f] || f || "";
 // the current track, measured from the samples a few seconds in (Soloist does not report it)
 const trackQuality = () => { const q = S.quality || {}, u = (S.playback.item || {}).uri; return u && q.uri === u ? q : null; };
@@ -25,10 +27,10 @@ const verifiedBits = () => { const q = trackQuality(); if (q) return q.verdict =
 function formatOf() {
   const q = trackQuality();
   if (q && q.verdict === "bitperfect" && q.bits) return { text: `FLAC ${q.bits} bit, 44,1 kHz`, lossy: false };
-  if (q && q.verdict === "lossy_or_processed") return { text: "Förlustkomprimerat, inte Lossless", lossy: true };
+  if (q && q.verdict === "lossy_or_processed") return { text: tr("Förlustkomprimerat, inte Lossless"), lossy: true };
   return null;
 }
-const fmtCarry = (f, bits = verifiedBits()) => /32/.test(f || "") && bits && bits < 32 ? `${bits} bit i 32-bitarsformat` : fmtWord(f);
+const fmtCarry = (f, bits = verifiedBits()) => /32/.test(f || "") && bits && bits < 32 ? tr`${bits} bit i 32-bitarsformat` : fmtWord(f);
 const bitsOf = (fmt) => { const m = /S(\d+)/.exec(fmt || ""); return m ? (m[1] === "32" ? 32 : +m[1]) : null; };
 
 function spec(el, rows) {
@@ -38,7 +40,7 @@ let toastT;
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 3600); }
 async function post(url, data = {}) {
   const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-  if (!r.ok) { const t = await r.text(); toast(t || `Fel ${r.status}`); if (r.status === 401) refreshAuth(); throw new Error(t); }
+  if (!r.ok) { const t = await r.text(); toast(t || tr`Fel ${r.status}`); if (r.status === 401) refreshAuth(); throw new Error(t); }
   return r.json();
 }
 const cmd = (command, extra = {}) => post("/api/soloist/command", { command, ...extra }).catch(() => {});
@@ -78,10 +80,10 @@ $$("details.fold").forEach((d) => {
 let ws, retry = 1000;
 function connect() {
   ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/ws`);
-  ws.onopen = () => { retry = 1000; const l = $("#conn"); l.classList.add("on"); l.setAttribute("aria-label", "Ansluten till enheten"); };
+  ws.onopen = () => { retry = 1000; const l = $("#conn"); l.classList.add("on"); l.setAttribute("aria-label", tr("Ansluten till enheten")); };
   ws.onclose = () => {
-    const l = $("#conn"); l.classList.remove("on"); l.setAttribute("aria-label", "Ingen kontakt med enheten");
-    $("#dev-sub").textContent = "– ingen kontakt, försöker igen…";
+    const l = $("#conn"); l.classList.remove("on"); l.setAttribute("aria-label", tr("Ingen kontakt med enheten"));
+    $("#dev-sub").textContent = tr("– ingen kontakt, försöker igen…");
     setTimeout(connect, retry); retry = Math.min(retry * 2, 15000);
   };
   ws.onmessage = (e) => handle(JSON.parse(e.data));
@@ -90,7 +92,7 @@ function connect() {
 function renderNames() {
   const n = S.names || {};
   $("#dev-name").textContent = outName();
-  $("#dev-sub").textContent = n.streamer ? `via ${n.streamer}` : "";
+  $("#dev-sub").textContent = n.streamer ? tr`via ${n.streamer}` : "";
   document.title = `mscOS: ${outName()}`;
   const o = $("#output-name"), st = $("#streamer-name"), set = S.settings || {};
   if (document.activeElement !== o) o.value = set.output_name || "";
@@ -103,6 +105,7 @@ function renderFeatures() {
   $("#amp").hidden = !amp; $("#f-amp").hidden = !amp;
   $("#f-arcam").hidden = !f.arcam;
   $("#f-ml").hidden = !amp;
+  $("#f-alerts").hidden = !(f.plugins || []).includes("homeassistant");
 }
 function handle(m) {
   switch (m.type) {
@@ -152,33 +155,33 @@ function renderSource() {
   const rb = $("#source button[data-v=roon]");
   rb.disabled = r.installed === false;
   $("#source-note").textContent = roon
-    ? "Spotify är avstängt. Roon Bridge äger DAC:en."
-    : r.installed === false ? "Roon Bridge är inte installerat." : "Roon är avstängt. Spotify äger DAC:en.";
+    ? tr("Spotify är avstängt. Roon Bridge äger DAC:en.")
+    : r.installed === false ? tr("Roon Bridge är inte installerat.") : tr("Roon är avstängt. Spotify äger DAC:en.");
 }
 function renderPlay() {
   renderSource();
   if (roonMode()) {
     const d = S.status.dac || {}, running = d.state === "RUNNING";
-    $("#np-title").textContent = running ? "Spelar via Roon" : "Roon";
-    $("#np-artist").textContent = running ? `${fmtWord(d.hw_params?.format)}, ${khz(parseInt(d.hw_params?.rate) || 44100)} kHz till ${outName()}` : "Välj den här enheten i Roon-appen";
+    $("#np-title").textContent = running ? tr("Spelar via Roon") : "Roon";
+    $("#np-artist").textContent = running ? tr`${fmtWord(d.hw_params?.format)}, ${khz(parseInt(d.hw_params?.rate) || 44100)} kHz till ${outName()}` : tr("Välj den här enheten i Roon-appen");
     $("#np-album").textContent = ""; $("#np-format").hidden = true;
     $("#np-cover").hidden = true; $("#cover-empty").hidden = false; $("#vol-warn").hidden = true;
     return;
   }
   const p = S.playback, it = p.item, playing = p.status === "playing";
-  $("#np-title").textContent = it ? nameOf(it) : "Inget spelas";
-  $("#np-artist").textContent = it ? artistsOf(it) : (S.auth.logged_in ? "Starta musik i Spotify-appen" : `Välj ${devName()} i Spotify-appen`);
+  $("#np-title").textContent = it ? nameOf(it) : tr("Inget spelas");
+  $("#np-artist").textContent = it ? artistsOf(it) : (S.auth.logged_in ? tr("Starta musik i Spotify-appen") : tr`Välj ${devName()} i Spotify-appen`);
   $("#np-album").textContent = it ? nameOf(deco(it).parent?.entity) : "";
   const f = it && S.auth.is_active ? formatOf() : null, fe = $("#np-format");
   fe.hidden = !(it && S.auth.is_active && (f || playing));  // "measuring" only while it plays
-  fe.textContent = f ? f.text : "Mäter formatet …";
+  fe.textContent = f ? f.text : tr("Mäter formatet …");
   fe.classList.toggle("lossy", !!f?.lossy);
   fe.classList.toggle("pending", !f);
   const img = $("#np-cover"), url = it && coverOf(it);
   if (url) { if (img.src !== url) img.src = url; img.hidden = false; } else img.hidden = true;
   $("#cover-empty").hidden = !!url;
   $("#i-play").hidden = playing; $("#i-pause").hidden = !playing;
-  $("#b-play").setAttribute("aria-label", playing ? "Pausa" : "Spela");
+  $("#b-play").setAttribute("aria-label", playing ? tr("Pausa") : tr("Spela"));
   const o = p.options || {};
   $("#b-shuffle").setAttribute("aria-pressed", !!o.shuffle);
   $("#b-repeat").setAttribute("aria-pressed", !!(o.repeat && o.repeat !== "off"));
@@ -201,14 +204,14 @@ function tickProgress() {
   const pct = dur ? (ms / dur) * 100 : 0;
   $("#np-bar").style.width = `${pct}%`;
   $("#scrub").setAttribute("aria-valuenow", Math.round(pct));
-  $("#scrub").setAttribute("aria-valuetext", `${fmtTime(ms)} av ${fmtTime(dur)}`);
+  $("#scrub").setAttribute("aria-valuetext", tr`${fmtTime(ms)} av ${fmtTime(dur)}`);
 }
 setInterval(tickProgress, 500);
 function renderQueue() {
   const up = (S.queue.upcoming || []).slice(0, 8);
   $("#queue").innerHTML = up.length
     ? up.map((q) => `<li><img src="${esc(coverOf(q.item, "small") || "")}" alt="" loading="lazy"><div><span class="q-t">${esc(nameOf(q.item))}</span><span class="q-a">${esc(artistsOf(q.item))}</span></div></li>`).join("")
-    : `<li class="empty">Kön visas när något spelas.</li>`;
+    : `<li class="empty">${tr("Kön visas när något spelas.")}</li>`;
   fv("queue", up.length ? nameOf(up[0].item) : "");
 }
 $$(".transport button").forEach((b) => b.addEventListener("click", () => {
@@ -242,15 +245,15 @@ function chainRoon() {
   const running = dac.state === "RUNNING", rate = running ? parseInt(dac.hw_params?.rate) || null : null;
   const stages = [
     { k: "roon", name: "Roon", tag: "RAAT", state: !roon.active ? "bad" : running ? "ok" : "idle",
-      facts: roon.active ? "Roon Bridge är igång" : "Roon Bridge kör inte",
-      note: roon.active ? (running ? "Spelar" : "Välj den här enheten i Roon-appen") : "Byt källa igen eller starta om enheten" },
+      facts: roon.active ? tr("Roon Bridge är igång") : tr("Roon Bridge kör inte"),
+      note: roon.active ? (running ? tr("Spelar") : tr("Välj den här enheten i Roon-appen")) : tr("Byt källa igen eller starta om enheten") },
     { k: "usb", name: "USB", tag: dac.usb_speed === "high" ? "high speed" : dac.present ? "full speed" : "",
       state: !dac.present ? "bad" : running ? "ok" : "idle",
-      facts: dac.present ? `Asynkron överföring, ${dac.usb_speed === "high" ? "USB 2.0" : "USB 1.1"}` : "Ingen DAC ansluten",
-      note: dac.present ? (dac.usb_speed === "high" ? "Upp till 192 kHz och DSD64 via DoP." : `Upp till ${khz(dac.max_rate || 48000)} kHz. Roon räknar om högre upplösningar.`) : "Kontrollera USB-kabeln" },
-    { k: "dac", name: outName(), tag: "DAC", state: !dac.present ? "bad" : running ? "ok" : "idle",
-      facts: running ? `${fmtWord(dac.hw_params.format)}, ${khz(rate)} kHz` : dac.present ? "Ansluten, vilar" : "Inte ansluten",
-      note: running ? "Tar emot signalen direkt från Roon Bridge" : "Väntar på Roon" },
+      facts: dac.present ? tr`Asynkron överföring, ${dac.usb_speed === "high" ? "USB 2.0" : "USB 1.1"}` : tr("Ingen DAC ansluten"),
+      note: dac.present ? (dac.usb_speed === "high" ? tr("Upp till 192 kHz och DSD64 via DoP.") : tr`Upp till ${khz(dac.max_rate || 48000)} kHz. Roon räknar om högre upplösningar.`) : tr("Kontrollera USB-kabeln") },
+    { k: "dac", name: outName(), tag: tr("DAC"), state: !dac.present ? "bad" : running ? "ok" : "idle",
+      facts: running ? `${fmtWord(dac.hw_params.format)}, ${khz(rate)} kHz` : dac.present ? tr("Ansluten, vilar") : tr("Inte ansluten"),
+      note: running ? tr("Tar emot signalen direkt från Roon Bridge") : tr("Väntar på Roon") },
   ];
   return { stages, running, playing: running, rate, issues: [], t: null, dac, xrunHour: 0, roon };
 }
@@ -269,34 +272,34 @@ function chain() {
   const xrunHour = recent.reduce((a, x) => a + (x.dac || 0), 0);           // dropouts at the DAC
   const streamHour = recent.reduce((a, x) => a + (x.stream || 0), 0);      // Soloist stream counter
   const issues = [];
-  if (vol < 100 && !S.settings?.spotify_vol_to_amp) issues.push(`Spotify-volymen är ${vol} %`);
-  if (norm) issues.push("volymnormalisering är på");
-  if (!sinkUnity) issues.push(`PipeWire-volymen är ${Math.round(sink.volume * 100)} %`);
-  if (stream && stream.rate && sink.rate && stream.rate !== sink.rate) issues.push("omsampling i PipeWire");
+  if (vol < 100 && !S.settings?.spotify_vol_to_amp) issues.push(tr`Spotify-volymen är ${vol} %`);
+  if (norm) issues.push(tr("volymnormalisering är på"));
+  if (!sinkUnity) issues.push(tr`PipeWire-volymen är ${Math.round(sink.volume * 100)} %`);
+  if (stream && stream.rate && sink.rate && stream.rate !== sink.rate) issues.push(tr("omsampling i PipeWire"));
   const stages = [
     { k: "spotify", name: "Spotify", tag: "Lossless",
       state: S.auth.logged_in ? (playing ? "ok" : "idle") : "bad",
       facts: (() => {
         const f = formatOf();
-        if (f) return `${f.text} (uppmätt)`;
-        return "FLAC upp till 24 bit, 44,1 kHz, mäts när låten spelat några sekunder"; })(),
-      note: !S.auth.logged_in ? "Inte ansluten. Välj enheten i Spotify-appen." : playing ? (nameOf(p.item) || "Spelar") : "Ansluten, väntar" },
+        if (f) return tr`${f.text} (uppmätt)`;
+        return tr("FLAC upp till 24 bit, 44,1 kHz, mäts när låten spelat några sekunder"); })(),
+      note: !S.auth.logged_in ? tr("Inte ansluten. Välj enheten i Spotify-appen.") : playing ? (nameOf(p.item) || tr("Spelar")) : tr("Ansluten, väntar") },
     { k: "soloist", name: "Soloist", tag: (solo.version || "").replace(/^soloist /, "").split(" ")[0],
       state: solo.service !== "active" ? "bad" : (volDigital || norm) ? "bad" : playing ? "ok" : "idle",
-      facts: bridge ? `Volym ${vol} % styr ${outName()}, normalisering ${norm ? "på" : "av"}` : `Volym ${vol} %, normalisering ${norm ? "på" : "av"}`,
-      note: solo.service !== "active" ? "Tjänsten kör inte" : (volDigital || norm) ? "Ändrar samplen digitalt" : solo.rt_watcher === "active" ? "Realtidsprioritet, avkodar orört" : "Avkodar orört" },
+      facts: bridge ? tr`Volym ${vol} % styr ${outName()}, normalisering ${norm ? tr("på") : tr("av")}` : tr`Volym ${vol} %, normalisering ${norm ? tr("på") : tr("av")}`,
+      note: solo.service !== "active" ? tr("Tjänsten kör inte") : (volDigital || norm) ? tr("Ändrar samplen digitalt") : solo.rt_watcher === "active" ? tr("Realtidsprioritet, avkodar orört") : tr("Avkodar orört") },
     { k: "pipewire", name: "PipeWire", tag: "pro-audio",
-      state: !sink.name ? "bad" : (!sinkUnity || issues.includes("omsampling i PipeWire")) ? "bad" : (stream && running ? "ok" : "idle"),
-      facts: `${fmtCarry(sink.format || "S32LE")}, ${sink.rate ? khz(sink.rate) : "44,1"} kHz, ingen omsampling`,
-      note: `Buffert ${st.pw_top?.quantum || 1024} sampel, ${xrunHour ? `${xrunHour} avbrott vid DAC:en` : "inga avbrott vid DAC:en"} senaste timmen${streamHour ? ` (strömmen: ${streamHour} missade cykler vid låtbyten)` : ""}` },
+      state: !sink.name ? "bad" : (!sinkUnity || issues.includes(tr("omsampling i PipeWire"))) ? "bad" : (stream && running ? "ok" : "idle"),
+      facts: tr`${fmtCarry(sink.format || "S32LE")}, ${sink.rate ? khz(sink.rate) : "44,1"} kHz, ingen omsampling`,
+      note: tr`Buffert ${st.pw_top?.quantum || 1024} sampel, ${xrunHour ? tr`${xrunHour} avbrott vid DAC:en` : tr("inga avbrott vid DAC:en")} senaste timmen${streamHour ? tr` (strömmen: ${streamHour} missade cykler vid låtbyten)` : ""}` },
     { k: "usb", name: "USB", tag: dac.usb_speed === "high" ? "high speed" : dac.present ? "full speed" : "",
       state: !dac.present ? "bad" : running ? "ok" : "idle",
-      facts: dac.present ? `Asynkron överföring, ${dac.usb_speed === "high" ? "USB 2.0" : "USB 1.1"}` : "Ingen DAC ansluten",
-      note: dac.present ? `DAC:ns egen klocka styr takten. ${dac.usb_speed === "high" ? "Upp till 192 kHz." : `Upp till ${khz(dac.max_rate || 48000)} kHz, räcker för Spotify.`}` : "Kontrollera USB-kabeln" },
-    { k: "dac", name: outName(), tag: "DAC",
+      facts: dac.present ? tr`Asynkron överföring, ${dac.usb_speed === "high" ? "USB 2.0" : "USB 1.1"}` : tr("Ingen DAC ansluten"),
+      note: dac.present ? tr`DAC:ns egen klocka styr takten. ${dac.usb_speed === "high" ? tr("Upp till 192 kHz.") : tr`Upp till ${khz(dac.max_rate || 48000)} kHz, räcker för Spotify.`}` : tr("Kontrollera USB-kabeln") },
+    { k: "dac", name: outName(), tag: tr("DAC"),
       state: !dac.present ? "bad" : running ? "ok" : "idle",
-      facts: running ? `${fmtCarry(dac.hw_params.format)}, ${khz(rate)} kHz` : dac.present ? "Ansluten, vilar" : "Inte ansluten",
-      note: running ? "Tar emot signalen" : "Väljer USB-ingången när musik spelar" },
+      facts: running ? `${fmtCarry(dac.hw_params.format)}, ${khz(rate)} kHz` : dac.present ? tr("Ansluten, vilar") : tr("Inte ansluten"),
+      note: running ? tr("Tar emot signalen") : tr("Väljer USB-ingången när musik spelar") },
   ];
   return { stages, running, playing, rate, issues, t: fresh ? t : null, dac, xrunHour };
 }
@@ -318,23 +321,23 @@ function renderSignal() {
   $("#r-gain").textContent = c.issues.length ? "≠ 0" : c.t && c.t.gain_db != null ? dec(c.t.gain_db) : "0,0";
   // seal
   const seal = $("#seal"); let head, sub, cls = "";
-  if (!c.dac.present) { head = "Ingen DAC"; sub = "Kontrollera USB-kabeln till DAC:en."; cls = "warn"; }
+  if (!c.dac.present) { head = tr("Ingen DAC"); sub = tr("Kontrollera USB-kabeln till DAC:en."); cls = "warn"; }
   else if (c.roon) {
-    head = c.roon.active ? (c.running ? "Roon spelar" : "Roon, redo") : "Roon Bridge kör inte";
-    sub = c.running ? `Roon Bridge äger DAC:en: ${fmtWord(c.dac.hw_params?.format)}, ${khz(c.rate)} kHz.` : "Välj den här enheten i Roon-appen.";
+    head = c.roon.active ? (c.running ? tr("Roon spelar") : tr("Roon, redo")) : tr("Roon Bridge kör inte");
+    sub = c.running ? tr`Roon Bridge äger DAC:en: ${fmtWord(c.dac.hw_params?.format)}, ${khz(c.rate)} kHz.` : tr("Välj den här enheten i Roon-appen.");
     cls = c.roon.active ? "" : "warn";
   }
-  else if (c.issues.length) { head = "Signalen ändras"; sub = c.issues.join(", ").replace(/^./, (x) => x.toUpperCase()) + "."; cls = "warn"; }
+  else if (c.issues.length) { head = tr("Signalen ändras"); sub = c.issues.join(", ").replace(/^./, (x) => x.toUpperCase()) + "."; cls = "warn"; }
   else if (c.t && c.t.verdict === "bitperfect" && !c.t.gaps.length) {
-    head = "Bitperfekt"; cls = "verified";
-    sub = `Verifierat ${clock(c.t.t)}: ${c.t.bits} bit, ${dec(c.t.gain_db)} dB, inga avbrott`;
-  } else if (c.t && c.t.verdict === "bitperfect") { head = "Bitperfekt, med avbrott"; sub = `${c.t.gaps.length} avbrott i testet ${clock(c.t.t)}`; cls = "warn"; }
-  else if (c.t && c.t.verdict === "scaled") { head = "Skalat"; sub = `Senaste testet visade ${dec(c.t.gain_db)} dB`; cls = "warn"; }
-  else if (!c.playing) { head = "Redo"; sub = "Signalvägen är inställd för bitperfekt ljud."; }
-  else { head = "Orörd signalväg"; sub = "Inställt för bitperfekt. Verifiera under Signal."; }
+    head = tr("Bitperfekt"); cls = "verified";
+    sub = tr`Verifierat ${clock(c.t.t)}: ${c.t.bits} bit, ${dec(c.t.gain_db)} dB, inga avbrott`;
+  } else if (c.t && c.t.verdict === "bitperfect") { head = tr("Bitperfekt, med avbrott"); sub = tr`${c.t.gaps.length} avbrott i testet ${clock(c.t.t)}`; cls = "warn"; }
+  else if (c.t && c.t.verdict === "scaled") { head = tr("Skalat"); sub = tr`Senaste testet visade ${dec(c.t.gain_db)} dB`; cls = "warn"; }
+  else if (!c.playing) { head = tr("Redo"); sub = tr("Signalvägen är inställd för bitperfekt ljud."); }
+  else { head = tr("Orörd signalväg"); sub = tr("Inställt för bitperfekt. Verifiera under Signal."); }
   seal.className = `seal ${cls}`;
   const bad = c.stages.some((x) => x.state === "bad");
-  fv("path", c.issues.length ? "Ändras" : bad ? "Avvikelse" : "Orörd", c.issues.length > 0 || bad);
+  fv("path", c.issues.length ? tr("Ändras") : bad ? tr("Avvikelse") : tr("Orörd"), c.issues.length > 0 || bad);
   $("#seal-head").textContent = head; $("#seal-sub").textContent = sub;
   // schematic
   $("#path").innerHTML = c.stages.map((s) => `<li class="${s.state}">
@@ -350,42 +353,42 @@ function renderStatus() {
   // Soloist
   const days = solo.days_left;
   spec($("#solo-kv"), [
-    ["Tjänst", solo.service === "active" ? "Igång" : esc(solo.service || "Okänd"), solo.service === "active" ? "good" : "warn"],
-    ["Spotify", S.auth.logged_in ? "Inloggad" : "Inte inloggad", S.auth.logged_in ? "good" : ""],
+    [tr("Tjänst"), solo.service === "active" ? tr("Igång") : esc(solo.service || tr("Okänd")), solo.service === "active" ? "good" : "warn"],
+    ["Spotify", S.auth.logged_in ? tr("Inloggad") : tr("Inte inloggad"), S.auth.logged_in ? "good" : ""],
     ["Version", esc((solo.version || "").replace(/^soloist /, "").split(" ")[0] || "–")],
-    ["Realtidsprioritet", solo.rt_watcher === "active" ? "Aktiv" : "Av", solo.rt_watcher === "active" ? "good" : "warn"],
-    ["Nästa versionskoll", esc(fmtDate(solo.update_next))],
+    [tr("Realtidsprioritet"), solo.rt_watcher === "active" ? tr("Aktiv") : tr("Av"), solo.rt_watcher === "active" ? "good" : "warn"],
+    [tr("Nästa versionskoll"), esc(fmtDate(solo.update_next))],
   ]);
   const v = $("#validity");
   if (days != null) {
     v.hidden = false; v.classList.toggle("warn", days < 14);
     $("#validity-fill").style.width = `${Math.max(0, Math.min(100, days / 90 * 100))}%`;
     $("#validity-txt").textContent = days > 0
-      ? `Spotify-bygget gäller ${days} dagar till. En ny version hämtas automatiskt varje natt.`
-      : "Spotify-bygget har gått ut. Sök ny version.";
+      ? tr`Spotify-bygget gäller ${days} dagar till. En ny version hämtas automatiskt varje natt.`
+      : tr("Spotify-bygget har gått ut. Sök ny version.");
   }
   const nameIn = $("#name-in");
   if (document.activeElement !== nameIn) nameIn.value = solo.device_name || "";
   $("#norm").checked = !!solo.normalization;
   const k = solo.api_key || {};
-  $("#key-state").textContent = k.set ? `Inställd${k.changed ? `, senast ändrad ${stamp(k.changed)}` : ""}.` : "Ingen nyckel är inställd. Soloist kan inte starta.";
+  $("#key-state").textContent = k.set ? tr`Inställd${k.changed ? tr`, senast ändrad ${stamp(k.changed)}` : ""}.` : tr("Ingen nyckel är inställd. Soloist kan inte starta.");
   // Device
   const memUsed = sys.mem_total - sys.mem_available;
   spec($("#sys-kv"), [
     ["System", esc(sys.mscos ? `mscOS ${sys.mscos}` : "mscOS")],
-    ["Bas", esc(sys.os || "–")],
-    ["Kärna", esc(sys.kernel || "–")],
-    ["Drifttid", fmtUptime(sys.uptime_s || 0)],
-    ["Processor", sys.cpu_mhz ? `${sys.cpu_mhz} MHz, ${esc(sys.governor)}, last ${dec((sys.load || [0])[0], 2)}` : "–"],
-    ["Temperatur", sys.pmic_temp_c != null ? `${dec(sys.pmic_temp_c)} °C` : "–"],
-    ["Minne", sys.mem_total ? `${fmtBytes(memUsed)} av ${fmtBytes(sys.mem_total)}` : "–"],
-    ["Nätverk", sys.net ? `${esc(sys.net.ip)}, ${sys.net.speed_mbps} Mbit/s` : "–"],
-    ["USB-fel sedan start", String(st.usb_errors ?? "–"), st.usb_errors ? "warn" : ""],
-    st.supply && ["Matning", `${dec(st.supply.v, 2)} V, ${dec(st.supply.a, 2)} A, ${dec(st.supply.w, 2)} W`],
+    [tr("Bas"), esc(sys.os || "–")],
+    [tr("Kärna"), esc(sys.kernel || "–")],
+    [tr("Drifttid"), fmtUptime(sys.uptime_s || 0)],
+    [tr("Processor"), sys.cpu_mhz ? tr`${sys.cpu_mhz} MHz, ${esc(sys.governor)}, last ${dec((sys.load || [0])[0], 2)}` : "–"],
+    [tr("Temperatur"), sys.pmic_temp_c != null ? `${dec(sys.pmic_temp_c)} °C` : "–"],
+    [tr("Minne"), sys.mem_total ? tr`${fmtBytes(memUsed)} av ${fmtBytes(sys.mem_total)}` : "–"],
+    [tr("Nätverk"), sys.net ? `${esc(sys.net.ip)}, ${sys.net.speed_mbps} Mbit/s` : "–"],
+    [tr("USB-fel sedan start"), String(st.usb_errors ?? "–"), st.usb_errors ? "warn" : ""],
+    st.supply && [tr("Matning"), `${dec(st.supply.v, 2)} V, ${dec(st.supply.a, 2)} A, ${dec(st.supply.w, 2)} W`],
   ]);
   $("#leds").checked = !!st.leds;
   $("#overlay").checked = !!sys.root_overlay;
-  fv("spotify", solo.service && solo.service !== "active" ? "Kör inte" : days != null ? `${days} dagar kvar` : "", (solo.service && solo.service !== "active") || (days != null && days < 14));
+  fv("spotify", solo.service && solo.service !== "active" ? tr("Kör inte") : days != null ? tr`${days} dagar kvar` : "", (solo.service && solo.service !== "active") || (days != null && days < 14));
   fv("device", [sys.pmic_temp_c != null ? `${dec(sys.pmic_temp_c)} °C` : null, st.supply ? `${dec(st.supply.v, 2)} V` : null].filter(Boolean).join(", "));
   renderSysHead();
 }
@@ -393,16 +396,16 @@ function renderSysHead() {
   const st = S.status, solo = st.soloist || {}, dac = st.dac || {}, sys = st.system || {}, m = ML.state || {};
   if (!st.system) return;
   const roon = roonMode(), issues = [];
-  if (!dac.present) issues.push("DAC:n hittas inte");
-  if (roon ? !(st.roon || {}).active : solo.service !== "active") issues.push(roon ? "Roon Bridge kör inte" : "Soloist kör inte");
-  if (solo.days_left != null && solo.days_left < 14) issues.push(`Spotify-bygget går ut om ${solo.days_left} dagar`);
-  if (m.host && m.reachable === false) issues.push("förstärkaren svarar inte");
+  if (!dac.present) issues.push(tr("DAC:n hittas inte"));
+  if (roon ? !(st.roon || {}).active : solo.service !== "active") issues.push(roon ? tr("Roon Bridge kör inte") : tr("Soloist kör inte"));
+  if (solo.days_left != null && solo.days_left < 14) issues.push(tr`Spotify-bygget går ut om ${solo.days_left} dagar`);
+  if (m.host && m.reachable === false) issues.push(tr("förstärkaren svarar inte"));
   const t = $("#sys-title");
-  t.textContent = issues.length ? "Behöver uppmärksamhet" : "Allt i ordning";
+  t.textContent = issues.length ? tr("Behöver uppmärksamhet") : tr("Allt i ordning");
   t.classList.toggle("warn", issues.length > 0);
   $("#sys-sum").textContent = issues.length
     ? issues.join(", ").replace(/^./, (c) => c.toUpperCase()) + "."
-    : `${roon ? "Roon Bridge" : "Soloist"} igång${m.reachable ? ", förstärkaren ansluten" : ""}${S.settings?.alerts ? ", larm till telefonen på" : ""}. Drifttid ${fmtUptime(sys.uptime_s || 0)}.`;
+    : tr`${roon ? "Roon Bridge" : "Soloist"} igång${m.reachable ? tr(", förstärkaren ansluten") : ""}${S.settings?.alerts ? tr(", larm till telefonen på") : ""}. Drifttid ${fmtUptime(sys.uptime_s || 0)}.`;
 }
 function fmtDate(s) {
   if (!s || s === "n/a") return "–";
@@ -429,9 +432,9 @@ function renderSpark() {
     if (n) { total += n; ctx.fillStyle = red; const bh = Math.min(h - 6, 8 + Math.log2(n + 1) * 10); ctx.fillRect(x, h - bh, Math.max(2, bw), bh); }
   }
   $("#spark-sum").textContent = played
-    ? `${total ? `${total} avbrott vid DAC:en` : "Inga avbrott vid DAC:en"} under ${Math.round(played / 2)} minuters uppspelning.${streamMiss ? ` Gula markeringar: Spotify-strömmen missade ${streamMiss} cykler, oftast vid låtbyte eller volymändring, utan luckor i signalen.` : ""} Röda staplar är avbrott.`
-    : "Ingen uppspelning registrerad senaste dygnet.";
-  fv("drop", played ? (total ? `${total} vid DAC:en` : "Inga") : "Ingen uppspelning", total > 0);
+    ? tr`${total ? tr`${total} avbrott vid DAC:en` : tr("Inga avbrott vid DAC:en")} under ${Math.round(played / 2)} minuters uppspelning.${streamMiss ? tr` Gula markeringar: Spotify-strömmen missade ${streamMiss} cykler, oftast vid låtbyte eller volymändring, utan luckor i signalen.` : ""} Röda staplar är avbrott.`
+    : tr("Ingen uppspelning registrerad senaste dygnet.");
+  fv("drop", played ? (total ? tr`${total} vid DAC:en` : tr("Inga")) : tr("Ingen uppspelning"), total > 0);
 }
 window.addEventListener("resize", renderSpark);
 
@@ -441,18 +444,18 @@ function renderTest(r) {
   if (!r) { el.innerHTML = ""; return; }
   const gaps = r.gaps || [];
   let head, warn = true;
-  if (r.verdict === "silent" || (r.rms ?? 1) < 1e-4) head = "Inget ljud under testet";
-  else if (r.verdict === "bitperfect") { head = gaps.length ? "Bitperfekt, men med avbrott" : "Bitperfekt"; warn = !!gaps.length; }
-  else if (r.verdict === "scaled") head = `Skalat med ${dec(r.gain_db)} dB`;
-  else if (r.verdict === "lossy_or_processed") head = "Inte orört: förlustkodat eller bearbetat";
-  else head = "Kunde inte avgöra";
+  if (r.verdict === "silent" || (r.rms ?? 1) < 1e-4) head = tr("Inget ljud under testet");
+  else if (r.verdict === "bitperfect") { head = gaps.length ? tr("Bitperfekt, men med avbrott") : tr("Bitperfekt"); warn = !!gaps.length; }
+  else if (r.verdict === "scaled") head = tr`Skalat med ${dec(r.gain_db)} dB`;
+  else if (r.verdict === "lossy_or_processed") head = tr("Inte orört: förlustkodat eller bearbetat");
+  else head = tr("Kunde inte avgöra");
   const silence = Math.round(gaps.reduce((a, g) => a + g[1], 0) / 44.1);
   el.innerHTML = `<p class="v-head ${warn ? "warn" : ""}">${esc(head)}</p>
     <dl class="v-facts">
-      <div><dt>Upplösning</dt><dd>${r.bits ? `${r.bits} bit` : "–"}</dd></div>
-      <div><dt>Förstärkning</dt><dd>${r.gain_db != null ? `${dec(r.gain_db)} dB` : "–"}</dd></div>
-      <div><dt>Avbrott</dt><dd>${gaps.length ? `${gaps.length} (${silence} ms)` : "Inga"}</dd></div>
-      <div><dt>Längd</dt><dd>${dec(r.seconds, 0)} s</dd></div>
+      <div><dt>${tr("Upplösning")}</dt><dd>${r.bits ? `${r.bits} bit` : "–"}</dd></div>
+      <div><dt>${tr("Förstärkning")}</dt><dd>${r.gain_db != null ? `${dec(r.gain_db)} dB` : "–"}</dd></div>
+      <div><dt>${tr("Avbrott")}</dt><dd>${gaps.length ? `${gaps.length} (${silence} ms)` : tr("Inga")}</dd></div>
+      <div><dt>${tr("Längd")}</dt><dd>${dec(r.seconds, 0)} s</dd></div>
     </dl>
     <p class="fine">${r.track ? `${esc(r.track)}, ` : ""}${stamp(r.t)}</p>`;
 }
@@ -463,15 +466,15 @@ $("#test-secs").addEventListener("click", (e) => {
 });
 $("#test-run").addEventListener("click", async () => {
   const b = $("#test-run");
-  if (S.playback.status !== "playing") { toast("Starta musik först. Testet spelar in det som går till DAC:en."); return; }
+  if (S.playback.status !== "playing") { toast(tr("Starta musik först. Testet spelar in det som går till DAC:en.")); return; }
   try { await post("/api/audio/test", { seconds: testSecs }); } catch {}
 });
 
 // ------------------------------------------------------------------ optimisation ledger (verified live)
 const MARK = {
-  ok: `<svg class="opt-mark" viewBox="0 0 18 18" aria-label="Aktiv"><circle cx="9" cy="9" r="8" fill="none" stroke="currentColor" stroke-width="1"/><path d="M5.5 9.3l2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-  warn: `<svg class="opt-mark" viewBox="0 0 18 18" aria-label="Inte aktiv" style="color:var(--amber)"><circle cx="9" cy="9" r="8" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M9 4.8v5.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="9" cy="12.9" r=".95" fill="currentColor"/></svg>`,
-  optional: `<svg class="opt-mark" viewBox="0 0 18 18" aria-label="Valfri, av" style="color:var(--engraved)"><circle cx="9" cy="9" r="8" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="2 2"/></svg>`,
+  ok: `<svg class="opt-mark" viewBox="0 0 18 18" aria-label="${tr("Aktiv")}"><circle cx="9" cy="9" r="8" fill="none" stroke="currentColor" stroke-width="1"/><path d="M5.5 9.3l2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  warn: `<svg class="opt-mark" viewBox="0 0 18 18" aria-label="${tr("Inte aktiv")}" style="color:var(--amber)"><circle cx="9" cy="9" r="8" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M9 4.8v5.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="9" cy="12.9" r=".95" fill="currentColor"/></svg>`,
+  optional: `<svg class="opt-mark" viewBox="0 0 18 18" aria-label="${tr("Valfri, av")}" style="color:var(--engraved)"><circle cx="9" cy="9" r="8" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="2 2"/></svg>`,
 };
 async function loadOpts(force = false) {
   if (!force && Date.now() - optT < 20000) return;
@@ -484,10 +487,10 @@ function renderOpts() {
   const ok = core.filter((i) => i.state === "ok").length, warn = core.length - ok;
   $("#opt-n").textContent = ok; $("#opt-of").textContent = `/${core.length}`;
   $("#opt-n").parentElement.classList.toggle("warn", !!warn);
-  fv("opt", `${ok} av ${core.length}`, !!warn);
+  fv("opt", tr`${ok} av ${core.length}`, !!warn);
   $("#opt-sum").textContent = warn
-    ? `${warn} ${warn === 1 ? "optimering behöver" : "optimeringar behöver"} åtgärd. Kontrollerat på enheten ${clock(S.opts.t)}.`
-    : `Alla aktiva och kontrollerade på enheten ${clock(S.opts.t)}.`;
+    ? tr`${warn} ${warn === 1 ? tr("optimering behöver") : tr("optimeringar behöver")} åtgärd. Kontrollerat på enheten ${clock(S.opts.t)}.`
+    : tr`Alla aktiva och kontrollerade på enheten ${clock(S.opts.t)}.`;
   const open = new Set([...$$("#opt-list details[open]")].map((d) => d.dataset.g));
   const groups = [...new Set(items.map((i) => i.group))];
   $("#opt-list").innerHTML = groups.map((g) => {
@@ -506,99 +509,99 @@ const jobOut = $("#job-out");
 function jobEvent(m) {
   if (m.name === "audio-test") {
     const b = $("#test-run");
-    if (m.started) { b.disabled = true; b.textContent = m.auto ? "Verifierar automatiskt…" : `Spelar in ${m.seconds} s…`; }
+    if (m.started) { b.disabled = true; b.textContent = m.auto ? tr("Verifierar automatiskt…") : tr`Spelar in ${m.seconds} s…`; }
     if (m.done) {
-      b.disabled = false; b.textContent = "Verifiera nu";
+      b.disabled = false; b.textContent = tr("Verifiera nu");
       if (m.tests) { S.tests = m.tests; renderVlog(); }
       if (m.result) { S.lastTest = m.result; renderTest(m.result); renderSignal(); }
-      else if (!m.auto) toast(m.error || "Verifieringen misslyckades");
+      else if (!m.auto) toast(m.error || tr("Verifieringen misslyckades"));
     }
     return;
   }
   jobOut.hidden = false;
   if (m.line) { jobOut.textContent += m.line; jobOut.scrollTop = jobOut.scrollHeight; }
-  if (m.done) { jobOut.textContent += m.rc === 0 ? "\nKlart.\n" : `\nAvslutades med fel (${m.rc}).\n`; toast(m.rc === 0 ? "Klart" : "Misslyckades, se utskriften"); }
+  if (m.done) { jobOut.textContent += m.rc === 0 ? tr("\nKlart.\n") : tr`\nAvslutades med fel (${m.rc}).\n`; toast(m.rc === 0 ? tr("Klart") : tr("Misslyckades, se utskriften")); }
 }
 function startJob(url, title, data) { jobOut.hidden = false; jobOut.textContent = `${title}\n`; return post(url, data).catch(() => {}); }
 
 // ------------------------------------------------------------------ system actions
-$("#solo-restart").addEventListener("click", async () => { await post("/api/soloist/restart"); toast("Soloist startades om"); });
-$("#solo-update").addEventListener("click", () => startJob("/api/soloist/update", "Söker ny Soloist-version…"));
+$("#solo-restart").addEventListener("click", async () => { await post("/api/soloist/restart"); toast(tr("Soloist startades om")); });
+$("#solo-update").addEventListener("click", () => startJob("/api/soloist/update", tr("Söker ny Soloist-version…")));
 $("#name-form").addEventListener("submit", async (e) => {
   e.preventDefault(); const name = $("#name-in").value.trim();
-  try { await post("/api/soloist/name", { name }); toast(`Heter nu ${name} i Spotify`); } catch {}
+  try { await post("/api/soloist/name", { name }); toast(tr`Heter nu ${name} i Spotify`); } catch {}
 });
 $("#names-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   try {
     await post("/api/settings", { output_name: $("#output-name").value.trim(), streamer_name: $("#streamer-name").value.trim() });
-    document.activeElement?.blur(); toast("Namnen är sparade");
+    document.activeElement?.blur(); toast(tr("Namnen är sparade"));
   } catch {}
 });
 $("#key-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const inp = $("#key-in"), b = $("#key-save"), key = inp.value.trim();
   if (!key) { inp.focus(); return; }
-  b.disabled = true; b.textContent = "Kontrollerar…";
-  $("#key-state").textContent = "Soloist startas om med den nya nyckeln. Det tar ungefär 15 sekunder.";
+  b.disabled = true; b.textContent = tr("Kontrollerar…");
+  $("#key-state").textContent = tr("Soloist startas om med den nya nyckeln. Det tar ungefär 15 sekunder.");
   try {
     const r = await post("/api/soloist/apikey", { key });
-    toast(r.changed ? "Nyckeln är bytt och Soloist kör" : "Det är redan den nyckeln");
+    toast(r.changed ? tr("Nyckeln är bytt och Soloist kör") : tr("Det är redan den nyckeln"));
   } catch { /* toast shown by post() */ }
-  inp.value = ""; b.disabled = false; b.textContent = "Byt nyckel"; renderStatus();
+  inp.value = ""; b.disabled = false; b.textContent = tr("Byt nyckel"); renderStatus();
 });
 $("#norm").addEventListener("change", async (e) => {
   const on = e.target.checked;
-  try { await post("/api/soloist/normalization", { enabled: on }); toast(on ? "Normalisering på. Soloist startades om." : "Normalisering av. Soloist startades om."); }
+  try { await post("/api/soloist/normalization", { enabled: on }); toast(on ? tr("Normalisering på. Soloist startades om.") : tr("Normalisering av. Soloist startades om.")); }
   catch { e.target.checked = !on; }
 });
 $("#apt-check").addEventListener("click", async () => {
-  const b = $("#apt-check"); b.disabled = true; $("#apt-info").textContent = "Söker…";
+  const b = $("#apt-check"); b.disabled = true; $("#apt-info").textContent = tr("Söker…");
   try {
     const r = await fetch("/api/system/updates").then((x) => x.json());
-    $("#apt-info").textContent = r.packages.length ? `${r.packages.length} paket kan uppdateras: ${r.packages.slice(0, 12).join(", ")}${r.packages.length > 12 ? " …" : ""}` : "Systemet är uppdaterat.";
+    $("#apt-info").textContent = r.packages.length ? tr`${r.packages.length} paket kan uppdateras: ${r.packages.slice(0, 12).join(", ")}${r.packages.length > 12 ? " …" : ""}` : tr("Systemet är uppdaterat.");
     $("#apt-run").hidden = !r.packages.length;
   } finally { b.disabled = false; }
 });
-$("#apt-run").addEventListener("click", () => startJob("/api/system/upgrade", "Installerar uppdateringar…"));
+$("#apt-run").addEventListener("click", () => startJob("/api/system/upgrade", tr("Installerar uppdateringar…")));
 $("#overlay").addEventListener("change", (e) => {
   const on = e.target.checked;
-  startJob("/api/system/overlay", on ? "Slår på skrivskydd…" : "Stänger av skrivskydd…", { enabled: on });
+  startJob("/api/system/overlay", on ? tr("Slår på skrivskydd…") : tr("Stänger av skrivskydd…"), { enabled: on });
 });
 $("#reboot").addEventListener("click", async (e) => {
   const b = e.currentTarget;
-  if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Tryck igen för att starta om"; setTimeout(() => { b.dataset.armed = ""; b.textContent = "Starta om enheten"; }, 4000); return; }
-  await post("/api/system/reboot"); toast("Startar om. Panelen återansluter av sig själv.");
+  if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = tr("Tryck igen för att starta om"); setTimeout(() => { b.dataset.armed = ""; b.textContent = tr("Starta om enheten"); }, 4000); return; }
+  await post("/api/system/reboot"); toast(tr("Startar om. Panelen återansluter av sig själv."));
 });
 $("#log-load").addEventListener("click", async () => {
   const src = $("#log-src").value, err = $("#log-err").checked ? 1 : 0;
   const t = await fetch(`/api/logs?source=${src}&errors=${err}&lines=300`).then((r) => r.text());
-  const out = $("#log-out"); out.hidden = false; out.textContent = t || "Loggen är tom."; out.scrollTop = out.scrollHeight;
+  const out = $("#log-out"); out.hidden = false; out.textContent = t || tr("Loggen är tom."); out.scrollTop = out.scrollHeight;
 });
 
 // ------------------------------------------------------------------ verification log, settings
-const VERDICT = { bitperfect: "Bitperfekt", scaled: "Skalat", lossy_or_processed: "Bearbetat", inconclusive: "Oavgjort" };
+const VERDICT = { bitperfect: tr("Bitperfekt"), scaled: tr("Skalat"), lossy_or_processed: tr("Bearbetat"), inconclusive: tr("Oavgjort") };
 function renderVlog() {
   const items = [...S.tests].reverse().slice(0, 12);
   $("#vlog").innerHTML = items.length ? items.map((t) => {
     const good = t.verdict === "bitperfect" && !t.gaps;
-    const head = `${VERDICT[t.verdict] || t.verdict}${t.verdict === "bitperfect" && t.gaps ? `, ${t.gaps} avbrott` : ""}`;
+    const head = `${VERDICT[t.verdict] || t.verdict}${t.verdict === "bitperfect" && t.gaps ? tr`, ${t.gaps} avbrott` : ""}`;
     const detail = [t.bits ? `${t.bits} bit` : null, t.gain_db != null ? `${dec(t.gain_db)} dB` : null, t.track].filter(Boolean).join(", ");
     return `<li class="${good ? "" : "warn"}">${good ? MARK.ok : MARK.warn}<div class="vl-what">${esc(head)}<span>${esc(detail)}</span></div>
-      <div class="vl-when">${esc(stamp(t.t))}<br>${t.auto ? "Automatisk" : "Manuell"}</div></li>`;
-  }).join("") : `<li class="empty">Inga verifieringar än.</li>`;
+      <div class="vl-when">${esc(stamp(t.t))}<br>${t.auto ? tr("Automatisk") : tr("Manuell")}</div></li>`;
+  }).join("") : `<li class="empty">${tr("Inga verifieringar än.")}</li>`;
   const last = S.tests.length ? S.tests[S.tests.length - 1] : null;
-  fv("ver", last ? `${VERDICT[last.verdict] || last.verdict} ${clock(last.t)}` : "Inga än", !!last && !(last.verdict === "bitperfect" && !last.gaps));
+  fv("ver", last ? `${VERDICT[last.verdict] || last.verdict} ${clock(last.t)}` : tr("Inga än"), !!last && !(last.verdict === "bitperfect" && !last.gaps));
 }
 function renderSettings() {
   const st = S.settings || {};
   $("#auto-verify").checked = !!st.auto_verify;
   $("#alerts-on").checked = !!st.alerts;
   $("#alerts-state").textContent = st.alerts_configured
-    ? (st.alerts ? "Kopplat till Home Assistant. Larm skickas till din telefon." : "Kopplat till Home Assistant, men larmen är avstängda.")
-    : "Inte kopplat till Home Assistant.";
+    ? (st.alerts ? tr("Kopplat till Home Assistant. Larm skickas till din telefon.") : tr("Kopplat till Home Assistant, men larmen är avstängda."))
+    : tr("Inte kopplat till Home Assistant.");
   $("#alerts-on").disabled = !st.alerts_configured; $("#alerts-test").disabled = !st.alerts_configured || !st.alerts;
-  fv("alerts", !st.alerts_configured ? "Inte kopplat" : st.alerts ? "På" : "Av", !st.alerts_configured || !st.alerts);
+  fv("alerts", !st.alerts_configured ? tr("Inte kopplat") : st.alerts ? tr("På") : tr("Av"), !st.alerts_configured || !st.alerts);
   $$("#net-speed button").forEach((b) => b.setAttribute("aria-checked", +b.dataset.v === (st.net_speed || 100)));
 }
 async function setSetting(key, on, el) {
@@ -607,12 +610,12 @@ async function setSetting(key, on, el) {
 }
 $("#auto-verify").addEventListener("change", (e) => setSetting("auto_verify", e.target.checked, e.target));
 $("#alerts-on").addEventListener("change", (e) => setSetting("alerts", e.target.checked, e.target));
-$("#alerts-test").addEventListener("click", async () => { try { await post("/api/alerts/test"); toast("Testlarmet är skickat till telefonen"); } catch {} });
+$("#alerts-test").addEventListener("click", async () => { try { await post("/api/alerts/test"); toast(tr("Testlarmet är skickat till telefonen")); } catch {} });
 $("#hist-clear").addEventListener("click", async (e) => {
   const b = e.currentTarget;
-  if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Tryck igen för att nollställa"; setTimeout(() => { b.dataset.armed = ""; b.textContent = "Nollställ historiken"; }, 4000); return; }
-  try { await post("/api/tests/clear"); toast("Avbrottshistoriken och verifieringsloggen är nollställda"); } catch {}
-  b.dataset.armed = ""; b.textContent = "Nollställ historiken";
+  if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = tr("Tryck igen för att nollställa"); setTimeout(() => { b.dataset.armed = ""; b.textContent = tr("Nollställ historiken"); }, 4000); return; }
+  try { await post("/api/tests/clear"); toast(tr("Avbrottshistoriken och verifieringsloggen är nollställda")); } catch {}
+  b.dataset.armed = ""; b.textContent = tr("Nollställ historiken");
 });
 
 // ------------------------------------------------------------------ access (password for system actions)
@@ -627,41 +630,41 @@ function renderAccess() {
   $("#setup-form").hidden = a.configured;
   $("#session").hidden = !a.logged_in;
   $("#access-state").textContent = !a.configured
-    ? "Inget lösenord är skapat. Skapa ett för att skydda omstart, uppdateringar, nyckel och inställningar."
-    : a.logged_in ? "Inloggad på den här enheten i 90 dagar." : "Logga in för att ändra inställningar, starta om eller uppdatera.";
-  fv("access", !a.configured ? "Inget lösenord" : a.logged_in ? "Inloggad" : "Utloggad", !a.configured);
+    ? tr("Inget lösenord är skapat. Skapa ett för att skydda omstart, uppdateringar, nyckel och inställningar.")
+    : a.logged_in ? tr("Inloggad på den här enheten i 90 dagar.") : tr("Logga in för att ändra inställningar, starta om eller uppdatera.");
+  fv("access", !a.configured ? tr("Inget lösenord") : a.logged_in ? tr("Inloggad") : tr("Utloggad"), !a.configured);
   if (!a.logged_in) $("#access").open = true;
 }
 $("#login-form").addEventListener("submit", async (e) => {
   e.preventDefault(); const pw = $("#pw-in").value;
-  try { await post("/api/auth/login", { password: pw }); $("#pw-in").value = ""; await refreshAuth(); toast("Inloggad"); } catch { $("#pw-in").select(); }
+  try { await post("/api/auth/login", { password: pw }); $("#pw-in").value = ""; await refreshAuth(); toast(tr("Inloggad")); } catch { $("#pw-in").select(); }
 });
 $("#setup-form").addEventListener("submit", async (e) => {
   e.preventDefault(); const a = $("#pw-new").value, b = $("#pw-new2").value;
-  if (a !== b) { toast("Lösenorden är inte lika"); return; }
-  try { await post("/api/auth/setup", { password: a }); $("#pw-new").value = $("#pw-new2").value = ""; await refreshAuth(); toast("Lösenordet är skapat och du är inloggad"); } catch {}
+  if (a !== b) { toast(tr("Lösenorden är inte lika")); return; }
+  try { await post("/api/auth/setup", { password: a }); $("#pw-new").value = $("#pw-new2").value = ""; await refreshAuth(); toast(tr("Lösenordet är skapat och du är inloggad")); } catch {}
 });
-$("#logout").addEventListener("click", async () => { try { await post("/api/auth/logout"); } catch {} await refreshAuth(); toast("Utloggad"); });
+$("#logout").addEventListener("click", async () => { try { await post("/api/auth/logout"); } catch {} await refreshAuth(); toast(tr("Utloggad")); });
 $("#pw-change-open").addEventListener("click", (e) => {
   const f = $("#pw-change-form"); f.hidden = !f.hidden; e.currentTarget.setAttribute("aria-expanded", String(!f.hidden)); if (!f.hidden) $("#pw-cur").focus();
 });
 $("#pw-change-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   try { await post("/api/auth/password", { current: $("#pw-cur").value, password: $("#pw-next").value });
-    $("#pw-cur").value = $("#pw-next").value = ""; $("#pw-change-form").hidden = true; toast("Lösenordet är bytt. Andra enheter är utloggade."); } catch {}
+    $("#pw-cur").value = $("#pw-next").value = ""; $("#pw-change-form").hidden = true; toast(tr("Lösenordet är bytt. Andra enheter är utloggade.")); } catch {}
 });
 
 // ------------------------------------------------------------------ Arcam
 function renderArcam() {
   const a = S.arcam, ctl = $("#arcam-ctl");
-  if (a.reachable === false) { $("#arcam-state").textContent = "Receivern svarar inte. Kontrollera att den är på nätverket och att IP-styrning är aktiverad."; ctl.hidden = true; fv("arcam", "Svarar inte"); return; }
+  if (a.reachable === false) { $("#arcam-state").textContent = tr("Receivern svarar inte. Kontrollera att den är på nätverket och att IP-styrning är aktiverad."); ctl.hidden = true; fv("arcam", tr("Svarar inte")); return; }
   if (a.reachable == null) return;
   ctl.hidden = false;
   ctl.classList.toggle("off", !a.power);
-  $("#arcam-state").textContent = a.power ? `På, källa ${a.source}${a.muted ? ", ljudet avstängt" : ""}` : "I standby";
-  fv("arcam", a.power ? `På, ${a.source}` : "I standby");
-  const pb = $("#arcam-power"); pb.textContent = a.power ? "Stäng av" : "Slå på";
-  const mb = $("#arcam-mute"); mb.textContent = a.muted ? "Slå på ljudet" : "Stäng av ljudet"; mb.setAttribute("aria-pressed", !!a.muted);
+  $("#arcam-state").textContent = a.power ? tr`På, källa ${a.source}${a.muted ? tr(", ljudet avstängt") : ""}` : tr("I standby");
+  fv("arcam", a.power ? tr`På, ${a.source}` : tr("I standby"));
+  const pb = $("#arcam-power"); pb.textContent = a.power ? tr("Stäng av") : tr("Slå på");
+  const mb = $("#arcam-mute"); mb.textContent = a.muted ? tr("Slå på ljudet") : tr("Stäng av ljudet"); mb.setAttribute("aria-pressed", !!a.muted);
   const vol = $("#arcam-vol"); if (document.activeElement !== vol && a.volume != null) vol.value = a.volume;
   $("#arcam-vol-v").textContent = a.volume ?? "–";
   const src = $("#arcam-src");
@@ -669,7 +672,7 @@ function renderArcam() {
   src.querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", b.dataset.src === a.source));
 }
 const arcam = (data) => post("/api/arcam", data).catch(() => {});
-$("#arcam-power").addEventListener("click", () => { toast(S.arcam.power ? "Stänger av receivern…" : "Slår på receivern…"); arcam({ power: !S.arcam.power }); });
+$("#arcam-power").addEventListener("click", () => { toast(S.arcam.power ? tr("Stänger av receivern…") : tr("Slår på receivern…")); arcam({ power: !S.arcam.power }); });
 $("#arcam-mute").addEventListener("click", () => arcam({ mute: !S.arcam.muted }));
 $("#arcam-vol").addEventListener("input", (e) => { $("#arcam-vol-v").textContent = e.target.value; });
 $("#arcam-vol").addEventListener("change", (e) => arcam({ volume: +e.target.value }));
@@ -689,8 +692,8 @@ function renderDac() {
   const face = $(".clockface");
   if (!d.present) {
     $("#ck-hz").textContent = "–"; $("#ck-ppm").innerHTML = "&nbsp;"; face.classList.remove("live");
-    fv("clock", "–"); fv("usb", "Ingen DAC", true); fv("dac", "");
-    $("#ck-sum").textContent = "Ingen DAC ansluten."; spec($("#dac-kv"), [["Status", "Inte ansluten", "warn"]]);
+    fv("clock", "–"); fv("usb", tr("Ingen DAC"), true); fv("dac", "");
+    $("#ck-sum").textContent = tr("Ingen DAC ansluten."); spec($("#dac-kv"), [["Status", tr("Inte ansluten"), "warn"]]);
     spec($("#usb-kv"), []); $("#usb-note").hidden = true; renderUsbEvents([]); return;
   }
   // clock: long-term average of ALSA's frame counter against the SOtM's crystal
@@ -702,45 +705,45 @@ function renderDac() {
     $("#ck-ppm").innerHTML = `<b>${ppmTxt(ck.ppm)} ppm</b> mot ${khz(ck.nominal)} kHz, ±${dec(ck.unc_ppm, ck.unc_ppm < 1 ? 2 : 1)} ppm efter ${fmtUptime(ck.elapsed_s)}`;
     const s = ck.series || [];
     const lo = s.length ? Math.min(...s.map((x) => x[1])) : null, hi = s.length ? Math.max(...s.map((x) => x[1])) : null;
-    $("#ck-sum").textContent = `DAC:ns egen kristall styr takten, och streamern följer den via återkopplingen. Siffran är medelvärdet sedan strömmen till DAC:en startade, mätt mot SOtM:ens kristall, och blir exaktare ju längre den går. Avvikelsen är skillnaden mellan två kristaller och påverkar inte ljudet.${s.length > 4 ? ` Kurvan visar timmedel: ${ppmTxt(lo)} till ${ppmTxt(hi)} ppm.` : " Kurvan visar timmedel när strömmen har gått en halvtimme."}`;
+    $("#ck-sum").textContent = tr`DAC:ns egen kristall styr takten, och streamern följer den via återkopplingen. Siffran är medelvärdet sedan strömmen till DAC:en startade, mätt mot streamerns kristall, och blir exaktare ju längre den går. Avvikelsen är skillnaden mellan två kristaller och påverkar inte ljudet.${s.length > 4 ? tr` Kurvan visar timmedel: ${ppmTxt(lo)} till ${ppmTxt(hi)} ppm.` : tr(" Kurvan visar timmedel när strömmen har gått en halvtimme.")}`;
   } else {
     $("#ck-hz").textContent = "–";
-    $("#ck-ppm").innerHTML = "Mäter, första värdet efter en minut";
-    $("#ck-sum").textContent = "Klockan mäts när strömmen till DAC:en är öppen. Den är öppen hela tiden efter första uppspelningen.";
+    $("#ck-ppm").innerHTML = tr("Mäter, första värdet efter en minut");
+    $("#ck-sum").textContent = tr("Klockan mäts när strömmen till DAC:en är öppen. Den är öppen hela tiden efter första uppspelningen.");
   }
   renderClockChart(ck.series || []);
   // identity
   $("#dac-title").textContent = outName();
   spec($("#dac-kv"), [
-    ["USB-mottagare", `${esc(d.manufacturer)}, ${esc(d.product)}`],
+    [tr("USB-mottagare"), `${esc(d.manufacturer)}, ${esc(d.product)}`],
     ["USB-id", esc(d.usb_id)],
     ["Firmware (USB)", esc(d.firmware)],
-    ["Klass", esc(d.uac)],
-    ["Klockkälla", d.clock_valid === "on" ? "Giltig, låst" : d.clock_valid ? "Ogiltig" : "–", d.clock_valid === "on" ? "good" : d.clock_valid ? "warn" : ""],
-    ["Strömbehov från USB", esc(d.max_power || "–")],
+    [tr("Klass"), esc(d.uac)],
+    [tr("Klockkälla"), d.clock_valid === "on" ? tr("Giltig, låst") : d.clock_valid ? tr("Ogiltig") : "–", d.clock_valid === "on" ? "good" : d.clock_valid ? "warn" : ""],
+    [tr("Strömbehov från USB"), esc(d.max_power || "–")],
   ]);
   // link
   const hs = d.speed_mbps >= 480, failedHs = (d.events || []).some((e) => e.kind === "failed" && e.speed === "high-speed");
   fv("usb", hs ? "High speed" : "Full speed", !hs);
   fv("dac", d.firmware ? `Firmware ${d.firmware}` : "");
   spec($("#usb-kv"), [
-    ["Port på SOtM:en", esc(d.port), d.port === "Audio USB" ? "good" : ""],
-    ["Hastighet", hs ? "High speed, 480 Mbit/s (USB 2.0)" : `Full speed, ${d.speed_mbps} Mbit/s (USB 1.1)`, hs ? "good" : "warn"],
-    ["Styrkrets", `${esc(d.host)}, ${esc(d.controller)}`],
-    ["Överföring", /ASYNC/.test(d.endpoint || "") ? "Asynkron, DAC:n är klockmaster" : esc(d.endpoint || "–"), /ASYNC/.test(d.endpoint || "") ? "good" : ""],
-    d.sync_endpoint && ["Återkoppling", `Ändpunkt ${esc(d.sync_endpoint)}, format ${esc(fb.feedback_format || "–")}`],
-    d.packet_size && ["Största paket", `${d.packet_size} byte per ${hs ? "125 µs" : "ms"}`],
-    d.altset != null && ["Gränssnitt", `Alternativ ${d.altset}`],
+    [tr("Port på streamern"), esc(d.port), d.port === "Audio USB" ? "good" : ""],
+    [tr("Hastighet"), hs ? "High speed, 480 Mbit/s (USB 2.0)" : `Full speed, ${d.speed_mbps} Mbit/s (USB 1.1)`, hs ? "good" : "warn"],
+    [tr("Styrkrets"), `${esc(d.host)}, ${esc(d.controller)}`],
+    [tr("Överföring"), /ASYNC/.test(d.endpoint || "") ? tr("Asynkron, DAC:n är klockmaster") : esc(d.endpoint || "–"), /ASYNC/.test(d.endpoint || "") ? "good" : ""],
+    d.sync_endpoint && [tr("Återkoppling"), tr`Ändpunkt ${esc(d.sync_endpoint)}, format ${esc(fb.feedback_format || "–")}`],
+    d.packet_size && [tr("Största paket"), tr`${d.packet_size} byte per ${hs ? "125 µs" : "ms"}`],
+    d.altset != null && [tr("Gränssnitt"), tr`Alternativ ${d.altset}`],
   ]);
   const note = $("#usb-note");
   note.hidden = hs || !failedHs;
-  note.innerHTML = `<p>DAC:n anmäler sig som USB 2.0, men redan första paketet i 480 Mbit/s kommer fram förvanskat, så länken faller tillbaka till USB 1.1. Det räcker för Spotify, 24 bit/44,1 kHz bitperfekt. Prova en kort vanlig USB-kabel. Som test kan du också prova en av de två USB-portarna bredvid.</p>`;
+  note.innerHTML = `<p>${tr("DAC:n anmäler sig som USB 2.0, men redan första paketet i 480 Mbit/s kommer fram förvanskat, så länken faller tillbaka till USB 1.1. Det räcker för 24 bit/44,1 kHz bitperfekt. Prova en kort vanlig USB-kabel, eller en annan USB-port.")}</p>`;
   // formats
   const cur = st.hw_params || {}, rows = st.altsets || [];
-  $("#dac-fmt").innerHTML = `<tr><th>Ordlängd</th><th>Frekvenser, kHz</th></tr>` + rows.map((a) =>
+  $("#dac-fmt").innerHTML = `<tr><th>${tr("Ordlängd")}</th><th>${tr("Frekvenser, kHz")}</th></tr>` + rows.map((a) =>
     `<tr class="${a.format === cur.format ? "on" : ""}" title="${esc(a.format)}"><td>${esc(fmtWord(a.format))}${a.format === "S24_3LE" ? " (3 byte)" : ""}</td><td>${a.rates.map(khz).join(", ")}</td></tr>`).join("");
   const rate = parseInt(cur.rate), per = parseInt(cur.period_size), buf = parseInt(cur.buffer_size);
-  $("#dac-cur").textContent = rate ? `Används nu: ${fmtCarry(cur.format)}, ${khz(rate)} kHz, period ${per.toLocaleString("sv-SE")} sampel (${dec(per / rate * 1000)} ms), buffert ${buf.toLocaleString("sv-SE")} sampel (${Math.round(buf / rate * 1000)} ms). Varje sampel skickas som ett 32-bitars tal, och musikens bitar ligger orörda i det (i rådata heter formatet ${cur.format}).` : "Ingen ström öppen just nu.";
+  $("#dac-cur").textContent = rate ? tr`Används nu: ${fmtCarry(cur.format)}, ${khz(rate)} kHz, period ${per.toLocaleString("sv-SE")} sampel (${dec(per / rate * 1000)} ms), buffert ${buf.toLocaleString("sv-SE")} sampel (${Math.round(buf / rate * 1000)} ms). Varje sampel skickas som ett 32-bitars tal, och musikens bitar ligger orörda i det (i rådata heter formatet ${cur.format}).` : tr("Ingen ström öppen just nu.");
   renderUsbEvents(d.events || []);
   // raw, keep open state
   const raw = $("#dac-raw");
@@ -763,12 +766,12 @@ function renderUsbEvents(ev) {
   const shown = out.slice(-8).reverse();
   $("#usb-ev").innerHTML = shown.length ? shown.map((e) => {
     const fail = e.failed || (e.kind === "failed" ? e : null);
-    const what = e.kind === "connected" ? `${e.reconnect ? "Återansluten" : "Ansluten"}, ${sp(e.speed)}` : e.kind === "failed" ? "High speed misslyckades" : "Frånkopplad";
-    const sub = fail ? `High speed misslyckades efter ${fail.tries} försök (${fail.errors} fel, -71)` : e.kind === "connected" ? esc(e.product || "") : "";
+    const what = e.kind === "connected" ? `${e.reconnect ? tr("Återansluten") : tr("Ansluten")}, ${sp(e.speed)}` : e.kind === "failed" ? tr("High speed misslyckades") : tr("Frånkopplad");
+    const sub = fail ? tr`High speed misslyckades efter ${fail.tries} försök (${fail.errors} fel, -71)` : e.kind === "connected" ? esc(e.product || "") : "";
     const cls = fail ? "fail" : "";
     return `<li class="${cls}">${fail ? MARK.warn : e.kind === "connected" ? MARK.ok : MARK.optional}<p class="vl-what">${what}${sub ? `<span>${sub}</span>` : ""}</p><span class="vl-when">${clock(e.t)}</span></li>`;
-  }).join("") + (out.length > 8 ? `<li class="empty">${out.length - 8} äldre händelser sedan start visas inte.</li>` : "")
-    : `<li class="empty">Inga USB-händelser sedan start.</li>`;
+  }).join("") + (out.length > 8 ? `<li class="empty">${tr`${out.length - 8} äldre händelser sedan start visas inte.`}</li>` : "")
+    : `<li class="empty">${tr("Inga USB-händelser sedan start.")}</li>`;
 }
 function renderClockChart(pts) {
   const cv = $("#ck-chart"), ctx = cv.getContext("2d"), dpr = window.devicePixelRatio || 1;
@@ -796,19 +799,19 @@ function armed(b, label, armedLabel) {
   return false;
 }
 $("#poweroff").addEventListener("click", async (e) => {
-  if (!armed(e.currentTarget, "Stäng av enheten", "Tryck igen för att stänga av")) return;
-  try { await post("/api/system/poweroff"); toast("Stänger av. Bryt och slå på strömmen för att starta igen."); } catch {}
+  if (!armed(e.currentTarget, tr("Stäng av enheten"), tr("Tryck igen för att stänga av"))) return;
+  try { await post("/api/system/poweroff"); toast(tr("Stänger av. Bryt och slå på strömmen för att starta igen.")); } catch {}
 });
 $("#audio-restart").addEventListener("click", async (e) => {
-  const b = e.currentTarget; b.disabled = true; toast("Startar om PipeWire, WirePlumber och Soloist…");
-  try { await post("/api/system/restart-audio"); toast("Ljudtjänsterna är omstartade"); } catch {}
+  const b = e.currentTarget; b.disabled = true; toast(tr("Startar om PipeWire, WirePlumber och Soloist…"));
+  try { await post("/api/system/restart-audio"); toast(tr("Ljudtjänsterna är omstartade")); } catch {}
   b.disabled = false;
 });
 $("#usb-reconnect").addEventListener("click", async (e) => {
-  const b = e.currentTarget; b.disabled = true; toast("Ansluter DAC:n på nytt, cirka 10 sekunder…");
+  const b = e.currentTarget; b.disabled = true; toast(tr("Ansluter DAC:n på nytt, cirka 10 sekunder…"));
   try {
     const r = await post("/api/system/usb-reconnect");
-    toast(!r.present ? "DAC:n svarar inte. Kontrollera kabeln." : r.speed === "high" ? "Ansluten i high speed, USB 2.0" : "Ansluten i full speed, USB 1.1");
+    toast(!r.present ? tr("DAC:n svarar inte. Kontrollera kabeln.") : r.speed === "high" ? tr("Ansluten i high speed, USB 2.0") : tr("Ansluten i full speed, USB 1.1"));
     loadDac();
   } catch {}
   b.disabled = false;
@@ -818,7 +821,7 @@ $("#usb-reconnect").addEventListener("click", async (e) => {
 $("#leds").addEventListener("change", (e) => setSetting("leds", e.target.checked, e.target));
 $("#net-speed").addEventListener("click", async (e) => {
   const b = e.target.closest("button"); if (!b || b.getAttribute("aria-checked") === "true") return;
-  try { await post("/api/settings", { net_speed: +b.dataset.v }); S.settings = { ...S.settings, net_speed: +b.dataset.v }; renderSettings(); toast(`Byter till ${b.dataset.v} Mbit/s. Panelen kopplar upp igen om några sekunder.`); } catch {}
+  try { await post("/api/settings", { net_speed: +b.dataset.v }); S.settings = { ...S.settings, net_speed: +b.dataset.v }; renderSettings(); toast(tr`Byter till ${b.dataset.v} Mbit/s. Panelen kopplar upp igen om några sekunder.`); } catch {}
 });
 
 // ------------------------------------------------------------------ Mark Levinson 585.5
@@ -827,24 +830,24 @@ function renderLevinson() {
   const m = ML.state || {}, st = S.settings || {};
   const max = +(st.ml_max_db || 40);
   let lead;
-  if (m.reachable === null || m.reachable === undefined) lead = "Söker 585.5 i nätverket…";
-  else if (!m.host) lead = "Hittar inte förstärkaren i nätverket. Anslut nätverkskabeln och välj Connect = Ethernet i dess Setup-meny.";
-  else if (!m.reachable) lead = `Ingen kontakt med 585.5 på ${m.host}. Står den i standbyläget Green är nätverket avstängt.`;
-  else if (m.power === false) lead = "I standby";
+  if (m.reachable === null || m.reachable === undefined) lead = tr("Söker förstärkaren i nätverket…");
+  else if (!m.host) lead = tr("Hittar inte förstärkaren i nätverket. Anslut nätverkskabeln och välj Connect = Ethernet i dess Setup-meny.");
+  else if (!m.reachable) lead = tr`Ingen kontakt med förstärkaren på ${m.host}. Står den i standbyläget Green är nätverket avstängt.`;
+  else if (m.power === false) lead = tr("I standby");
   else {
     const name = m.label ? (m.input && m.input !== m.label ? `${m.label} (${m.input})` : m.label) : m.input;
-    lead = `På${name ? `, ${name}` : ""}${m.muted ? ", ljudet av" : ""}`;
+    lead = tr`På${name ? `, ${name}` : ""}${m.muted ? ", ljudet av" : ""}`;
   }
   $("#ml-state").textContent = lead;
   $("#ml-ctl").hidden = !m.reachable;
   $("#ml-step").hidden = !m.reachable || m.power === false;
   $("#amp").classList.toggle("live", !!m.reachable && m.power !== false);
   fv("amp", !m.reachable ? "" : m.power === false ? "Standby" : (m.label || m.input || ""));
-  fv("ml", m.host || "Söker", m.reachable === false);
+  fv("ml", m.host || tr("Söker"), m.reachable === false);
   $("#amp").classList.toggle("off", m.power === false);
-  $("#ml-power").textContent = m.power === false ? "Slå på" : "Standby";
+  $("#ml-power").textContent = m.power === false ? tr("Slå på") : "Standby";
   $("#ml-mute").setAttribute("aria-pressed", !!m.muted);
-  $("#ml-mute").textContent = m.muted ? "Ljud på" : "Ljud av";
+  $("#ml-mute").textContent = m.muted ? tr("Ljud på") : tr("Ljud av");
   const vol = $("#ml-vol");
   vol.max = max;
   const over = m.volume_db != null && m.volume_db > max;
@@ -853,8 +856,8 @@ function renderLevinson() {
     $("#ml-vol-v").textContent = m.volume_db != null ? dec(m.volume_db) : "–";
   }
   $("#ml-limit").textContent = over
-    ? `Volymen är ställd med fjärrkontrollen över panelens gräns på ${dec(max)} dB. Panelen kan bara sänka den.`
-    : `Panelen går högst till ${dec(max)} dB. Högre volym ställer du med fjärrkontrollen.`;
+    ? tr`Volymen är ställd med fjärrkontrollen över panelens gräns på ${dec(max)} dB. Panelen kan bara sänka den.`
+    : tr`Panelen går högst till ${dec(max)} dB. Högre volym ställer du med fjärrkontrollen.`;
   const src = $("#ml-src");
   // inputs, with the names the amplifier's display uses once the panel has seen them
   const labels = m.labels || {}, key = JSON.stringify(labels);
@@ -864,15 +867,15 @@ function renderLevinson() {
   }
   src.querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", b.dataset.src === m.input));
   // settings
-  $("#ml-conn").textContent = !m.host ? "Inte hittad än. Panelen söker var tionde minut."
-    : m.reachable ? `Ansluten på ${m.host}${st.ml_host ? "" : ", hittad automatiskt"}.` : `Ingen kontakt på ${m.host}.`;
+  $("#ml-conn").textContent = !m.host ? tr("Inte hittad än. Panelen söker var tionde minut.")
+    : m.reachable ? tr`Ansluten på ${m.host}${st.ml_host ? "" : ", hittad automatiskt"}.` : tr`Ingen kontakt på ${m.host}.`;
   $("#ml-auto-on").checked = !!st.ml_auto_on;
   $("#spotify-vol-amp").checked = !!st.spotify_vol_to_amp;
   $$("#ml-off button").forEach((b) => b.setAttribute("aria-checked", +b.dataset.v === (st.ml_auto_off_min || 0)));
   const mx = $("#ml-max"); if (document.activeElement !== mx) mx.value = max;
   const h = $("#ml-host"); if (document.activeElement !== h) h.value = st.ml_host || "";
   $("#ml-log").textContent = (m.log || []).length
-    ? m.log.map(([t, dir, txt]) => `${clock(t)}  ${dir === "tx" ? "→" : "←"} ${txt}`).join("\n") : "Ingen trafik än.";
+    ? m.log.map(([t, dir, txt]) => `${clock(t)}  ${dir === "tx" ? "→" : "←"} ${txt}`).join("\n") : tr("Ingen trafik än.");
 }
 const ml = (data) => post("/api/levinson", data).then((r) => { ML.state = r.levinson; renderLevinson(); }).catch(() => {});
 async function mlSetting(data, msg) {
@@ -884,7 +887,7 @@ async function mlSetting(data, msg) {
 }
 $("#ml-power").addEventListener("click", () => {
   const on = ML.state.power === false;
-  toast(on ? "Slår på förstärkaren…" : "Försätter förstärkaren i standby…");
+  toast(on ? tr("Slår på förstärkaren…") : tr("Försätter förstärkaren i standby…"));
   ml({ power: on });
 });
 $("#ml-mute").addEventListener("click", () => ml({ mute: !ML.state.muted }));
@@ -893,7 +896,7 @@ $("#ml-vol").addEventListener("input", (e) => { $("#ml-vol-v").textContent = dec
 function mlStep(d) {
   const m = ML.state || {}, max = +(S.settings?.ml_max_db || 40);
   if (m.volume_db == null) return;
-  if (d > 0 && m.volume_db >= max) { toast(`Panelen går högst till ${dec(max)} dB. Högre volym ställer du med fjärrkontrollen.`); return; }
+  if (d > 0 && m.volume_db >= max) { toast(tr`Panelen går högst till ${dec(max)} dB. Högre volym ställer du med fjärrkontrollen.`); return; }
   const v = Math.max(0, Math.min(max, Math.round((m.volume_db + d) * 2) / 2));
   $("#ml-vol-v").textContent = dec(v);
   ml({ volume_db: v });
@@ -907,11 +910,11 @@ $("#spotify-vol-amp").addEventListener("change", (e) => setSetting("spotify_vol_
 $("#ml-off").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) mlSetting({ ml_auto_off_min: +b.dataset.v }); });
 $("#ml-max-form").addEventListener("submit", (e) => {
   e.preventDefault();
-  mlSetting({ ml_max_db: +$("#ml-max").value }, (s) => `Högsta volym från panelen: ${dec(s.ml_max_db)} dB`);
+  mlSetting({ ml_max_db: +$("#ml-max").value }, (s) => tr`Högsta volym från panelen: ${dec(s.ml_max_db)} dB`);
 });
 $("#ml-host-form").addEventListener("submit", (e) => {
   e.preventDefault();
-  mlSetting({ ml_host: $("#ml-host").value }, (s) => s.ml_host ? `Använder ${s.ml_host}` : "Söker förstärkaren automatiskt");
+  mlSetting({ ml_host: $("#ml-host").value }, (s) => s.ml_host ? tr`Använder ${s.ml_host}` : tr("Söker förstärkaren automatiskt"));
 });
 
 // ------------------------------------------------------------------ source switch
@@ -919,11 +922,11 @@ $("#source").addEventListener("click", async (e) => {
   const b = e.target.closest("button"); if (!b || b.getAttribute("aria-checked") === "true") return;
   const src = b.dataset.v, seg = $("#source");
   seg.classList.add("busy");
-  toast(src === "roon" ? "Stänger av Spotify och startar Roon…" : "Stänger av Roon och startar Spotify…");
+  toast(src === "roon" ? tr("Stänger av Spotify och startar Roon…") : tr("Stänger av Roon och startar Spotify…"));
   try {
     const r = await post("/api/source", { source: src });
     S.settings = { ...S.settings, source: r.source };
-    toast(src === "roon" ? "Roon är aktivt. Välj den här enheten i Roon-appen." : `Spotify är aktivt. Välj ${devName()} i Spotify-appen.`);
+    toast(src === "roon" ? tr("Roon är aktivt. Välj den här enheten i Roon-appen.") : tr`Spotify är aktivt. Välj ${devName()} i Spotify-appen.`);
   } catch {}
   seg.classList.remove("busy");
   renderPlay(); renderSignal();
@@ -938,7 +941,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catc
 document.addEventListener("visibilitychange", () => { if (!document.hidden && ws && ws.readyState > 1) connect(); });
 
 // ---- appearance: follow the phone, or a fixed light/dark theme (per browser)
-const THEMES = { auto: "Som telefonen", light: "Ljust", dark: "Mörkt" };
+const THEMES = { auto: tr("Som telefonen"), light: tr("Ljust"), dark: tr("Mörkt") };
 function applyTheme(t) {
   if (!THEMES[t]) t = "auto";
   if (t === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
@@ -959,13 +962,13 @@ $("#theme").addEventListener("click", (e) => {
 });
 
 // ---- modules: what is installed, on/off (applies when the panel restarts)
-const KINDS = { amp: "Förstärkare", integration: "Integration", device: "Enhet" };
+const KINDS = { amp: tr("Förstärkare"), integration: "Integration", device: tr("Enhet") };
 const lang = () => (document.documentElement.lang || "sv").slice(0, 2);
 const loc = (o) => (o && (o[lang()] || o.en || o.sv)) || "";
 let MODS = { plugins: [], restart_needed: false };
 function renderMods() {
   const on = MODS.plugins.filter((p) => p.enabled);
-  fv("mods", on.length ? `${on.length} på` : "Inga");
+  fv("mods", on.length ? tr`${on.length} på` : tr("Inga"));
   $("#mods").innerHTML = MODS.plugins.map((p) => `
     <li><label class="toggle"><input type="checkbox" data-mod="${esc(p.id)}" ${p.enabled ? "checked" : ""}>
       <span class="toggle-ui" aria-hidden="true"></span>
@@ -985,7 +988,11 @@ $("#mods").addEventListener("change", async (e) => {
 });
 $("#mods-apply").addEventListener("click", async () => {
   const first = MODS.plugins[0]; if (!first) return;
-  try { await post("/api/plugins/set", { id: first.id, enabled: first.enabled, restart: true }); toast("Panelen startar om…"); } catch {}
+  try { await post("/api/plugins/set", { id: first.id, enabled: first.enabled, restart: true }); toast(tr("Panelen startar om…")); } catch {}
   setTimeout(() => location.reload(), 6000);
 });
 loadMods();
+
+// ---- language: follow the browser, or a chosen one (per browser); changing reloads the page
+$$("#lang button").forEach((b) => b.setAttribute("aria-checked", b.dataset.v === (chosenLang() || "auto")));
+$("#lang").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setLang(b.dataset.v); });
