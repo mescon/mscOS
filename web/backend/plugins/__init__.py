@@ -74,6 +74,7 @@ class Plugin:
 class AmpPlugin(Plugin):
     """An amplifier (or any volume control) the core can drive. Levels are in dB."""
     kind = "amp"
+    model = ""  # the default name of what this device plays into, e.g. "Mark Levinson Nº585.5"
 
     @property
     def max_db(self) -> float:

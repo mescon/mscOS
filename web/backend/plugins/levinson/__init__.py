@@ -42,6 +42,8 @@ class LevinsonAmp(AmpPlugin):
         "ml_max_db": 40.0,        # the panel's ceiling
     }
 
+    model = "Mark Levinson Nº585.5"  # default name of the output (System -> Names changes it)
+
     def __init__(self, hub):
         super().__init__(hub)
         s = hub.settings

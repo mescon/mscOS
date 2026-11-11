@@ -9,6 +9,10 @@ GID_=$(id -g "$SVC_USER")
 H=$(getent passwd "$SVC_USER" | cut -d: -f6)
 ENV=/boot/armbianEnv.txt
 
+# What this device is called in the panel (its device tree names the reference board,
+# "Cubietech Cubietruck"); the user can rename it under System -> Device.
+install -d /etc/mscos && [ -s /etc/mscos/board-name ] || echo "SOtM sMS-200Ultra" > /etc/mscos/board-name
+
 add_extraarg() {   # add_extraarg <arg> : append to extraargs= once
     if grep -q '^extraargs=' "$ENV"; then
         grep -q "^extraargs=.*\b$1\b" "$ENV" || sed -i "s|^extraargs=\(.*\)|extraargs=\1 $1|" "$ENV"

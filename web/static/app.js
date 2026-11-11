@@ -1,4 +1,4 @@
-// mscOS panel (Mark Levinson 585.5 / sMS-200Ultra). One WebSocket for live state, POSTs for actions.
+// mscOS panel. One WebSocket for live state, POSTs for actions.
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
 const S = { status: {}, playback: {}, auth: {}, queue: {}, xruns: [], lastTest: null, arcam: {}, sources: [], opts: null,
@@ -86,6 +86,17 @@ function connect() {
   };
   ws.onmessage = (e) => handle(JSON.parse(e.data));
 }
+// "Mark Levinson Nº585.5 via SOtM sMS-200Ultra": both names are settings, detected by default
+function renderNames() {
+  const n = S.names || {};
+  $("#dev-name").textContent = outName();
+  $("#dev-sub").textContent = n.streamer ? `via ${n.streamer}` : "";
+  document.title = `mscOS: ${outName()}`;
+  const o = $("#output-name"), st = $("#streamer-name"), set = S.settings || {};
+  if (document.activeElement !== o) o.value = set.output_name || "";
+  if (document.activeElement !== st) st.value = set.streamer_name || "";
+  o.placeholder = n.detected?.output || ""; st.placeholder = n.detected?.streamer || "";
+}
 // Only what this installation has: no amplifier driver, no amplifier parts; no Arcam, no Arcam row.
 function renderFeatures() {
   const f = S.features || {}, amp = f.amp && f.amp !== "none";
@@ -96,7 +107,7 @@ function renderFeatures() {
 function handle(m) {
   switch (m.type) {
     case "hello":
-      Object.assign(S, { status: m.status || {}, playback: m.playback || {}, auth: m.auth || {}, queue: m.queue || {}, xruns: m.xruns || [], lastTest: m.last_test, arcam: m.arcam || {}, sources: m.arcam_sources || [], tests: m.tests || [], settings: m.settings || {}, quality: m.quality || {}, features: m.features || { amp: "levinson", arcam: true } });
+      Object.assign(S, { status: m.status || {}, playback: m.playback || {}, auth: m.auth || {}, queue: m.queue || {}, xruns: m.xruns || [], lastTest: m.last_test, arcam: m.arcam || {}, sources: m.arcam_sources || [], tests: m.tests || [], settings: m.settings || {}, quality: m.quality || {}, features: m.features || { amp: "levinson", arcam: true }, names: m.names || {} });
       ML.state = m.levinson || {}; ML.inputs = m.ml_inputs || [];
       renderFeatures(); renderAll(); break;
     case "status": S.status = m.status; renderStatus(); renderSignal(); if (roonMode()) renderPlay(); else renderSource(); break;
@@ -106,7 +117,7 @@ function handle(m) {
     case "quality": S.quality = m.quality; renderSignal(); renderPlay(); break;
     case "levinson": ML.state = m.levinson; renderLevinson(); break;
     case "job": jobEvent(m); break;
-    case "settings": S.settings = { ...S.settings, ...m.settings }; if (m.features) { S.features = m.features; renderFeatures(); } renderSettings(); renderPlay(); renderSignal(); break;
+    case "settings": S.settings = { ...S.settings, ...m.settings }; if (m.features) { S.features = m.features; renderFeatures(); } if (m.names) { S.names = m.names; renderNames(); } renderSettings(); renderPlay(); renderSignal(); break;
     case "history_cleared": S.xruns = []; S.tests = []; renderSpark(); renderVlog(); renderSignal(); break;
   }
 }
@@ -132,7 +143,8 @@ const deco = (e) => (e && e.decorations) || {};
 const nameOf = (e) => deco(e).identity?.name || "";
 const coverOf = (e, size = "large") => { const c = deco(e).visual_identity?.cover || []; return (c.find((x) => x.size === size) || c[c.length - 1] || {}).url; };
 const artistsOf = (e) => (deco(e).creators || []).map((c) => nameOf(c.entity)).filter(Boolean).join(", ");
-const devName = () => S.status.soloist?.device_name || "Mark Levinson 585.5";
+const devName = () => S.status.soloist?.device_name || "mscOS";  // the name in the Spotify app
+const outName = () => S.names?.output || devName();
 function renderSource() {
   const roon = roonMode(), r = S.status.roon || {};
   document.body.classList.toggle("src-roon", roon);
@@ -148,7 +160,7 @@ function renderPlay() {
   if (roonMode()) {
     const d = S.status.dac || {}, running = d.state === "RUNNING";
     $("#np-title").textContent = running ? "Spelar via Roon" : "Roon";
-    $("#np-artist").textContent = running ? `${fmtWord(d.hw_params?.format)}, ${khz(parseInt(d.hw_params?.rate) || 44100)} kHz till 585.5` : "Välj Mark Levinson 585.5 i Roon-appen";
+    $("#np-artist").textContent = running ? `${fmtWord(d.hw_params?.format)}, ${khz(parseInt(d.hw_params?.rate) || 44100)} kHz till ${outName()}` : "Välj den här enheten i Roon-appen";
     $("#np-album").textContent = ""; $("#np-format").hidden = true;
     $("#np-cover").hidden = true; $("#cover-empty").hidden = false; $("#vol-warn").hidden = true;
     return;
@@ -231,12 +243,12 @@ function chainRoon() {
   const stages = [
     { k: "roon", name: "Roon", tag: "RAAT", state: !roon.active ? "bad" : running ? "ok" : "idle",
       facts: roon.active ? "Roon Bridge är igång" : "Roon Bridge kör inte",
-      note: roon.active ? (running ? "Spelar" : "Välj Mark Levinson 585.5 i Roon-appen") : "Byt källa igen eller starta om enheten" },
+      note: roon.active ? (running ? "Spelar" : "Välj den här enheten i Roon-appen") : "Byt källa igen eller starta om enheten" },
     { k: "usb", name: "USB", tag: dac.usb_speed === "high" ? "high speed" : dac.present ? "full speed" : "",
       state: !dac.present ? "bad" : running ? "ok" : "idle",
       facts: dac.present ? `Asynkron överföring, ${dac.usb_speed === "high" ? "USB 2.0" : "USB 1.1"}` : "Ingen DAC ansluten",
       note: dac.present ? (dac.usb_speed === "high" ? "Upp till 192 kHz och DSD64 via DoP." : `Upp till ${khz(dac.max_rate || 48000)} kHz. Roon räknar om högre upplösningar.`) : "Kontrollera USB-kabeln" },
-    { k: "dac", name: "585.5", tag: "Mark Levinson", state: !dac.present ? "bad" : running ? "ok" : "idle",
+    { k: "dac", name: outName(), tag: "DAC", state: !dac.present ? "bad" : running ? "ok" : "idle",
       facts: running ? `${fmtWord(dac.hw_params.format)}, ${khz(rate)} kHz` : dac.present ? "Ansluten, vilar" : "Inte ansluten",
       note: running ? "Tar emot signalen direkt från Roon Bridge" : "Väntar på Roon" },
   ];
@@ -271,7 +283,7 @@ function chain() {
       note: !S.auth.logged_in ? "Inte ansluten. Välj enheten i Spotify-appen." : playing ? (nameOf(p.item) || "Spelar") : "Ansluten, väntar" },
     { k: "soloist", name: "Soloist", tag: (solo.version || "").replace(/^soloist /, "").split(" ")[0],
       state: solo.service !== "active" ? "bad" : (volDigital || norm) ? "bad" : playing ? "ok" : "idle",
-      facts: bridge ? `Volym ${vol} % styr 585.5, normalisering ${norm ? "på" : "av"}` : `Volym ${vol} %, normalisering ${norm ? "på" : "av"}`,
+      facts: bridge ? `Volym ${vol} % styr ${outName()}, normalisering ${norm ? "på" : "av"}` : `Volym ${vol} %, normalisering ${norm ? "på" : "av"}`,
       note: solo.service !== "active" ? "Tjänsten kör inte" : (volDigital || norm) ? "Ändrar samplen digitalt" : solo.rt_watcher === "active" ? "Realtidsprioritet, avkodar orört" : "Avkodar orört" },
     { k: "pipewire", name: "PipeWire", tag: "pro-audio",
       state: !sink.name ? "bad" : (!sinkUnity || issues.includes("omsampling i PipeWire")) ? "bad" : (stream && running ? "ok" : "idle"),
@@ -281,7 +293,7 @@ function chain() {
       state: !dac.present ? "bad" : running ? "ok" : "idle",
       facts: dac.present ? `Asynkron överföring, ${dac.usb_speed === "high" ? "USB 2.0" : "USB 1.1"}` : "Ingen DAC ansluten",
       note: dac.present ? `DAC:ns egen klocka styr takten. ${dac.usb_speed === "high" ? "Upp till 192 kHz." : `Upp till ${khz(dac.max_rate || 48000)} kHz, räcker för Spotify.`}` : "Kontrollera USB-kabeln" },
-    { k: "dac", name: "585.5", tag: "Mark Levinson",
+    { k: "dac", name: outName(), tag: "DAC",
       state: !dac.present ? "bad" : running ? "ok" : "idle",
       facts: running ? `${fmtCarry(dac.hw_params.format)}, ${khz(rate)} kHz` : dac.present ? "Ansluten, vilar" : "Inte ansluten",
       note: running ? "Tar emot signalen" : "Väljer USB-ingången när musik spelar" },
@@ -306,10 +318,10 @@ function renderSignal() {
   $("#r-gain").textContent = c.issues.length ? "≠ 0" : c.t && c.t.gain_db != null ? dec(c.t.gain_db) : "0,0";
   // seal
   const seal = $("#seal"); let head, sub, cls = "";
-  if (!c.dac.present) { head = "Ingen DAC"; sub = "Kontrollera USB-kabeln till 585.5."; cls = "warn"; }
+  if (!c.dac.present) { head = "Ingen DAC"; sub = "Kontrollera USB-kabeln till DAC:en."; cls = "warn"; }
   else if (c.roon) {
     head = c.roon.active ? (c.running ? "Roon spelar" : "Roon, redo") : "Roon Bridge kör inte";
-    sub = c.running ? `Roon Bridge äger DAC:en: ${fmtWord(c.dac.hw_params?.format)}, ${khz(c.rate)} kHz.` : "Välj Mark Levinson 585.5 i Roon-appen.";
+    sub = c.running ? `Roon Bridge äger DAC:en: ${fmtWord(c.dac.hw_params?.format)}, ${khz(c.rate)} kHz.` : "Välj den här enheten i Roon-appen.";
     cls = c.roon.active ? "" : "warn";
   }
   else if (c.issues.length) { head = "Signalen ändras"; sub = c.issues.join(", ").replace(/^./, (x) => x.toUpperCase()) + "."; cls = "warn"; }
@@ -334,9 +346,7 @@ function renderSignal() {
 // ------------------------------------------------------------------ status panels
 function renderStatus() {
   const st = S.status, sys = st.system || {}, solo = st.soloist || {};
-  $("#dev-name").textContent = devName();
-  document.title = `mscOS: ${devName()}`;
-  $("#dev-sub").textContent = "via SOtM";
+  renderNames();
   // Soloist
   const days = solo.days_left;
   spec($("#solo-kv"), [
@@ -518,6 +528,13 @@ $("#name-form").addEventListener("submit", async (e) => {
   e.preventDefault(); const name = $("#name-in").value.trim();
   try { await post("/api/soloist/name", { name }); toast(`Heter nu ${name} i Spotify`); } catch {}
 });
+$("#names-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    await post("/api/settings", { output_name: $("#output-name").value.trim(), streamer_name: $("#streamer-name").value.trim() });
+    document.activeElement?.blur(); toast("Namnen är sparade");
+  } catch {}
+});
 $("#key-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const inp = $("#key-in"), b = $("#key-save"), key = inp.value.trim();
@@ -685,7 +702,7 @@ function renderDac() {
     $("#ck-ppm").innerHTML = `<b>${ppmTxt(ck.ppm)} ppm</b> mot ${khz(ck.nominal)} kHz, ±${dec(ck.unc_ppm, ck.unc_ppm < 1 ? 2 : 1)} ppm efter ${fmtUptime(ck.elapsed_s)}`;
     const s = ck.series || [];
     const lo = s.length ? Math.min(...s.map((x) => x[1])) : null, hi = s.length ? Math.max(...s.map((x) => x[1])) : null;
-    $("#ck-sum").textContent = `585.5:s egen kristall styr takten, och SOtM:en följer den via återkopplingen. Siffran är medelvärdet sedan strömmen till DAC:en startade, mätt mot SOtM:ens kristall, och blir exaktare ju längre den går. Avvikelsen är skillnaden mellan två kristaller och påverkar inte ljudet.${s.length > 4 ? ` Kurvan visar timmedel: ${ppmTxt(lo)} till ${ppmTxt(hi)} ppm.` : " Kurvan visar timmedel när strömmen har gått en halvtimme."}`;
+    $("#ck-sum").textContent = `DAC:ns egen kristall styr takten, och streamern följer den via återkopplingen. Siffran är medelvärdet sedan strömmen till DAC:en startade, mätt mot SOtM:ens kristall, och blir exaktare ju längre den går. Avvikelsen är skillnaden mellan två kristaller och påverkar inte ljudet.${s.length > 4 ? ` Kurvan visar timmedel: ${ppmTxt(lo)} till ${ppmTxt(hi)} ppm.` : " Kurvan visar timmedel när strömmen har gått en halvtimme."}`;
   } else {
     $("#ck-hz").textContent = "–";
     $("#ck-ppm").innerHTML = "Mäter, första värdet efter en minut";
@@ -693,7 +710,7 @@ function renderDac() {
   }
   renderClockChart(ck.series || []);
   // identity
-  $("#dac-title").textContent = "Mark Levinson Nº585.5";
+  $("#dac-title").textContent = outName();
   spec($("#dac-kv"), [
     ["USB-mottagare", `${esc(d.manufacturer)}, ${esc(d.product)}`],
     ["USB-id", esc(d.usb_id)],
@@ -717,7 +734,7 @@ function renderDac() {
   ]);
   const note = $("#usb-note");
   note.hidden = hs || !failedHs;
-  note.innerHTML = `<p>585.5 anmäler sig som USB 2.0, men redan första paketet i 480 Mbit/s kommer fram förvanskat, så länken faller tillbaka till USB 1.1. Det räcker för Spotify, 24 bit/44,1 kHz bitperfekt. Prova en kort vanlig USB-kabel. Som test kan du också prova en av de två USB-portarna bredvid.</p>`;
+  note.innerHTML = `<p>DAC:n anmäler sig som USB 2.0, men redan första paketet i 480 Mbit/s kommer fram förvanskat, så länken faller tillbaka till USB 1.1. Det räcker för Spotify, 24 bit/44,1 kHz bitperfekt. Prova en kort vanlig USB-kabel. Som test kan du också prova en av de två USB-portarna bredvid.</p>`;
   // formats
   const cur = st.hw_params || {}, rows = st.altsets || [];
   $("#dac-fmt").innerHTML = `<tr><th>Ordlängd</th><th>Frekvenser, kHz</th></tr>` + rows.map((a) =>
@@ -906,7 +923,7 @@ $("#source").addEventListener("click", async (e) => {
   try {
     const r = await post("/api/source", { source: src });
     S.settings = { ...S.settings, source: r.source };
-    toast(src === "roon" ? "Roon är aktivt. Välj Mark Levinson 585.5 i Roon-appen." : "Spotify är aktivt. Välj Mark Levinson 585.5 i Spotify-appen.");
+    toast(src === "roon" ? "Roon är aktivt. Välj den här enheten i Roon-appen." : `Spotify är aktivt. Välj ${devName()} i Spotify-appen.`);
   } catch {}
   seg.classList.remove("busy");
   renderPlay(); renderSignal();

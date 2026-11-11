@@ -221,6 +221,16 @@ class Hub:
             return True
         return False
 
+    def names(self) -> dict:
+        """What to call things. Each is a setting; empty means the detected default:
+        output    what this device plays into: the amplifier module's model, else the DAC
+        streamer  this device: the board name, PC model or device tree model"""
+        s, a = self.settings, self.amp
+        det_out = (getattr(a, "model", "") if a else "") or collect.detect_dac() or "DAC"
+        det_str = collect.detect_streamer()
+        return {"output": s.get("output_name") or det_out, "streamer": s.get("streamer_name") or det_str,
+                "detected": {"output": det_out, "streamer": det_str}}
+
     def features(self) -> dict:
         """What this installation has, so the panel shows only that."""
         f = {"amp": "none", "arcam": False, "plugins": list(self.plugins)}
@@ -775,7 +785,7 @@ async def ws_handler(request):
     await ws.send_str(json.dumps({
         "type": "hello", "status": hub.status, "playback": hub.playback, "auth": hub.auth,
         "queue": hub.queue, "xruns": list(hub.xruns)[-2880:], "last_test": hub.last_test,
-        "features": hub.features(), **{k: v for p in hub.plugins.values() for k, v in p.hello().items()}, "quality": hub.track_quality,
+        "features": hub.features(), "names": hub.names(), **{k: v for p in hub.plugins.values() for k, v in p.hello().items()}, "quality": hub.track_quality,
         "tests": list(hub.tests)[-30:], "settings": {**hub.settings, "alerts_configured": bool(hub.features().get("ha_alerts"))},
         "jobs": {k: {kk: vv for kk, vv in v.items()} for k, v in hub.jobs.items()},
     }))
@@ -1047,6 +1057,12 @@ async def get_settings(request):
 async def set_settings(request):
     b = await body(request)
     upd: dict = {k: bool(b[k]) for k in ("auto_verify", "alerts", "leds", "spotify_vol_to_amp") if k in b}
+    for k in ("output_name", "streamer_name"):
+        if k in b:
+            v = re.sub(r"\s+", " ", str(b[k])).strip()
+            if len(v) > 60 or any(ord(c) < 32 for c in v):
+                raise web.HTTPBadRequest(text="Namnet får vara högst 60 tecken.")
+            upd[k] = v  # "" = the detected name
     for p in hub.plugins.values():
         p.update_settings(b, upd)
     # all valid: apply
@@ -1061,7 +1077,7 @@ async def set_settings(request):
         # the link renegotiates (~3 s); answer first so the reply is not lost
         asyncio.get_running_loop().call_later(1, lambda: asyncio.ensure_future(collect.apply_net_speed(b["net_speed"])))
     await asyncio.get_running_loop().run_in_executor(None, hub.save_settings)
-    await hub.broadcast({"type": "settings", "settings": hub.settings, "features": hub.features()})
+    await hub.broadcast({"type": "settings", "settings": hub.settings, "features": hub.features(), "names": hub.names()})
     return ok(settings=hub.settings)
 
 

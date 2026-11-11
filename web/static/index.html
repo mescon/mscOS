@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>mscOS</title>
-<meta name="description" content="mscOS på SOtM sMS-200Ultra: Spotify Lossless och Roon till Mark Levinson 585.5, signalväg och system">
+<meta name="description" content="mscOS: bitperfekt nätverksspelare för Spotify Lossless, Roon med flera, med signalväg och system">
 <meta name="application-name" content="mscOS">
 <meta name="apple-mobile-web-app-title" content="mscOS">
 <meta name="theme-color" content="#e4e2dc" media="(prefers-color-scheme: light)">
@@ -25,7 +25,7 @@
 <header class="masthead">
   <div class="ident">
     <div class="ident-name"><h1 class="wordmark">mscOS</h1><span class="link-led" id="conn" role="img" aria-label="Ingen kontakt med enheten"></span></div>
-    <p><span id="dev-name">Mark Levinson 585.5</span> <span id="dev-sub">ansluter…</span></p>
+    <p><span id="dev-name"></span> <span id="dev-sub">ansluter…</span></p>
   </div>
   <div class="source" role="radiogroup" aria-label="Källa" id="source">
     <button role="radio" data-v="spotify" aria-checked="true"><i aria-hidden="true"></i>Spotify</button>
@@ -43,7 +43,7 @@
       <div class="cover"><img id="np-cover" alt="" hidden><span class="cover-empty" id="cover-empty" aria-hidden="true"></span></div>
       <figcaption>
         <p class="np-title" id="np-title">Inget spelas</p>
-        <p class="np-artist" id="np-artist">Välj Mark Levinson 585.5 i Spotify-appen</p>
+        <p class="np-artist" id="np-artist">Välj enheten i Spotify-appen</p>
         <p class="np-album" id="np-album"></p>
         <p class="np-format" id="np-format" hidden></p>
       </figcaption>
@@ -77,7 +77,7 @@
       <div class="amp-main">
         <div class="amp-read">
           <p class="amp-vol"><b id="ml-vol-v">–</b><small>dB</small></p>
-          <p class="amp-state" id="ml-state">Söker 585.5 i nätverket…</p>
+          <p class="amp-state" id="ml-state">Söker förstärkaren i nätverket…</p>
         </div>
         <div class="amp-step" id="ml-step" hidden>
           <button class="step" id="ml-down" aria-label="Sänk volymen">−</button>
@@ -158,7 +158,7 @@
         <li data-k="soloist"><i></i>Soloist</li>
         <li data-k="pipewire"><i></i>PipeWire</li>
         <li data-k="usb"><i></i>USB</li>
-        <li data-k="dac"><i></i>585.5</li>
+        <li data-k="dac"><i></i>DAC</li>
       </ol>
     </section>
 
@@ -381,6 +381,13 @@
         <div class="fold-body">
           <dl class="spec" id="sys-kv"></dl>
           <div class="admin dev-ctl">
+            <h4 class="sub">Namn</h4>
+            <form class="names" id="names-form">
+              <label><span>Ansluten till</span><input id="output-name" maxlength="60" autocomplete="off" placeholder=""></label>
+              <label><span>Streamer</span><input id="streamer-name" maxlength="60" autocomplete="off" placeholder=""></label>
+              <button class="btn">Spara namn</button>
+            </form>
+            <p class="fine">Visas överst som "förstärkare via streamer". Lämna tomt för det som identifieras automatiskt. Namnet i Spotify-appen ställs in under Spotify.</p>
             <label class="toggle"><input type="checkbox" id="leds"><span class="toggle-ui" aria-hidden="true"></span><span>Aktivitetslampa</span></label>
             <p class="fine">Den gröna lampan blinkar när SD-kortet läses. Av gör enheten helt mörk.</p>
             <div class="seg net-seg" role="radiogroup" aria-label="Nätverkshastighet" id="net-speed">

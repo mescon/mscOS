@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shlex
+import socket
 
 SVC_USER = "soloist"
 SOLOIST_HOME = "/var/lib/soloist"
@@ -935,3 +936,39 @@ async def local_network() -> tuple[str | None, set[str]]:
         return None, set()
     net = ipaddress.ip_network(f"{a['local']}/{max(int(a['prefixlen']), 22)}", strict=False)
     return str(net), {a["local"]} | ({gw} if gw else set())
+
+
+def _first_line(path: str) -> str:
+    try:
+        with open(path, errors="replace") as f:
+            return f.read().replace("\0", "").strip().splitlines()[0].strip()
+    except (OSError, IndexError):
+        return ""
+
+
+def detect_streamer() -> str:
+    """What this device is: the image's board name (/etc/mscos/board-name, written by the
+    image or the installer: device trees often name the reference board, e.g. a SOtM
+    sMS-200 reports "Cubietech Cubietruck"), else the PC's DMI vendor and model, else the
+    device tree model, else the host name."""
+    n = _first_line("/etc/mscos/board-name")
+    if n:
+        return n
+    vendor, product = _first_line("/sys/class/dmi/id/sys_vendor"), _first_line("/sys/class/dmi/id/product_name")
+    junk = {"", "to be filled by o.e.m.", "default string", "system product name", "system manufacturer"}
+    if product.lower() not in junk:
+        return f"{vendor} {product}".strip() if vendor.lower() not in junk and not product.startswith(vendor) else product
+    return _first_line("/proc/device-tree/model") or socket.gethostname()
+
+
+def detect_dac() -> str:
+    """The DAC as ALSA names it ("HARMAN USB2.0 High-Speed True HD Audio"), or ""."""
+    try:
+        with open("/proc/asound/cards") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return ""
+    for i, line in enumerate(lines):
+        if "USB-Audio" in line and i + 1 < len(lines):
+            return re.split(r" at usb-", lines[i + 1].strip())[0]
+    return ""
