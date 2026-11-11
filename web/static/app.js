@@ -149,6 +149,11 @@ function renderFeatures() {
   $("#amp").hidden = !amp; $("#f-amp").hidden = !amp;
   $("#f-spotify").hidden = !(f.plugins || []).includes("spotify");  // Soloist: key, name, updates
   const led = $("#leds").closest("label"); led.hidden = f.leds === false; led.nextElementSibling.hidden = f.leds === false;
+  // what only Spotify Lossless (Soloist) has: the sample-exact verification, and its build's expiry
+  const solo = (f.plugins || []).includes("spotify");
+  $("#f-ver").hidden = !solo;
+  $('#alert-kinds [data-kind="expiry"]').closest("label").hidden = !solo;
+  $('#alert-kinds [data-kind="verify"]').closest("label").hidden = !solo;
   const b = f.board || {};
   $("#power-note").hidden = b.power_button !== false;
   $("#net-speed").hidden = $("#net-note").hidden = !b.link_mbps;
