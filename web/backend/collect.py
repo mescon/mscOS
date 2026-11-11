@@ -12,6 +12,8 @@ import re
 import shlex
 import socket
 
+from i18n import N_, T, decimal
+
 SVC_USER = "soloist"
 SOLOIST_HOME = "/var/lib/soloist"
 SOLOIST_UNIT = f"{SOLOIST_HOME}/.config/systemd/user/soloist.service"
@@ -459,7 +461,7 @@ def _kernel_config(opt: str) -> str | None:
     return m.group(1) if m else None
 
 
-def optimizations(status: dict, playback: dict, vol_bridge: bool = False) -> list[dict]:
+def optimizations(status: dict, playback: dict, vol_bridge: bool = False, output: str = "") -> list[dict]:
     """Every tuning measure, verified live on the device. state: ok | warn | optional."""
     cmd = read("/proc/cmdline")
     sysi, pw, solo = status.get("system") or {}, status.get("pipewire") or {}, status.get("soloist") or {}
@@ -475,103 +477,103 @@ def optimizations(status: dict, playback: dict, vol_bridge: bool = False) -> lis
     # ---- Kärna och processor
     preempt = "PREEMPT" in os.uname().version and "PREEMPT_NONE" not in os.uname().version
     hz = _kernel_config("HZ")
-    add("Kärna och processor", "kernel", "Låglatenskärna",
-        "Kärnan kan avbrytas mitt i arbete, så ljudtrådar kommer till direkt.",
-        preempt and hz == "1000", f"{'PREEMPT' if preempt else 'Ingen preemption'}, {hz or '?'} Hz")
+    add(T("Kärna och processor"), "kernel", T("Låglatenskärna"),
+        T("Kärnan kan avbrytas mitt i arbete, så ljudtrådar kommer till direkt."),
+        preempt and hz == "1000", f"{'PREEMPT' if preempt else T('Ingen preemption')}, {hz or '?'} Hz")
     rtgs = "rt_group_sched=0" in cmd or _kernel_config("RT_GROUP_SCHED") is None
-    add("Kärna och processor", "rtgroup", "Realtidsschemaläggning tillåten",
-        "Utan detta får PipeWire ingen realtidsprioritet inne i systemd.", rtgs,
-        "Ingen RT-budget per grupp" if rtgs else "RT-budget 0 i cgroups")
+    add(T("Kärna och processor"), "rtgroup", T("Realtidsschemaläggning tillåten"),
+        T("Utan detta får PipeWire ingen realtidsprioritet inne i systemd."), rtgs,
+        T("Ingen RT-budget per grupp") if rtgs else T("RT-budget 0 i cgroups"))
     gov, mhz = sysi.get("governor"), sysi.get("cpu_mhz")
-    add("Kärna och processor", "cpu", "Fast klockfrekvens",
-        "Ingen frekvensväxling som kan ge jitter i bearbetningen.", gov == "performance" and mhz == 960,
+    add(T("Kärna och processor"), "cpu", T("Fast klockfrekvens"),
+        T("Ingen frekvensväxling som kan ge jitter i bearbetningen."), gov == "performance" and mhz == 960,
         f"{mhz} MHz, {gov}")
     usb_irq = [v for k, v in irq.items() if "hci_hcd" in k]
     audio_cpu = {t["cpus"] for t in th}
     split = bool(usb_irq) and all(v.endswith("2") for v in usb_irq) and audio_cpu == {"1"}
-    add("Kärna och processor", "cpu1", "Egen processorkärna för ljud",
-        "USB-avbrott och ljudtrådar på kärna 1, nätverk, SD-kort och panel på kärna 0.", split,
-        "Kärna 1: USB + PipeWire + Soloist" if split else f"Ljud på kärna {', '.join(sorted(audio_cpu)) or '?'}")
+    add(T("Kärna och processor"), "cpu1", T("Egen processorkärna för ljud"),
+        T("USB-avbrott och ljudtrådar på kärna 1, nätverk, SD-kort och panel på kärna 0."), split,
+        T("Kärna 1: USB + PipeWire + Soloist") if split else T("Ljud på kärna {cpus}", cpus=", ".join(sorted(audio_cpu)) or "?"))
     dl = [t for t in th if t["proc"] == "pipewire" and t["name"].startswith("data-loop") and t["policy"] == 1]
     so = [t for t in th if t["proc"] == "soloist" and t["policy"] == 1]
-    add("Kärna och processor", "rt", "Realtidsprioritet",
-        "PipeWires ljudtråd och Soloists renderingstrådar går före allt annat.", bool(dl) and len(so) >= 1,
-        f"PipeWire {max((t['rtprio'] for t in dl), default=0)}, Soloist {max((t['rtprio'] for t in so), default=0)} ({len(so)} {'tråd' if len(so) == 1 else 'trådar'})")
-    add("Kärna och processor", "audit", "Säkerhetsloggning av",
-        "Ingen granskningslogg på varje systemanrop.", "audit=0" in cmd or _kernel_config("AUDIT") is None,
-        "audit=0" if "audit=0" in cmd else "Aktiv")
+    add(T("Kärna och processor"), "rt", T("Realtidsprioritet"),
+        T("PipeWires ljudtråd och Soloists renderingstrådar går före allt annat."), bool(dl) and len(so) >= 1,
+        f"PipeWire {max((t['rtprio'] for t in dl), default=0)}, Soloist {max((t['rtprio'] for t in so), default=0)} ({len(so)} {T('tråd') if len(so) == 1 else T('trådar')})")
+    add(T("Kärna och processor"), "audit", T("Säkerhetsloggning av"),
+        T("Ingen granskningslogg på varje systemanrop."), "audit=0" in cmd or _kernel_config("AUDIT") is None,
+        "audit=0" if "audit=0" in cmd else T("Aktiv"))
 
     # ---- Ljudväg
     pwc = read(PW_CONF)
     locked = re.search(r"default\.clock\.allowed-rates\s*=\s*\[\s*44100\s*\]", pwc) is not None
     live = sink.get("rate")
     rate_ok = (live in (None, 44100)) and locked and all(s.get("rate") in (None, 44100) for s in pw.get("streams", []))
-    add("Ljudväg", "rate", "Ingen omsampling",
-        "PipeWire är låst till 44,1 kHz, samma som Spotify Lossless.", rate_ok,
-        f"Utgång {sink.get('format')} 44,1 kHz" if live else ("Låst till 44,1 kHz" if locked else "Inte låst"))
+    add(T("Ljudväg"), "rate", T("Ingen omsampling"),
+        T("PipeWire är låst till 44,1 kHz, samma som Spotify Lossless."), rate_ok,
+        T("Utgång {format} {khz} kHz", format=sink.get("format"), khz=decimal(44.1)) if live else (T("Låst till {khz} kHz", khz=decimal(44.1)) if locked else T("Inte låst")))
     vol = playback.get("volume")
     sink_ok = sink.get("volume") is None or abs(sink["volume"] - 1) < 1e-6
     if vol_bridge:  # the Spotify slider drives the amplifier; the stream is kept at unity
-        add("Ljudväg", "volume", "Full digital volym",
-            "Spotify-reglaget styr förstärkaren. Strömmen hålls på 100 %, så samplen räknas aldrig om.",
-            sink_ok, f"Spotify {vol if vol is not None else '–'} % styr 585.5, strömmen 100 %")
+        add(T("Ljudväg"), "volume", T("Full digital volym"),
+            T("Spotify-reglaget styr förstärkaren. Strömmen hålls på 100 %, så samplen räknas aldrig om."),
+            sink_ok, T("Spotify {vol} % styr {amp}, strömmen 100 %", vol=vol if vol is not None else "–", amp=output or T("förstärkaren")))
     else:
-        add("Ljudväg", "volume", "Full digital volym",
-            "All volym under 100 % räknar om samplen. Volymen sköts i förstärkaren.", (vol in (None, 100)) and sink_ok,
+        add(T("Ljudväg"), "volume", T("Full digital volym"),
+            T("All volym under 100 % räknar om samplen. Volymen sköts i förstärkaren."), (vol in (None, 100)) and sink_ok,
             f"Spotify {vol if vol is not None else '–'} %, PipeWire {round((sink.get('volume') or 0) * 100)} %")
     norm = solo.get("normalization")
-    add("Ljudväg", "norm", "Volymnormalisering av",
-        "Spotify sänker annars vissa låtar med flera dB.", norm is False,
-        "Av" if norm is False else ("På" if norm else "Okänt"))
+    add(T("Ljudväg"), "norm", T("Volymnormalisering av"),
+        T("Spotify sänker annars vissa låtar med flera dB."), norm is False,
+        T("Av") if norm is False else (T("På") if norm else T("Okänt")))
     wp = read(WP_CONF)
     tsched = "disable-tsched" in wp and re.search(r"api\.alsa\.disable-tsched\s*=\s*true", wp)
-    add("Ljudväg", "tsched", "Avbrottsstyrd USB-matning",
-        "DAC:ens egna avbrott styr flödet i stället för en uppskattande timer.", bool(tsched),
-        "period 1024, headroom 1024" if tsched else "Timerstyrd")
+    add(T("Ljudväg"), "tsched", T("Avbrottsstyrd USB-matning"),
+        T("DAC:ens egna avbrott styr flödet i stället för en uppskattande timer."), bool(tsched),
+        "period 1024, headroom 1024" if tsched else T("Timerstyrd"))
     q = top.get("quantum")
     mq = re.search(r"default\.clock\.quantum\s*=\s*(\d+)", pwc)
     q = q or (int(mq.group(1)) if mq else None)
-    add("Ljudväg", "quantum", "Rymlig buffert",
-        "1024 sampel ger marginal mot avbrott utan att påverka ljudet.", q == 1024,
-        f"{q} sampel ({round(q / 44.1)} ms)" if q else "–")
-    add("Ljudväg", "pro", "Rå ljudprofil",
-        "Pro-audio-profilen: ingen kanalmixning, ingen dither, inbyggt ljud avstängt.",
+    add(T("Ljudväg"), "quantum", T("Rymlig buffert"),
+        T("1024 sampel ger marginal mot avbrott utan att påverka ljudet."), q == 1024,
+        T("{n} sampel ({ms} ms)", n=q, ms=round(q / 44.1)) if q else "–")
+    add(T("Ljudväg"), "pro", T("Rå ljudprofil"),
+        T("Pro-audio-profilen: ingen kanalmixning, ingen dither, inbyggt ljud avstängt."),
         "pro-audio" in wp and "dither.method" in wp, "pro-audio, S32LE")
 
     # ---- Störningsfrihet
     zones = [z for z in glob.glob("/sys/class/thermal/thermal_zone*") if read(f"{z}/type").strip() == "cpu-thermal"]
     th_ok = not zones or all(read(f"{z}/mode").strip() == "disabled" for z in zones)
-    add("Störningsfrihet", "thermal", "Ingen termoavläsning",
-        "A20:s sensor blockerar processorn i upp till en sekund per avläsning.", th_ok,
-        "Sensorn borttagen" if not zones else ("Avstängd" if th_ok else "Pollas"))
+    add(T("Störningsfrihet"), "thermal", T("Ingen termoavläsning"),
+        T("A20:s sensor blockerar processorn i upp till en sekund per avläsning."), th_ok,
+        T("Sensorn borttagen") if not zones else (T("Avstängd") if th_ok else T("Pollas")))
     dt_ok = read("/proc/device-tree/soc/hdmi@1c16000/status").strip("\0\n") == "disabled"
     nmods = max(0, len(read("/proc/modules").splitlines()))
-    add("Störningsfrihet", "dt", "Oanvänd hårdvara avstängd",
-        "HDMI, GPU, video, SATA, Wi-Fi och Bluetooth får inga klockor och drivrutiner.", dt_ok,
-        f"{nmods} kärnmoduler laddade")
+    add(T("Störningsfrihet"), "dt", T("Oanvänd hårdvara avstängd"),
+        T("HDMI, GPU, video, SATA, Wi-Fi och Bluetooth får inga klockor och drivrutiner."), dt_ok,
+        T("{n} kärnmoduler laddade", n=nmods))
     cache = any(l.split()[1] == f"{SOLOIST_HOME}/.cache" and l.split()[2] == "tmpfs"
                 for l in read("/proc/mounts").splitlines() if len(l.split()) > 2)
-    add("Störningsfrihet", "cache", "Strömningscache i RAM",
-        "Inga skrivningar till SD-kortet under uppspelning.", cache, "tmpfs 400 MB" if cache else "På SD-kortet")
+    add(T("Störningsfrihet"), "cache", T("Strömningscache i RAM"),
+        T("Inga skrivningar till SD-kortet under uppspelning."), cache, "tmpfs 400 MB" if cache else T("På SD-kortet"))
     wants = "/etc/systemd/system/timers.target.wants"
     active_t = [t for t in QUIET_TIMERS if os.path.exists(f"{wants}/{t}")]
-    add("Störningsfrihet", "timers", "Inga bakgrundsjobb under lyssning",
-        "Automatiska apt-, man-db- och diskkontroller är avstängda; underhåll sker 04:30–04:45.",
-        not active_t, "Avstängda" if not active_t else f"{len(active_t)} timers aktiva")
+    add(T("Störningsfrihet"), "timers", T("Inga bakgrundsjobb under lyssning"),
+        T("Automatiska apt-, man-db- och diskkontroller är avstängda; underhåll sker 04:30–04:45."),
+        not active_t, T("Avstängda") if not active_t else T("{n} timers aktiva", n=len(active_t)))
     sp = (sysi.get("net") or {}).get("speed_mbps")
-    add("Störningsfrihet", "net", "Nätverk i 100 Mbit/s",
-        "Lägre länkhastighet ger mindre elektriskt brus; räcker gott för Lossless.", sp == 100,
+    add(T("Störningsfrihet"), "net", T("Nätverk i 100 Mbit/s"),
+        T("Lägre länkhastighet ger mindre elektriskt brus; räcker gott för Lossless."), sp == 100,
         f"{sp} Mbit/s" if sp else "–", optional=True)
-    add("Störningsfrihet", "overlay", "Skrivskyddat system",
-        "SD-kortet tål strömavbrott och systemet är identiskt efter varje start.",
-        bool(sysi.get("root_overlay")), "På" if sysi.get("root_overlay") else "Av", optional=True)
+    add(T("Störningsfrihet"), "overlay", T("Skrivskyddat system"),
+        T("SD-kortet tål strömavbrott och systemet är identiskt efter varje start."),
+        bool(sysi.get("root_overlay")), T("På") if sysi.get("root_overlay") else T("Av"), optional=True)
     return items
 
 
 # --------------------------------------------------------------------------- DAC detail (the /dacinfo/ view)
 # Which socket on the sMS-200Ultra's rear panel each A20 USB controller feeds.
 PORTS = {"1c1c000.usb": "Audio USB", "1c1c400.usb": "Audio USB",
-         "1c14000.usb": "USB (via intern hubb)", "1c14400.usb": "USB (via intern hubb)"}
+         "1c14000.usb": N_("USB (via intern hubb)"), "1c14400.usb": N_("USB (via intern hubb)")}
 UAC = {0x20: "USB Audio Class 2.0", 0x00: "USB Audio Class 1.0", 0x30: "USB Audio Class 3.0"}
 
 
@@ -661,10 +663,10 @@ async def dac_detail() -> dict:
         "firmware": (lambda b: f"{int(b[:2], 16)}.{b[2:]}" if len(b) == 4 else b)(sysf("bcdDevice")),
         "usb_version": sysf("version"), "max_power": sysf("bMaxPower"),
         "speed_mbps": int(float(sysf("speed") or 0)),
-        "controller": ctrl, "port": PORTS.get(ctrl, ctrl),
+        "controller": ctrl, "port": T(PORTS.get(ctrl, ctrl)),
         "host": "EHCI (USB 2.0)" if "1c1c000" in ctrl or "1c14000" in ctrl else "OHCI (USB 1.1)" if ctrl else "",
         "via_hub": "1c14" in ctrl,
-        "uac": UAC.get(proto, f"protokoll {proto:#x}" if proto is not None else "–"),
+        "uac": UAC.get(proto, T("protokoll {proto}", proto=f"{proto:#x}") if proto is not None else "–"),
         "altset": int(cur_alt.group(1)) if cur_alt else None,
         "packet_size": int(pk.group(1)) if pk else None,
         **ep,
@@ -852,7 +854,7 @@ async def set_source(src: str) -> dict:
     """Hand the DAC to Spotify or to Roon. Returns what is running afterwards."""
     if src == "roon":
         if not await roon_installed():
-            raise RuntimeError("Roon Bridge är inte installerat")
+            raise RuntimeError(N_("Roon Bridge är inte installerat"))
         rc, _, err = await run(["systemctl", "--user", "stop", *reversed(SPOTIFY_UNITS)], as_user=True, timeout=60)
         released = await _wait_released()
         rc2, _, err2 = await run(["systemctl", "start", ROON_UNIT], timeout=60)

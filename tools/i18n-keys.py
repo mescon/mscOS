@@ -1,5 +1,6 @@
-"""Extract translation keys: tr("...") / tr`...` in JS files, and static texts in index.html.
-Usage: i18n_keys.py <static dir> [en.json]  -> prints keys missing from en.json (or all)"""
+"""Extract translation keys: tr("...") / tr`...` in the panel's JS, static texts in index.html,
+and T("...") / N_("...") in the backend (web/backend, next to the static dir).
+Usage: i18n-keys.py <static dir> [en.json]  -> prints keys missing from en.json (or all)"""
 import re, sys, json, html
 
 root = sys.argv[1]
@@ -36,6 +37,15 @@ def js_keys(s):
 
 for f in ("app.js",):
     keys += js_keys(open(f"{root}/{f}").read())
+
+import glob, ast
+for f in glob.glob(f"{root}/../backend/**/*.py", recursive=True):
+    for node in ast.walk(ast.parse(open(f).read())):
+        if isinstance(node, ast.Call) and getattr(node.func, "id", "") in ("T", "N_") and node.args:
+            for c in ast.walk(node.args[0]):  # also both arms of T("a" if x else "b")
+                if isinstance(c, ast.Constant) and isinstance(c.value, str):
+                    keys.append(c.value)
+        # module names and descriptions carry their own translations ({"sv": ..., "en": ...})
 
 s = open(f"{root}/index.html").read()
 body = s[s.index("<body"):]

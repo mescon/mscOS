@@ -22,6 +22,8 @@ import time
 
 import aiohttp
 
+from i18n import T
+
 PORT = 7701
 EOL = b"\r"
 
@@ -63,12 +65,12 @@ class Levinson:
         if self.connected:
             return
         if not self.host:
-            raise LevinsonError("ingen adress")
+            raise LevinsonError(T("ingen adress"))
         try:
             self._r, self._w = await asyncio.wait_for(asyncio.open_connection(self.host, PORT), self.timeout)
         except (OSError, asyncio.TimeoutError) as e:
             self._r = self._w = None
-            raise LevinsonError(f"ingen kontakt med {self.host}:{PORT} ({e})") from e
+            raise LevinsonError(T("ingen kontakt med {host} ({error})", host=f"{self.host}:{PORT}", error=e)) from e
         # A powered-off amplifier or a pulled cable sends no FIN: detect it within ~10 s
         # instead of TCP's minutes of retransmission, so commands are not silently lost.
         sock = self._w.get_extra_info("socket")
@@ -143,7 +145,7 @@ class Levinson:
                 await self._w.drain()
             except OSError as e:
                 await self.close()
-                raise LevinsonError(f"sändningen misslyckades ({e})") from e
+                raise LevinsonError(T("sändningen misslyckades ({error})", error=e)) from e
             if not expect:
                 return None
             end = time.monotonic() + wait
@@ -153,7 +155,7 @@ class Levinson:
                 except asyncio.TimeoutError:
                     break
                 if line.strip().upper() == "EH?":
-                    raise LevinsonError(f"förstärkaren känner inte igen {code}")
+                    raise LevinsonError(T("förstärkaren känner inte igen {code}", code=code))
                 if re.search(expect, line):
                     return line
             return None
@@ -169,7 +171,7 @@ class Levinson:
 
     async def set_input(self, name: str):
         if name not in INPUT_CODE:
-            raise LevinsonError(f"okänd ingång {name}")
+            raise LevinsonError(T("okänd ingång {name}", name=name))
         await self.send(INPUT_CODE[name])
         self.input, self.power = name, True
 
@@ -212,7 +214,7 @@ class Levinson:
                 self.muted = d["muted"]
                 if not d["muted"]:
                     return
-        raise LevinsonError("mute gick inte att slå av")
+        raise LevinsonError(T("mute gick inte att slå av"))
 
     async def read_display(self) -> dict | None:
         """What the front-panel display shows, via the unit's own web remote.

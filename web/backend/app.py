@@ -30,6 +30,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bitcheck  # noqa: E402
 from auth import Auth  # noqa: E402
 import collect  # noqa: E402
+import i18n  # noqa: E402
+from i18n import T  # noqa: E402
 import plugins as pluginlib  # noqa: E402
 from volbridge import VolumeBridge  # noqa: E402
 
@@ -138,7 +140,8 @@ class Hub:
         self.tests = collections.deque(maxlen=200)  # verification log, manual and automatic
         self.settings: dict = {"auto_verify": True, "alerts": True, "leds": True, "net_speed": 100,
                                "spotify_vol_to_amp": True, "soloist_normalization": False,
-                               "source": "spotify"}  # who owns the DAC: spotify | roon
+                               "source": "spotify",  # who owns the DAC: spotify | roon
+                               "language": "en"}  # system language (alerts); the panel follows the browser
         # 30 s samples, 24 h: the DAC's measured clock and the supply rail
         self.clock = collections.deque(maxlen=24 * 60 * 2)
         self.supply = collections.deque(maxlen=24 * 60 * 2)
@@ -271,7 +274,10 @@ class Hub:
             pass
         try:
             with open(os.path.join(STATE_DIR, "settings.json")) as f:
-                self.settings.update(json.load(f))
+                saved = json.load(f)
+            self.settings.update(saved)
+            if "language" not in saved:  # an install from before the panel had languages
+                self.settings["language"] = "sv"
         except (OSError, ValueError):
             pass
 
@@ -352,7 +358,7 @@ class Hub:
         """Send a command. With wait, return Soloist's error or command_result if one arrives
         within that time (None: accepted without complaint)."""
         if not self.soloist_ws:
-            raise web.HTTPServiceUnavailable(text="Soloist svarar inte")
+            raise web.HTTPServiceUnavailable(text=T("Soloist svarar inte"))
         if not wait:
             await self.soloist_ws.send(json.dumps({"type": "command", **msg}))
             return None
@@ -505,8 +511,9 @@ class Hub:
         # Soloist (re)starts a stream or changes volume; recordings of the sink show no gaps then.
         n = point["dac"]
         if playing and n:
-            await self.alert("dropouts", "Avbrott i ljudet",
-                             f"{n} avbrott under uppspelning kl {time.strftime('%H:%M')}. Se avbrottshistoriken i panelen.",
+            await self.alert("dropouts", T("Avbrott i ljudet"),
+                             T("{n} avbrott under uppspelning kl {time}. Se avbrottshistoriken i panelen.",
+                               n=n, time=time.strftime("%H:%M")),
                              cooldown=3600)
 
     # ---- alerts, delivered by the modules that are a transport (Home Assistant, ...)
@@ -536,16 +543,16 @@ class Hub:
         dac = st.get("dac") or {}
         solo = st.get("soloist") or {}
         if self._held("dac", not dac.get("present"), 60):
-            await self.alert("dac", "DAC:en hittas inte",
-                             "DAC:en syns inte längre på USB. Kontrollera kabeln och att DAC:en är på.")
+            await self.alert("dac", T("DAC:en hittas inte"),
+                             T("DAC:en syns inte längre på USB. Kontrollera kabeln och att DAC:en är på."))
         if self._held("soloist", self.settings.get("source") == "spotify"
                       and solo.get("service") not in (None, "active"), 120):
-            await self.alert("soloist", "Soloist har stannat",
-                             f"Spotify-tjänsten är {solo.get('service')}. Starta om den under System i panelen.")
+            await self.alert("soloist", T("Soloist har stannat"),
+                             T("Spotify-tjänsten är {state}. Starta om den under System i panelen.", state=solo.get("service")))
         days = solo.get("days_left")
         if days is not None and days <= 14:
-            await self.alert("expiry", "Soloist-bygget går snart ut",
-                             f"{days} dagar kvar. Nattens uppdatering har inte hittat en nyare version; prova Sök ny version i panelen.",
+            await self.alert("expiry", T("Soloist-bygget går snart ut"),
+                             T("{days} dagar kvar. Nattens uppdatering har inte hittat en nyare version; prova Sök ny version i panelen.", days=days),
                              cooldown=24 * 3600)
 
     # ---- what the current track really is (Soloist does not say: measure it)
@@ -621,7 +628,7 @@ class Hub:
     async def run_audio_test(self, secs: int, auto: bool = False):
         sink = (self.status.get("pipewire") or {}).get("sink") or {}
         if not sink.get("name"):
-            raise web.HTTPConflict(text="Ingen USB-DAC hittades i PipeWire")
+            raise web.HTTPConflict(text=T("Ingen USB-DAC hittades i PipeWire"))
         job = {"name": "audio-test", "running": True, "output": "", "rc": None, "started": time.time(),
                "seconds": secs, "auto": auto}
         self.jobs["audio-test"] = job
@@ -657,9 +664,10 @@ class Hub:
                     self.tests.append({k: res.get(k) for k in ("t", "auto", "verdict", "bits", "gain_db", "seconds", "track")}
                                       | {"gaps": len(res.get("gaps") or [])})
                     if res.get("verdict") != "bitperfect" or res.get("gaps"):
-                        what = "avbrott" if res.get("verdict") == "bitperfect" else f"resultat: {res.get('verdict')}"
-                        await self.alert("verify", "Verifieringen hittade avvikelser",
-                                         f"{'Automatisk' if auto else 'Manuell'} verifiering kl {time.strftime('%H:%M')}: {what}.")
+                        what = T("avbrott") if res.get("verdict") == "bitperfect" else T("resultat: {verdict}", verdict=res.get("verdict"))
+                        await self.alert("verify", T("Verifieringen hittade avvikelser"),
+                                         T("Automatisk verifiering kl {time}: {what}." if auto else "Manuell verifiering kl {time}: {what}.",
+                                           time=time.strftime("%H:%M"), what=what))
                 job["result"] = res
                 job["rc"] = 0
             except Exception as e:  # report, never crash the server
@@ -722,7 +730,7 @@ class Hub:
     # ---- jobs: long-running commands with streamed output
     async def run_job(self, name: str, cmd: list[str] | str, as_user=False):
         if self.jobs.get(name, {}).get("running"):
-            raise web.HTTPConflict(text=f"{name} pågår redan")
+            raise web.HTTPConflict(text=T("{name} pågår redan", name=name))
         job = {"name": name, "running": True, "output": "", "rc": None, "started": time.time()}
         self.jobs[name] = job
 
@@ -769,9 +777,9 @@ def num(v, lo: float, hi: float, what: str, integer: bool = False):
     try:
         x = float(v)
     except (TypeError, ValueError, OverflowError):
-        raise web.HTTPBadRequest(text=f"{what}: ange ett tal")
+        raise web.HTTPBadRequest(text=T("{what}: ange ett tal", what=T(what)))
     if not math.isfinite(x):
-        raise web.HTTPBadRequest(text=f"{what}: ange ett tal")
+        raise web.HTTPBadRequest(text=T("{what}: ange ett tal", what=T(what)))
     x = max(lo, min(hi, x))
     return int(round(x)) if integer else round(x, 1)
 
@@ -815,32 +823,32 @@ async def soloist_command(request):
                "set_repeat_context", "set_repeat_track", "get_state", "get_queue", "activate",
                "deactivate", "add_to_queue"}
     if c not in allowed:
-        raise web.HTTPBadRequest(text="okänt kommando")
+        raise web.HTTPBadRequest(text=T("okänt kommando"))
     uri = b.get("uri")
     if c == "add_to_queue" or uri is not None:
         m = SPOTIFY_URI.fullmatch(uri) if isinstance(uri, str) else None
         if not m:
-            raise web.HTTPBadRequest(text="Ogiltig Spotify-adress. Ange till exempel spotify:album:<22 tecken>.")
+            raise web.HTTPBadRequest(text=T("Ogiltig Spotify-adress. Ange till exempel spotify:album:<22 tecken>."))
         if c == "add_to_queue" and m.group(1) != "track":
-            raise web.HTTPBadRequest(text="Bara enskilda spår kan läggas i kön (spotify:track:…).")
+            raise web.HTTPBadRequest(text=T("Bara enskilda spår kan läggas i kön (spotify:track:…)."))
     msg = {k: v for k, v in b.items() if k in ("command", "position_ms", "volume", "enabled", "uri", "limit")}
     if not (c == "play" and uri) and c not in ("add_to_queue", "deactivate", "activate"):
         await hub.soloist_cmd(msg)  # the panel's own buttons: fire and forget, as before
         return ok()
     # From Home Assistant (voice assistants): say what actually happened.
     if hub.settings.get("source") == "roon":
-        raise web.HTTPConflict(text="Stereon är inställd på Roon")
+        raise web.HTTPConflict(text=T("Stereon är inställd på Roon"))
     if not hub.soloist_ws:
-        raise web.HTTPServiceUnavailable(text="Soloist svarar inte")
+        raise web.HTTPServiceUnavailable(text=T("Soloist svarar inte"))
     if not hub.auth.get("logged_in"):
-        raise web.HTTPConflict(text="Soloist är inte inloggad på Spotify. Välj enheten i Spotify-appen en gång.")
+        raise web.HTTPConflict(text=T("Soloist är inte inloggad på Spotify. Välj enheten i Spotify-appen en gång."))
     if c == "play":
         if not hub.auth.get("is_active"):
             r = await hub.soloist_cmd({"command": "activate"}, wait=1.5)
             if r and r.get("type") == "error":
                 raise web.HTTPBadGateway(text=f"Soloist: {r.get('message')}")
             if not await hub.wait_active():
-                raise web.HTTPGatewayTimeout(text="Soloist blev inte aktiv på Spotify")
+                raise web.HTTPGatewayTimeout(text=T("Soloist blev inte aktiv på Spotify"))
         r = await hub.soloist_cmd(msg, wait=2.0)
         if not (r and r.get("type") == "error"):
             hub.play_started(force=True)  # wake the amplifier, select this device's input
@@ -916,7 +924,7 @@ async def soloist_update(request):
 async def soloist_name(request):
     name = str((await body(request)).get("name", "")).strip()
     if not re.fullmatch(r"[\w .\-åäöÅÄÖ]{1,40}", name):
-        raise web.HTTPBadRequest(text="Namnet får vara 1–40 tecken: bokstäver, siffror, mellanslag, punkt och bindestreck.")
+        raise web.HTTPBadRequest(text=T("Namnet får vara 1–40 tecken: bokstäver, siffror, mellanslag, punkt och bindestreck."))
     p = collect.SOLOIST_UNIT
     text = collect.read(p)
     text = re.sub(r'--device-name\s+"[^"]*"', f'--device-name "{name}"', text)
@@ -932,7 +940,7 @@ async def soloist_name(request):
 async def soloist_normalization(request):
     enabled = bool((await body(request)).get("enabled"))
     if not collect.prefs_paths():
-        raise web.HTTPConflict(text="Soloist har inte loggat in än. Anslut från Spotify-appen först.")
+        raise web.HTTPConflict(text=T("Soloist har inte loggat in än. Anslut från Spotify-appen först."))
     hub.settings["soloist_normalization"] = enabled  # kept for every account, guests too
     await asyncio.get_running_loop().run_in_executor(None, hub.save_settings)
     await apply_normalization(enabled)
@@ -956,7 +964,7 @@ async def soloist_apikey(request):
     does not stay up with the new key."""
     key = str((await body(request)).get("key", "")).strip()
     if not re.fullmatch(r"[A-Za-z0-9_\-.:+/=]{16,512}", key):
-        raise web.HTTPBadRequest(text="Nyckeln ser inte giltig ut: 16–512 tecken, bokstäver, siffror och _-.:+/=.")
+        raise web.HTTPBadRequest(text=T("Nyckeln ser inte giltig ut: 16–512 tecken, bokstäver, siffror och _-.:+/=."))
     path = collect.SOLOIST_ENV
     old = collect.read(path)
     if f"SOLOIST_API_KEY={key}" in old:
@@ -985,15 +993,15 @@ async def soloist_apikey(request):
     if active.strip() != "active" or after.strip() != before.strip():
         write(old)
         await user_systemctl("restart", "soloist.service")
-        raise web.HTTPUnprocessableEntity(text="Soloist startade inte med den nya nyckeln. Den tidigare nyckeln är återställd.")
+        raise web.HTTPUnprocessableEntity(text=T("Soloist startade inte med den nya nyckeln. Den tidigare nyckeln är återställd."))
     await hub.refresh_status()
     return ok(changed=True)
 
 
 @routes.get("/api/optimizations")
 async def get_optimizations(request):
-    items = await asyncio.get_running_loop().run_in_executor(
-        None, collect.optimizations, hub.status, hub.playback, hub.vol.enabled())
+    items = await asyncio.to_thread(collect.optimizations, hub.status, hub.playback, hub.vol.enabled(),
+                                    hub.names()["output"])
     return web.json_response({"t": int(time.time()), "items": items})
 
 
@@ -1002,7 +1010,7 @@ async def get_optimizations(request):
 async def audio_test(request):
     secs = max(5, min(int((await body(request)).get("seconds", 30)), 120))
     if hub.jobs.get("audio-test", {}).get("running"):
-        raise web.HTTPConflict(text="En verifiering pågår redan")
+        raise web.HTTPConflict(text=T("En verifiering pågår redan"))
     await hub.run_audio_test(secs)
     return ok(seconds=secs)
 
@@ -1012,16 +1020,16 @@ async def audio_test(request):
 async def set_source(request):
     src = (await body(request)).get("source")
     if src not in ("spotify", "roon"):
-        raise web.HTTPBadRequest(text="Välj spotify eller roon")
+        raise web.HTTPBadRequest(text=T("Välj spotify eller roon"))
     if hub.source_lock.locked():
-        raise web.HTTPConflict(text="Byter redan källa")
+        raise web.HTTPConflict(text=T("Byter redan källa"))
     async with hub.source_lock:
         try:
             r = await collect.set_source(src)
         except RuntimeError as e:
-            raise web.HTTPConflict(text=str(e))
+            raise web.HTTPConflict(text=T(str(e)))
         if not r["ok"]:
-            raise web.HTTPInternalServerError(text=f"Bytet misslyckades: {r['error']}")
+            raise web.HTTPInternalServerError(text=T("Bytet misslyckades: {error}", error=r["error"]))
         hub.settings["source"] = src
         await asyncio.get_running_loop().run_in_executor(None, hub.save_settings)
         hub._was_playing = False
@@ -1061,8 +1069,12 @@ async def set_settings(request):
         if k in b:
             v = re.sub(r"\s+", " ", str(b[k])).strip()
             if len(v) > 60 or any(ord(c) < 32 for c in v):
-                raise web.HTTPBadRequest(text="Namnet får vara högst 60 tecken.")
+                raise web.HTTPBadRequest(text=T("Namnet får vara högst 60 tecken."))
             upd[k] = v  # "" = the detected name
+    if "language" in b:  # the system language: alerts and other texts written without a browser
+        if b["language"] not in i18n.LANGS:
+            raise web.HTTPBadRequest(text=T("Okänt språk"))
+        upd["language"] = b["language"]
     for p in hub.plugins.values():
         p.update_settings(b, upd)
     # all valid: apply
@@ -1107,12 +1119,12 @@ async def plugins_set(request):
     b = await body(request)
     pid = b.get("id")
     if pid not in hub.available_plugins:
-        raise web.HTTPNotFound(text="Okänd modul")
+        raise web.HTTPNotFound(text=T("Okänd modul"))
     en = [p for p in hub.settings.get("plugins", []) if p != pid]
     if b.get("enabled"):
         cls = hub.available_plugins[pid]
         if "amp" in cls.requires and not any(hub.available_plugins[p].kind == "amp" for p in en if p in hub.available_plugins):
-            raise web.HTTPConflict(text="Modulen behöver en förstärkarmodul. Slå på en förstärkare först.")
+            raise web.HTTPConflict(text=T("Modulen behöver en förstärkarmodul. Slå på en förstärkare först."))
         if cls.kind == "amp":  # one volume: another amplifier module goes off
             en = [p for p in en if hub.available_plugins.get(p) is None or hub.available_plugins[p].kind != "amp"]
         en.append(pid)
@@ -1130,11 +1142,11 @@ async def plugins_set(request):
 @routes.post("/api/alerts/test")
 async def alerts_test(request):
     if not any(p.features().get("ha_alerts") for p in hub.plugins.values()):
-        raise web.HTTPConflict(text="Ingen modul skickar larm (slå på Home Assistant under Moduler)")
-    sent = await hub.alert("test", "Testlarm från Mark Levinson 585.5",
-                           "Larmen fungerar. Så här ser det ut när något händer med ljudkedjan.", force=True)
+        raise web.HTTPConflict(text=T("Ingen modul skickar larm (slå på Home Assistant under Moduler)"))
+    sent = await hub.alert("test", T("Testlarm från {name}", name=hub.names()["output"]),
+                           T("Larmen fungerar. Så här ser det ut när något händer med ljudkedjan."), force=True)
     if not sent:
-        raise web.HTTPBadGateway(text="Home Assistant tog inte emot larmet")
+        raise web.HTTPBadGateway(text=T("Home Assistant tog inte emot larmet"))
     return ok()
 
 
@@ -1167,13 +1179,13 @@ def _login_response(request, token: str):
 
 def _check_new_password(pw: str):
     if len(pw) < 8:
-        raise web.HTTPBadRequest(text="Lösenordet behöver minst 8 tecken.")
+        raise web.HTTPBadRequest(text=T("Lösenordet behöver minst 8 tecken."))
 
 
 @routes.post("/api/auth/setup")
 async def auth_setup(request):
     if AUTH.configured:
-        raise web.HTTPConflict(text="Ett lösenord finns redan. Logga in.")
+        raise web.HTTPConflict(text=T("Ett lösenord finns redan. Logga in."))
     pw = str((await body(request)).get("password", ""))
     _check_new_password(pw)
     await asyncio.get_running_loop().run_in_executor(None, AUTH.set_password, pw)
@@ -1188,12 +1200,12 @@ async def auth_login(request):
     pw = str((await body(request)).get("password", ""))
     async with LOGIN_LOCK:
         if AUTH.throttled():
-            raise web.HTTPTooManyRequests(text="För många felaktiga försök. Vänta tio minuter.")
+            raise web.HTTPTooManyRequests(text=T("För många felaktiga försök. Vänta tio minuter."))
         good = await asyncio.get_running_loop().run_in_executor(None, AUTH.verify, pw)
         if not good:
             AUTH.failed()
             await asyncio.sleep(1)
-            raise web.HTTPUnauthorized(text="Fel lösenord.")
+            raise web.HTTPUnauthorized(text=T("Fel lösenord."))
     return _login_response(request, AUTH.new_session())
 
 
@@ -1210,7 +1222,7 @@ async def auth_password(request):
     b = await body(request)
     if not await asyncio.get_running_loop().run_in_executor(None, AUTH.verify, str(b.get("current", ""))):
         AUTH.failed()
-        raise web.HTTPUnauthorized(text="Nuvarande lösenord stämmer inte.")
+        raise web.HTTPUnauthorized(text=T("Nuvarande lösenord stämmer inte."))
     pw = str(b.get("password", ""))
     _check_new_password(pw)
     await asyncio.get_running_loop().run_in_executor(None, AUTH.set_password, pw)
@@ -1238,7 +1250,7 @@ async def restart_audio(request):
     rc, _, err = await collect.run(["systemctl", "--user", "restart", "pipewire.service", "wireplumber.service",
                                     "soloist.service"], as_user=True, timeout=60)
     if rc:
-        raise web.HTTPInternalServerError(text=f"Omstarten misslyckades: {err.strip()[:200]}")
+        raise web.HTTPInternalServerError(text=T("Omstarten misslyckades: {error}", error=err.strip()[:200]))
     return ok()
 
 
@@ -1248,7 +1260,7 @@ USB_LOCK = asyncio.Lock()
 @routes.post("/api/system/usb-reconnect")
 async def usb_reconnect(request):
     if USB_LOCK.locked():
-        raise web.HTTPConflict(text="DAC:n ansluts redan på nytt")
+        raise web.HTTPConflict(text=T("DAC:n ansluts redan på nytt"))
     async with USB_LOCK:
         r = await collect.usb_reconnect()
     hub._dac_cache = (0.0, None)
@@ -1266,7 +1278,7 @@ async def updates(request):
 @routes.post("/api/system/upgrade")
 async def upgrade(request):
     if overlay_active():
-        raise web.HTTPConflict(text="Stäng av skrivskyddet först. Med skrivskyddat system försvinner uppdateringar vid omstart.")
+        raise web.HTTPConflict(text=T("Stäng av skrivskyddet först. Med skrivskyddat system försvinner uppdateringar vid omstart."))
     await hub.run_job("system-upgrade", "apt-get update && apt-get -y -o Dpkg::Options::=--force-confold full-upgrade && apt-get -y autoremove")
     return ok()
 
@@ -1278,12 +1290,12 @@ async def overlay(request):
         cmd = ("set -e; dpkg -s overlayroot >/dev/null 2>&1 || apt-get install -y overlayroot; "
                "sed -i 's/^overlayroot=.*/overlayroot=\"tmpfs:recurse=0\"/' /etc/overlayroot.conf; "
                "grep -q '^overlayroot=\"tmpfs' /etc/overlayroot.conf; "
-               "update-initramfs -u; echo 'Klart. Starta om enheten för att aktivera skrivskyddet.'")
+               "update-initramfs -u; echo '" + T("Klart. Starta om enheten för att aktivera skrivskyddet.") + "'")
     else:
         cmd = ("set -e; if [ -d /media/root-ro/etc ]; then mount -o remount,rw /media/root-ro; "
                "sed -i 's/^overlayroot=.*/overlayroot=\"\"/' /media/root-ro/etc/overlayroot.conf; "
                "mount -o remount,ro /media/root-ro; else sed -i 's/^overlayroot=.*/overlayroot=\"\"/' /etc/overlayroot.conf; fi; "
-               "echo 'Klart. Starta om enheten för att stänga av skrivskyddet.'")
+               "echo '" + T("Klart. Starta om enheten för att stänga av skrivskyddet.") + "'")
     await hub.run_job("overlay", cmd)
     return ok()
 
@@ -1342,16 +1354,26 @@ def _host_only(host: str) -> str:
 
 
 @web.middleware
+async def request_language(request, handler):
+    """Texts in the answer follow the panel's language (its cookie) or the browser's."""
+    token = i18n.use(i18n.from_request(request))
+    try:
+        return await handler(request)
+    finally:
+        i18n._lang.reset(token)
+
+
+@web.middleware
 async def only_via_proxy(request, handler):
     if not PUBLIC_URL:
         # Local mode. DNS rebinding defence: a page on another site can point its own name at
         # this device; then Origin and Host agree, so the Host itself must be one of ours.
         if _host_only(request.host or "") not in await own_names():
-            raise web.HTTPMisdirectedRequest(text="Okänt värdnamn. Öppna panelen med enhetens namn eller IP-adress.")
+            raise web.HTTPMisdirectedRequest(text=T("Okänt värdnamn. Öppna panelen med enhetens namn eller IP-adress."))
         return await handler(request)
     if _peer(request) not in TRUSTED_PEERS:
         if request.path.startswith("/api/"):
-            raise web.HTTPForbidden(text=f"Använd {PUBLIC_URL}")
+            raise web.HTTPForbidden(text=T("Använd {url}", url=PUBLIC_URL))
         raise web.HTTPPermanentRedirect(PUBLIC_URL + request.path_qs)
     return await handler(request)
 
@@ -1367,9 +1389,9 @@ async def same_origin_json(request, handler):
         # plain http, the only scheme the panel serves itself
         own = PUBLIC_URL or f"http://{request.host}"
         if origin and origin.rstrip("/").lower() != own.lower():
-            raise web.HTTPForbidden(text="Begäran kommer från en annan webbplats.")
+            raise web.HTTPForbidden(text=T("Begäran kommer från en annan webbplats."))
         if request.content_type != "application/json":
-            raise web.HTTPUnsupportedMediaType(text="Begäran måste vara JSON.")
+            raise web.HTTPUnsupportedMediaType(text=T("Begäran måste vara JSON."))
     return await handler(request)
 
 
@@ -1378,7 +1400,7 @@ async def require_login(request, handler):
     p = request.path
     guarded = any(p.startswith(x) for x in PROTECTED) and not (p == "/api/settings" and request.method == "GET")
     if guarded and not AUTH.valid(_token(request)):
-        raise web.HTTPUnauthorized(text="Logga in under System för att göra det här.")
+        raise web.HTTPUnauthorized(text=T("Logga in under System för att göra det här."))
     return await handler(request)
 
 
@@ -1425,7 +1447,8 @@ async def on_cleanup(app):
 
 def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    app = web.Application(middlewares=[only_via_proxy, same_origin_json, require_login, cache_headers])
+    i18n.setup(STATIC, lambda: hub.settings.get("language", "en"))
+    app = web.Application(middlewares=[request_language, only_via_proxy, same_origin_json, require_login, cache_headers])
     for p in hub.plugins.values():
         p.routes(routes)
     app.add_routes(routes)

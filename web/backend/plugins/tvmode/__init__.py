@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from aiohttp import web
 
+from i18n import T
 from plugins import Plugin
 
 
@@ -39,7 +40,7 @@ class TvMode(Plugin):
         if "tv_input" in b:
             a = self._amp()
             if a is None or b["tv_input"] not in getattr(a, "inputs", ()):
-                raise web.HTTPBadRequest(text="Okänd ingång")
+                raise web.HTTPBadRequest(text=T("Okänd ingång"))
             upd["tv_input"] = b["tv_input"]
 
     def mode(self) -> str | None:
@@ -67,10 +68,10 @@ class TvMode(Plugin):
             mode = b.get("mode")
             tv = hub.settings.get("tv_input", "RCA3")
             if mode not in ("tv", "stereo", "tv_off"):
-                raise web.HTTPBadRequest(text="mode ska vara tv, stereo eller tv_off")
+                raise web.HTTPBadRequest(text=T("mode ska vara tv, stereo eller tv_off"))
             a = self._amp()
             if a is None or not a.host:
-                raise web.HTTPServiceUnavailable(text="Förstärkaren är inte hittad")
+                raise web.HTTPServiceUnavailable(text=T("Förstärkaren är inte hittad"))
             did: dict = {}
             try:
                 if mode == "tv":
@@ -83,7 +84,7 @@ class TvMode(Plugin):
                 else:
                     did |= await a.standby_if_on(tv)
             except a.errors as e:
-                raise web.HTTPBadGateway(text=f"Förstärkaren: {e}")
+                raise web.HTTPBadGateway(text=T("Förstärkaren: {error}", error=e))
             await a.refresh()
             return hub.ok(mode=mode, did=did, **a.summary())
 

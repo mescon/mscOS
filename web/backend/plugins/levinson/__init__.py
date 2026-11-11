@@ -16,6 +16,7 @@ import time
 from aiohttp import web
 
 import collect
+from i18n import N_, T
 from plugins import AmpPlugin
 from .driver import INPUTS, Levinson, LevinsonError, discover
 
@@ -76,12 +77,12 @@ class LevinsonAmp(AmpPlugin):
     def update_settings(self, b: dict, upd: dict) -> None:
         upd.update({k: bool(b[k]) for k in ("ml_auto_on",) if k in b})
         if "ml_auto_off_min" in b:
-            upd["ml_auto_off_min"] = self.hub.num(b["ml_auto_off_min"], 0, 240, "Standby efter", integer=True)
+            upd["ml_auto_off_min"] = self.hub.num(b["ml_auto_off_min"], 0, 240, N_("Standby efter"), integer=True)
         if "ml_max_db" in b:
-            upd["ml_max_db"] = self.hub.num(b["ml_max_db"], 20, 80, "Högsta volym")
+            upd["ml_max_db"] = self.hub.num(b["ml_max_db"], 20, 80, N_("Högsta volym"))
         if "ml_play_input" in b:
             if b["ml_play_input"] not in INPUTS:
-                raise web.HTTPBadRequest(text="Okänd ingång")
+                raise web.HTTPBadRequest(text=T("Okänd ingång"))
             upd["ml_play_input"] = b["ml_play_input"]
         if "ml_host" in b:
             h = str(b["ml_host"]).strip()
@@ -89,7 +90,7 @@ class LevinsonAmp(AmpPlugin):
                 try:
                     ipaddress.IPv4Address(h)
                 except ValueError:
-                    raise web.HTTPBadRequest(text="Ange en IP-adress, till exempel 192.168.1.150, eller lämna tomt.")
+                    raise web.HTTPBadRequest(text=T("Ange en IP-adress, till exempel 192.168.1.150, eller lämna tomt."))
             upd["ml_host"] = h
 
     async def settings_applied(self, upd: dict) -> None:
@@ -287,15 +288,15 @@ class LevinsonAmp(AmpPlugin):
                     tv = hub.settings.get("tv_input")
                     tv_label = self.label_of(tv) if tv else None
                     if self.bypass(d["text"] if d else "") or (d and tv_label and d["label"] == tv_label):
-                        raise web.HTTPConflict(text="Ingången står i bypass. Volymen ställs på AV-receivern.")
+                        raise web.HTTPConflict(text=T("Ingången står i bypass. Volymen ställs på AV-receivern."))
                 if "volume_db" in b:
-                    await self.ml.set_volume(hub.num(b["volume_db"], 0, 80, "Volym"), self.max_db)
+                    await self.ml.set_volume(hub.num(b["volume_db"], 0, 80, N_("Volym")), self.max_db)
                 if "volume_step_db" in b:
-                    step = hub.num(b["volume_step_db"], -20, 20, "Volymsteg")
+                    step = hub.num(b["volume_step_db"], -20, 20, N_("Volymsteg"))
                     mx = self.max_db
                     cur = await self.ml.read_volume()  # fresh: the remote may have changed it
                     if cur is None:
-                        raise LevinsonError("volymen gick inte att läsa")
+                        raise LevinsonError(T("volymen gick inte att läsa"))
                     # never raise past the ceiling, and a level set higher with the remote only goes down
                     if not (step > 0 and cur >= mx):
                         await self.ml.set_volume(max(0.0, min(mx, cur + step)) if step > 0 else max(0.0, cur + step), max(mx, cur))
@@ -304,7 +305,7 @@ class LevinsonAmp(AmpPlugin):
                 if b.get("mute_toggle"):
                     await self.ml.toggle_mute()
             except LevinsonError as e:
-                raise web.HTTPBadGateway(text=f"585.5: {e}")
+                raise web.HTTPBadGateway(text=T("Förstärkaren: {error}", error=e))
             await self.refresh()
             if "volume_db" in b or "volume_step_db" in b:
                 asyncio.ensure_future(hub.vol.sync_from_amp())  # the Spotify slider follows
@@ -318,7 +319,7 @@ class LevinsonAmp(AmpPlugin):
             await self.ml.set_power(False)
             return {"standby": True}
         return {"standby": False,
-                "reason": "förstärkaren är inte på den ingången" if d and d["on"] else "redan i standby"}
+                "reason": T("förstärkaren är inte på den ingången") if d and d["on"] else T("redan i standby")}
 
     def current_input(self) -> str | None:
         m = self.state or {}

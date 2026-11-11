@@ -12,6 +12,7 @@ import os
 
 from aiohttp import web
 
+from i18n import N_, T
 from plugins import Plugin
 from .driver import SOURCE_RC5, Arcam, ArcamError
 
@@ -38,14 +39,14 @@ class ArcamPlugin(Plugin):
 
     def update_settings(self, b: dict, upd: dict) -> None:
         if "arcam_max_vol" in b:
-            upd["arcam_max_vol"] = self.hub.num(b["arcam_max_vol"], 0, 99, "Arcams volymtak", integer=True)
+            upd["arcam_max_vol"] = self.hub.num(b["arcam_max_vol"], 0, 99, N_("Arcams volymtak"), integer=True)
         if "arcam_host" in b:
             h = str(b["arcam_host"]).strip()
             if h:
                 try:
                     ipaddress.IPv4Address(h)
                 except ValueError:
-                    raise web.HTTPBadRequest(text="Ange Arcams IP-adress, till exempel 192.168.1.176.")
+                    raise web.HTTPBadRequest(text=T("Ange Arcams IP-adress, till exempel 192.168.1.176."))
             upd["arcam_host"] = h
 
     async def settings_applied(self, upd: dict) -> None:
@@ -64,7 +65,7 @@ class ArcamPlugin(Plugin):
         async def arcam_action(request):
             hub = self.hub
             if not self.host:
-                raise web.HTTPNotFound(text="Arcams adress är inte inställd.")
+                raise web.HTTPNotFound(text=T("Arcams adress är inte inställd."))
             b = await hub.body(request)
             try:
                 if "power" in b:
@@ -73,7 +74,7 @@ class ArcamPlugin(Plugin):
                     await self.dev.set_source(str(b["source"]))
                 if "volume" in b:
                     # the panel never goes above the ceiling; the remote can
-                    await self.dev.set_volume(min(hub.num(b["volume"], 0, 99, "Volym", integer=True),
+                    await self.dev.set_volume(min(hub.num(b["volume"], 0, 99, N_("Volym"), integer=True),
                                                   int(hub.settings.get("arcam_max_vol", 50))))
                 if "mute" in b:
                     await self.dev.set_mute(bool(b["mute"]))

@@ -50,6 +50,8 @@ function translateDom(root) {
 export async function initI18n() {
   LANG = chosenLang() || ((navigator.language || "sv").toLowerCase().startsWith("sv") ? "sv" : "en");
   document.documentElement.lang = LANG;
+  // the backend answers in the same language (error messages, the optimizations list)
+  try { document.cookie = `lang=${LANG}; path=/; max-age=31536000; samesite=lax`; } catch (e) {}
   if (LANG === "sv") return;
   try {
     const r = await fetch(`i18n/${LANG}.json`);
