@@ -4,11 +4,13 @@
 Armbian clone (not tracked, ~5 GB):
 
     git clone --depth 1 https://github.com/armbian/build kernel/armbian-build
-    cp -r kernel/userpatches/. kernel/armbian-build/userpatches/
+    cp -r kernel/userpatches/. image/userpatches/. kernel/armbian-build/userpatches/
     cd kernel/armbian-build
     ./compile.sh kernel BOARD=cubietruck BRANCH=current KERNEL_CONFIGURE=no KERNEL_GIT=shallow \
-        KERNEL_BTF=no ENABLE_EXTENSIONS=sotm-audio
+        KERNEL_BTF=no ENABLE_EXTENSIONS=mscos
 
-`extensions/sotm-audio.sh` runs after Armbian's own config hooks, which would otherwise force FTRACE,
+`image/userpatches/extensions/mscos.sh` runs after Armbian's own config hooks, which would otherwise force FTRACE,
 KPROBES and RT_GROUP_SCHED back on. RT_GROUP_SCHED and AUDIT still end up enabled and are switched off
 with the boot arguments `rt_group_sched=0 audit=0`. Built packages land in `armbian-build/output/debs/`.
+
+A whole image (kernel, Debian, the mscOS packages) is built with `image/build.sh <target>`, which does the copying above itself.

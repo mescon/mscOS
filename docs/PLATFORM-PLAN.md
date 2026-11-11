@@ -1,6 +1,17 @@
 # mscOS som distribution: plattformar, bas och plan
 
-Status 2026-11-11: förslag, inget av detta är byggt ännu. Målet är ett musik-OS som andra hifi-entusiaster kan flasha på sin egen enhet och ställa in själva:
+**Status 2026-11-11:** det mesta av planen är byggt. Dokumentet är kvar som bakgrund och resonemang; se [README](../README.md) för vad som finns och vad som är testat.
+
+| Punkt i avsnitt 6 | Läge |
+|---|---|
+| 1. Städa, lokalt läge, licens | klart |
+| 2. Översättning, moduler, generisk DAC | klart (panelen och backend på svenska och engelska; källor, förstärkare och integrationer som moduler). Uppdelningen av `app.js` och `app.py` i mindre filer är påbörjad (`setup.js`, `i18n`, `board`, `plugins/`). |
+| 3. Paket och guide vid första start | klart (`packaging/build.sh`, guiden i panelen). Apt-arkivet publiceras av `.github/workflows/packages.yml` när repot är offentligt och en signeringsnyckel finns. |
+| 4. Avbildningar | `image/build.sh` finns för SOtM, Raspberry Pi, PC och arm64. Ingen avbildning är startad på hårdvara än. |
+| 5. Fler källor | Spotify Connect (go-librespot) och HQPlayer NAA finns som moduler, inte provade på en enhet. UPnP, Squeezelite och AirPlay återstår. |
+| 6. CM6632A-patchen till upstream | återstår. DKMS-paketet finns men är obyggt mot en riktig kärna. |
+
+Ursprunglig plan följer. Målet är ett musik-OS som andra hifi-entusiaster kan flasha på sin egen enhet och ställa in själva:
 
 - med sina egna nycklar och konton, inga av våra,
 - med valfri DAC, där Mark Levinson och Arcam bara är tillval,

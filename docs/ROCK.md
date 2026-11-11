@@ -28,6 +28,6 @@ DSD och DoP sköts i RAAT i user space. mscOS gör redan mer på alla punkter so
 
 ## Infört i mscOS efter jämförelsen (2026-11-10)
 
-1. **RAATServer på ljudkärnan:** `device/raat-cpu` och `raat-cpu.service` flyttar RAATServer till CPU1 när port 9004 svarar. RoonBridge startar ibland om RAATServer, och den nya processen fångas upp vid nästa koll. Det är testat: affinitetsmask 2, 18 trådar.
+1. **RAATServer på ljudkärnan:** `sources/roon/raat-cpu` och `raat-cpu.service` flyttar RAATServer till CPU1 när port 9004 svarar. RoonBridge startar ibland om RAATServer, och den nya processen fångas upp vid nästa koll. Det är testat: affinitetsmask 2, 18 trådar.
 2. **Konsolnivå 0:** `verbosity=0` i `armbianEnv.txt`, så kärnan startar med `loglevel=0`. Det börjar gälla vid nästa omstart.
 3. **RT för RAAT:** RAAT begär det själv, precis som i ROCK. Kontrollera vid första uppspelningen i Roon med `ps -eLo tid,cls,rtprio,psr,comm -p $(pgrep -x RAATServer)` och genom att leta efter `sched_setscheduler` i `/var/roon/RAATServer/Logs/`. Saknas FIFO, gör en motsvarighet till `soloist-rt`.

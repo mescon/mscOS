@@ -13,7 +13,7 @@ Det här gör mscOS för bitperfekt uppspelning utan avbrott på sMS-200Ultra (A
 | `loglevel=0` (`verbosity=0`) | Ingen konsolutskrift från kärnan, som i ROCK |
 | `mscos-dsd` | Rå DSD till CM6632A, se [DSD.md](DSD.md) |
 
-## CPU-delning och avbrott (`device/tune-system.sh`, `device/sotm-tuning`)
+## CPU-delning och avbrott (`core/mscos-setup`, `core/mscos-tuning`, kortprofilen `boards/sotm-sms200ultra.conf`)
 
 - **Klockfrekvens:** governor `performance`, fast 960 MHz.
 - **CPU0** tar allt annat: nätverkets IRQ och RPS, SD-kortet, panelen, sshd och obundna workqueues.
@@ -22,13 +22,13 @@ Det här gör mscOS för bitperfekt uppspelning utan avbrott på sMS-200Ultra (A
 - **Roon Bridge** kör `CPUAffinity=0 1`, eftersom .NET-starten behöver båda kärnorna. Annars startar RoonBridge om RAATServer i en loop.
 - **RAATServer** flyttas till CPU1 av `raat-cpu` (bunden till roonbridge.service) så fort port 9004 svarar. Hela processen flyttas, och nya trådar ärver CPU1. RAAT sätter själv SCHED_FIFO på sina ljudtrådar, och som root lyckas det.
 
-## Hårdvara som stängs av (`device/sotm-lean.dts`)
+## Hårdvara som stängs av (`boards/dts/sotm-lean.dts`)
 
 Enheten kör Cubietrucks device tree. En DT-overlay stänger av LCD, HDMI, GPU och video-avkodaren, SATA, WiFi-SDIO, krypto, PWM, S/PDIF, IR, den analoga codecen, Bluetooth-UART:en och **GPADC**.
 
 Termosensorn i GPADC saknar fungerande IRQ på kortet, så varje avläsning blockerar kärnan i cirka 110 ms. Det gav 3–4 avbrott i ljudet varje sekund. Temperaturen läses i stället från AXP209.
 
-## Ljudkedjan (`device/10-bitperfect.conf`, `device/50-usb-dac.conf`)
+## Ljudkedjan (`core/10-bitperfect.conf`, `core/50-usb-dac.conf`)
 
 - **Fast graf:** PipeWire står på 44,1 kHz, quantum 1024, utan omsampling, dither eller kanalmixning.
 - **Rå hw-enhet:** DAC:n körs i pro-audio-profilen, med S32LE så att 24 bitar går igenom orörda.

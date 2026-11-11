@@ -1197,9 +1197,16 @@ async def set_settings(request):
         if b["language"] not in i18n.LANGS:
             raise web.HTTPBadRequest(text=T("Okänt språk"))
         upd["language"] = b["language"]
+    tz = b.get("timezone")
+    if tz is not None:  # the device's clock zone (logs, the nightly maintenance): the guide sends the browser's
+        if not (isinstance(tz, str) and re.fullmatch(r"[A-Za-z0-9_+\-]+(/[A-Za-z0-9_+\-]+){0,2}", tz)
+                and os.path.isfile(f"/usr/share/zoneinfo/{tz}")):
+            raise web.HTTPBadRequest(text=T("Okänd tidszon"))
     for p in hub.plugins.values():
         p.update_settings(b, upd)
     # all valid: apply
+    if tz is not None:
+        await collect.run(["timedatectl", "set-timezone", tz], timeout=10)
     hub.settings.update(upd)
     if "leds" in upd:
         collect.apply_leds(upd["leds"])

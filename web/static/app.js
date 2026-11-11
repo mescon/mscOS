@@ -1083,4 +1083,9 @@ loadMods();
 
 // ---- language: follow the browser, or a chosen one (per browser); changing reloads the page
 $$("#lang button").forEach((b) => b.setAttribute("aria-checked", b.dataset.v === (chosenLang() || "auto")));
-$("#lang").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setLang(b.dataset.v); });
+$("#lang").addEventListener("click", async (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  // logged in: the device's own texts (alerts to the phone) follow the choice too
+  if (LANGS[b.dataset.v] && !document.body.classList.contains("locked")) { try { await post("/api/settings", { language: b.dataset.v }); } catch {} }
+  setLang(b.dataset.v);
+});

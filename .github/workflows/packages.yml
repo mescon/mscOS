@@ -1,0 +1,70 @@
+# Builds the mscOS Debian packages. On a version tag (v*) they are attached to a GitHub
+# release; with the APT_GPG_KEY secret set, a signed apt repository is also published to
+# GitHub Pages (suite "trixie", component "main"), which is where "apt upgrade" on a
+# device gets new mscOS versions from.
+name: packages
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build packages
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          case "$GITHUB_REF" in refs/tags/v*) export MSCOS_VERSION=$VERSION ;; esac
+          packaging/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debs
+          path: packaging/out/*.deb
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" packaging/out/*.deb --title "mscOS ${GITHUB_REF_NAME#v}" --generate-notes
+
+  apt:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+    env:
+      HAVE_KEY: ${{ secrets.APT_GPG_KEY != '' }}
+    steps:
+      - uses: actions/download-artifact@v4
+        if: env.HAVE_KEY == 'true'
+        with:
+          name: debs
+          path: debs
+      - name: Build the apt repository
+        if: env.HAVE_KEY == 'true'
+        env:
+          APT_GPG_KEY: ${{ secrets.APT_GPG_KEY }}
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q reprepro
+          echo "$APT_GPG_KEY" | gpg --batch --import
+          KEYID=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec/ {print $5; exit}')
+          mkdir -p repo/conf
+          printf 'Origin: mscOS\nLabel: mscOS\nCodename: trixie\nComponents: main\nArchitectures: armhf arm64 amd64\nSignWith: %s\n' "$KEYID" > repo/conf/distributions
+          reprepro -b repo includedeb trixie debs/*.deb
+          gpg --export "$KEYID" > repo/mscos-archive-keyring.pgp
+          rm -rf repo/conf repo/db
+      - uses: actions/upload-pages-artifact@v3
+        if: env.HAVE_KEY == 'true'
+        with:
+          path: repo
+      - uses: actions/deploy-pages@v4
+        if: env.HAVE_KEY == 'true'

@@ -78,7 +78,9 @@ export async function maybeSetup({ access, post, toast }) {
     $("#su-next").disabled = true; $("#su-back").hidden = true;
     $("#su-body").innerHTML = `<p class="setup-lead">${tr("Sparar och startar om panelen…")}</p>`;
     try {
+      let tz; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) {}
       await post("/api/settings", { language: LANG, output_name: st.names.output || "", streamer_name: st.names.streamer || "", setup_done: true });
+      if (tz) await post("/api/settings", { timezone: tz }).catch(() => {});  // the device keeps the browser's time zone
       const want = new Set([...st.sources, ...(st.amp ? [st.amp] : [])]);
       const all = mods.filter((m) => m.kind === "source" || m.kind === "amp");
       for (const m of all) if (m.enabled !== want.has(m.id)) await post("/api/plugins/set", { id: m.id, enabled: want.has(m.id) });

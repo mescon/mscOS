@@ -595,5 +595,6 @@
  ", upp till {0} kHz": ", up to {0} kHz",
  "Steg {0} av {1}": "Step {0} of {1}",
  "Soloist är inte installerat": "Soloist is not installed",
- "Tillbaka": "Back"
+ "Tillbaka": "Back",
+ "Okänd tidszon": "Unknown time zone"
 }

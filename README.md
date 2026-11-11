@@ -1,32 +1,93 @@
 # mscOS
 
-mscOS ("music OS", eller "mescon OS") är operativsystemet för **SOtM sMS-200Ultra** som nätverksspelare till **Mark Levinson Nº585.5**. Det bygger på Armbian (Debian trixie) och har tre mål:
+mscOS ("music OS") turns a small computer into a network music player for a USB DAC: a
+bit-perfect endpoint for Spotify, Roon and HQPlayer, set up and watched from a web panel
+in Swedish or English.
 
-- **Bitperfekt Spotify Lossless:** Soloist och PipeWire, verifierat i panelen.
-- **Roon Bridge med rå DSD** till 585.5:an. Det kräver en egen kärnpatch.
-- **Lugn hårdvara:** ljudet har en egen CPU-kärna och oanvänd hårdvara är avstängd.
+- **Bit-perfect, and it shows it.** The panel measures what actually reaches the DAC:
+  16 or 24 bit, lossless or not, dropouts, the DAC's own clock.
+- **Sources as modules.** One at a time owns the DAC:
+  - Spotify Lossless (Soloist, with your own developer key),
+  - Spotify Connect without a key (go-librespot, 320 kbit/s),
+  - Roon Bridge,
+  - HQPlayer NAA.
+- **Your equipment as modules.** Amplifier volume and inputs over the network (Mark
+  Levinson Nº585/585.5, Arcam), Home Assistant, native DSD for C-Media CM6632A DACs. The
+  core needs none of them: any USB DAC works.
+- **A quiet machine.** One CPU core for audio and the USB interrupts, no frequency
+  scaling, nothing unscheduled while music plays; the panel lists each measure and checks
+  it live.
+- **No keys, no player binaries included.** Players are downloaded on the device from
+  their publishers; keys and accounts are your own.
 
-| Del | Var | Vad |
-|---|---|---|
-| Kärna | `kernel/` | Armbian-bygge med PREEMPT och HZ=1000, plus `kernel/mscos-dsd/` (rå DSD för CM6632A) |
-| System | `device/` | Trimning (CPU-delning, IRQ, DT-overlay, watchdog), Soloist, PipeWire och Roon Bridge |
-| Panel | `web/` | PWA:n på `http://<enhetens namn>.local`: uppspelning, signalväg, DAC, förstärkare, källväxel, API för HA |
-| Verktyg | `tools/` | Testverktyg, bland annat `dsf2u32le.py` (DSF till rå DSD_U32_LE) |
-| Dokumentation | `docs/` | [Optimeringar](docs/OPTIMIZATIONS.md), [DSD](docs/DSD.md), [jämförelse med ROCK](docs/ROCK.md) |
+It is Debian 13 with the mscOS packages on top, built into images with the Armbian
+framework. It started on a SOtM sMS-200ultra, which is still the only board it has been
+tested on; see [status](#status).
 
-Inställningar för den egna installationen (adresser, omvänd proxy) ligger i `/etc/mscos/site.env` på enheten, aldrig i repot.
+## Install
 
-## Vanliga kommandon
+See [docs/INSTALL.md](docs/INSTALL.md). In short: write the image to an SD card, start the
+device on wired network, open `http://mscos.local` and follow the guide. On an existing
+Debian 13 or Armbian system, install the packages instead.
+
+## Status
+
+| | State |
+|---|---|
+| SOtM sMS-200, sMS-200ultra (Allwinner A20) | in daily use; image target `image/build.sh sotm` |
+| Raspberry Pi 4/5, x86-64 PCs, other boards | profiles and image targets exist, **not yet tested on hardware** |
+| Spotify Lossless (Soloist), Roon Bridge | in daily use on the SOtM |
+| Spotify Connect (go-librespot), HQPlayer NAA | modules and install scripts written, **not yet tested on a device** |
+| Native DSD for CM6632A | in use as a kernel patch; the DKMS package is **untested** |
+| Panel in Swedish and English | complete |
+
+Planned: UPnP/OpenHome (Qobuz and Tidal through a control app), Squeezelite, AirPlay.
+Tidal Connect and Qobuz Connect are only offered to certified manufacturers and are not
+part of mscOS. See [docs/PLATFORM-PLAN.md](docs/PLATFORM-PLAN.md) (Swedish) for the reasoning.
+
+## Layout
+
+| Path | What |
+|---|---|
+| `web/` | the panel: `backend/` (Python, aiohttp), `static/` (a PWA without a build step), `backend/plugins/` (modules) |
+| `sources/` | per source: the script that downloads its player on the device, and its systemd units |
+| `core/` | system setup (`mscos-setup`), board detection, boot-time tuning, PipeWire configuration |
+| `boards/` | board profiles: what differs between boards (audio core, interrupts, sensors) |
+| `kernel/` | kernel configuration and the native-DSD patch (`mscos-dsd/`, also as DKMS) |
+| `packaging/` | builds the Debian packages: `mscos-core`, `mscos-panel`, `mscos-dsd-dkms`, `mscos` |
+| `image/` | builds images with the Armbian framework |
+| `docs/` | [install](docs/INSTALL.md), [modules](docs/MODULES.md), and in Swedish: [optimizations](docs/OPTIMIZATIONS.md), [DSD](docs/DSD.md), [compared with ROCK](docs/ROCK.md) |
+
+## Development
 
 ```sh
-MSCOS_HOST=root@<enhet> web/deploy.sh # panelen till enheten (standard root@mscos.local)
-kernel/mscos-dsd/build-module.sh       # snd-usb-audio med DSD-patchen, för den byggda kärnan
-kernel/mscos-dsd/install-module.sh     # installera den (updates/), --remove för originalet
-device/tune-system.sh                  # körs på enheten: systemtrimning
+packaging/build.sh                       # the .deb packages -> packaging/out/
+image/build.sh sotm                      # an image (sotm | rpi | pc | arm64)
+MSCOS_HOST=root@<device> web/deploy.sh   # this checkout onto a device, at the packages' paths
+tools/i18n-keys.py web/static web/static/i18n/en.json   # texts missing from a translation
 ```
 
-## Regler
+Swedish is the source language of the panel: texts are written in Swedish in the code and
+`web/static/i18n/<language>.json` maps them to another language. To add a language, copy
+`en.json`, translate the values and add the language to `LANGS` in `web/static/i18n.js` and
+`web/backend/i18n.py`.
 
-- Inga hemligheter i repot. Spotify-nyckeln finns bara i `.env` och i `/etc/soloist.env` på enheten.
-- Kärnpaketen är spärrade (`apt-mark hold`). En ny kärna kräver att DSD-modulen byggs om, se [DSD](docs/DSD.md).
-- Panelen ska bara nås via LAN eller VPN.
+A module is a Python package in `web/backend/plugins/`; see [docs/MODULES.md](docs/MODULES.md).
+
+## Rules for this repository
+
+- No secrets and nothing from anyone's own installation: no keys, addresses or host
+  names. Site settings live in `/etc/mscos/site.env` on the device, secrets in
+  `/etc/mscos/panel.env` and `/etc/soloist.env`.
+- No player binaries and no keys are redistributed. Spotify's Soloist key is personal and
+  Soloist may not be redistributed; Signalyst's NAA daemon and Roon Bridge are proprietary.
+  Their install scripts download them from the publisher onto the user's device.
+- The panel is made for the local network. Without an HTTPS reverse proxy in front of it,
+  the password crosses the LAN in clear text; do not expose it to the internet.
+
+## License
+
+MIT, see [LICENSE](LICENSE). The kernel patch and module in `kernel/` are
+GPL-2.0-or-later. The fonts (Jost, Cormorant) are under the SIL Open Font License.
+Spotify, Roon, HQPlayer, Mark Levinson, Arcam and SOtM are trademarks of their owners;
+mscOS is not affiliated with or endorsed by any of them.
