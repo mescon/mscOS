@@ -194,7 +194,14 @@ class Hub:
                 self.settings["source"] = self.settings["source"] or "spotify"
             if os.path.exists("/opt/RoonBridge/start.sh") and "roon" not in en:
                 en.append("roon")
-            self.settings["plugins_v"] = 2
+            if os.path.exists("/sys/module/snd_usb_audio/parameters/mscos_dsd") and "cm6632a" not in en:
+                en.append("cm6632a")
+            self.settings["plugins_v"] = 3
+        if self.settings.get("plugins_v", 1) < 3:  # (v2 was sources only)
+            en = self.settings["plugins"]
+            if os.path.exists("/sys/module/snd_usb_audio/parameters/mscos_dsd") and "cm6632a" not in en:
+                en.append("cm6632a")
+            self.settings["plugins_v"] = 3
             try:
                 self.save_settings()
             except OSError:
@@ -1206,6 +1213,10 @@ async def _plugin_list() -> list[dict]:
         d = {"id": pid, "kind": cls.kind, "name": cls.name, "description": cls.description,
              "requires": list(cls.requires), "enabled": pid in hub.settings.get("plugins", []),
              "running": pid in hub.plugins}
+        if pid in hub.plugins:
+            d["status"] = hub.plugins[pid].status()
+        if pid in hub.plugins and cls.options:
+            d["options"] = [{**o, "value": hub.settings.get(o["key"])} for o in cls.options]
         if cls.kind == "source":  # its player is installed on the device, from its publisher
             d.update(terms=cls.terms, terms_url=cls.terms_url,
                      installed=await hub.plugins[pid].installed() if pid in hub.plugins else None)

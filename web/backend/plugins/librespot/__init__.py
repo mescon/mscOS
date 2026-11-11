@@ -51,6 +51,17 @@ class Librespot(SourcePlugin):
              "en": "go-librespot is downloaded from GitHub to this device. It is an independent open-source program, not made or approved by Spotify, and plays 320 kbit/s at most."}
     terms_url = "https://github.com/devgianlu/go-librespot"
     defaults = {"librespot_name": "", "librespot_bitrate": 320, "librespot_volume": "fixed"}
+    options = (
+        {"key": "librespot_name", "type": "text", "label": {"sv": "Namn i Spotify-appen", "en": "Name in the Spotify app"},
+         "help": {"sv": "Tomt: samma namn som det enheten spelar till.", "en": "Empty: the name of what this device plays into."}},
+        {"key": "librespot_bitrate", "type": "select", "label": {"sv": "Kvalitet", "en": "Quality"},
+         "options": [[320, {"sv": "320 kbit/s", "en": "320 kbit/s"}], [160, {"sv": "160 kbit/s", "en": "160 kbit/s"}],
+                     [96, {"sv": "96 kbit/s", "en": "96 kbit/s"}]]},
+        {"key": "librespot_volume", "type": "select", "label": {"sv": "Volym", "en": "Volume"},
+         "options": [["fixed", {"sv": "Fast: ställs på förstärkaren", "en": "Fixed: set on the amplifier"}],
+                     ["software", {"sv": "Spotify-reglaget (digital volym)", "en": "The Spotify slider (digital volume)"}]],
+         "help": {"sv": "Fast volym lämnar samplen orörda.", "en": "Fixed volume leaves the samples untouched."}},
+    )
 
     def __init__(self, hub):
         super().__init__(hub)
@@ -91,21 +102,17 @@ class Librespot(SourcePlugin):
             "",
         ])
 
-    def write_config(self) -> bool:
-        """Write config.yml if it differs; True if it changed."""
-        path = f"{CONF_DIR}/config.yml"
-        text = self.config()
-        if collect.read(path) == text:
-            return False
-        import pwd
-        pw = pwd.getpwnam(collect.SVC_USER)
-        os.makedirs(CONF_DIR, exist_ok=True)
-        os.chown(CONF_DIR, pw.pw_uid, pw.pw_gid)
-        with open(path + ".tmp", "w") as f:
-            f.write(text)
-        os.chown(path + ".tmp", pw.pw_uid, pw.pw_gid)
-        os.replace(path + ".tmp", path)
-        return True
+    async def write_config(self) -> bool:
+        """Write config.yml if it differs; True if it changed. Written as the audio user, never
+        as root: the directory is theirs, and root must not follow whatever they put there."""
+        script = ('umask 077; mkdir -p "$1" && cat > "$1/config.yml.tmp" || exit 1; '
+                  'if cmp -s "$1/config.yml.tmp" "$1/config.yml"; then rm -f "$1/config.yml.tmp"; exit 3; fi; '
+                  'mv -f "$1/config.yml.tmp" "$1/config.yml"')
+        rc, _, err = await collect.run(["sh", "-c", script, "sh", CONF_DIR], as_user=True, timeout=10,
+                                       input_=self.config().encode())
+        if rc not in (0, 3):
+            log.warning("config.yml: %s", err.strip())
+        return rc == 0
 
     def update_settings(self, b: dict, upd: dict) -> None:
         if "librespot_name" in b:
@@ -123,7 +130,7 @@ class Librespot(SourcePlugin):
             upd["librespot_volume"] = b["librespot_volume"]
 
     async def settings_applied(self, upd: dict) -> None:
-        if await self.installed() and await asyncio.to_thread(self.write_config) and await self.active():
+        if await self.installed() and await self.write_config() and await self.active():
             await collect.run(["systemctl", "--user", "restart", "librespot.service"], as_user=True, timeout=30)
 
     # ---- source
@@ -131,7 +138,7 @@ class Librespot(SourcePlugin):
         return os.path.exists(BIN) and os.path.exists(UNIT)
 
     async def start(self) -> str:
-        await asyncio.to_thread(self.write_config)
+        await self.write_config()
         return await super().start()
 
     async def stop(self) -> str:

@@ -1025,12 +1025,29 @@ function renderMods() {
     <li><label class="toggle"><input type="checkbox" data-mod="${esc(p.id)}" ${p.enabled ? "checked" : ""}>
       <span class="toggle-ui" aria-hidden="true"></span>
       <span class="mod-t"><b>${esc(loc(p.name))}</b><small>${esc(KINDS[p.kind] || p.kind)}${p.enabled !== p.running ? tr(", efter omstart") : p.installed === false ? tr(", inte installerad") : ""}</small>
-      <span>${esc(loc(p.description))}</span></span></label>${modInstall(p)}</li>`).join("");
+      <span>${esc(loc(p.description))}</span>${p.status ? `<span class="mod-st ${esc(p.status.state)}">${esc(loc(p.status.text))}</span>` : ""}</span></label>${modInstall(p)}${modOptions(p)}</li>`).join("");
   const locked = document.body.classList.contains("locked");
   $$("#mods input").forEach((i) => { i.disabled = locked; });
   $("#mods-locked").hidden = !locked;
   $("#mods-restart").hidden = !MODS.restart_needed;
 }
+// A module's own settings (declared by the module), saved one at a time as they change.
+function modOptions(p) {
+  if (!p.options || !p.running) return "";
+  return `<div class="mod-opts admin">${p.options.map((o) => {
+    const id = `mo-${o.key}`, v = o.value ?? "";
+    const input = o.type === "select"
+      ? `<select id="${id}" data-opt="${esc(o.key)}">${o.options.map(([val, l]) => `<option value="${esc(JSON.stringify(val))}"${val === v ? " selected" : ""}>${esc(loc(l))}</option>`).join("")}</select>`
+      : o.type === "toggle" ? `<input type="checkbox" id="${id}" data-opt="${esc(o.key)}"${v ? " checked" : ""}>`
+      : `<input type="text" id="${id}" data-opt="${esc(o.key)}" value="${esc(v)}" placeholder="${esc(o.placeholder || "")}" autocomplete="off">`;
+    return `<label for="${id}">${esc(loc(o.label))}</label>${input}${o.help ? `<p class="fine">${esc(loc(o.help))}</p>` : ""}`;
+  }).join("")}</div>`;
+}
+$("#mods").addEventListener("change", async (e) => {
+  const i = e.target.closest("[data-opt]"); if (!i) return;
+  const val = i.tagName === "SELECT" ? JSON.parse(i.value) : i.type === "checkbox" ? i.checked : i.value;
+  try { await post("/api/settings", { [i.dataset.opt]: val }); toast(tr("Sparat")); } catch { loadMods(); }
+});
 // A source's player is not part of mscOS: it is downloaded to the device from its publisher.
 function modInstall(p) {
   if (p.kind !== "source" || !p.running || p.installed !== false) return "";

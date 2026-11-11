@@ -481,3 +481,10 @@ body.src-other .spotify-only, body:not(.src-other) .roon-only { display: none !i
 .mods input:disabled + .toggle-ui { opacity: .5; }
 .mod-install { margin: 8px 0 0 56px; display: grid; gap: 8px; justify-items: start; }
 .mod-install .fine { margin: 0; }
+.mod-opts { margin: 10px 0 0 56px; display: grid; gap: 6px; max-width: 28rem; }
+.mod-opts label { font-size: .8125rem; color: var(--engraved); margin-top: 4px; }
+.mod-opts .fine { margin: 0; }
+.mod-opts input[type=text], .mod-opts select { min-height: 44px; padding: 0 12px; border: 1px solid var(--btn-line); border-radius: 2px; background: transparent; font: inherit; font-size: 1rem; color: var(--ink); }
+.mod-opts select option { background: var(--paper, #fff); color: #111; }
+.mod-t > .mod-st { color: var(--ink); }
+.mod-t > .mod-st.warn { color: var(--red); }

@@ -569,5 +569,6 @@
  "Namnet får vara högst 40 tecken.": "The name may be at most 40 characters.",
  "Välj 96, 160 eller 320 kbit/s": "Choose 96, 160 or 320 kbit/s",
  "Okänt volymläge": "Unknown volume mode",
- "Verifieringen mäter Spotify Lossless och fungerar därför bara med den källan.": "The verification measures Spotify Lossless and therefore only works with that source."
+ "Verifieringen mäter Spotify Lossless och fungerar därför bara med den källan.": "The verification measures Spotify Lossless and therefore only works with that source.",
+ "Sparat": "Saved"
 }

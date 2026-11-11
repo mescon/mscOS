@@ -32,6 +32,11 @@ class Plugin:
     description: dict[str, str] = {}
     defaults: dict[str, Any] = {}  # its settings, merged into hub.settings (keys owned by the module)
     requires: tuple[str, ...] = ()  # other module kinds/ids it needs, e.g. ("amp",)
+    # Settings the panel shows under the module (Modules view) and saves through /api/settings:
+    #   {"key": ..., "type": "text" | "select" | "toggle", "label": {sv, en}, "help": {sv, en},
+    #    "options": [[value, {sv, en}], ...] (select), "placeholder": ...}
+    # Modules with a view of their own (the amplifier) leave this empty.
+    options: tuple[dict, ...] = ()
 
     def __init__(self, hub):
         self.hub = hub
@@ -71,6 +76,10 @@ class Plugin:
     def summary(self) -> dict:
         """Fields for the compact state API (/api/ha and the like)."""
         return {}
+
+    def status(self) -> dict | None:
+        """One line for the Modules view: {"state": "ok" | "warn" | "idle", "text": {sv, en}}."""
+        return None
 
 
 class AmpPlugin(Plugin):
