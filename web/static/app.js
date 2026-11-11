@@ -144,6 +144,14 @@ function renderNames() {
   $("#net-name-now").textContent = n.network ? tr`Enheten heter ${n.network} i Spotify-appen och för andra spelare som visar sig i nätverket.` : "";
 }
 // Only what this installation has: no amplifier driver, no amplifier parts; no Arcam, no Arcam row.
+// Nothing beside the sleeve (no amplifier module, no cards, no queue): the text takes that place.
+function stageLayout() {
+  const col = document.querySelector(".console-col");
+  const empty = $("#amp").hidden && !$("#panels").children.length && $("#f-amp").hidden
+    && (document.body.classList.contains("src-other") || $("#f-queue").hidden);
+  document.querySelector(".stage").classList.toggle("solo", empty);
+  col.hidden = empty;
+}
 function renderFeatures() {
   const f = S.features || {}, amp = f.amp && f.amp !== "none";
   $("#amp").hidden = !amp; $("#f-amp").hidden = !amp;
@@ -157,7 +165,7 @@ function renderFeatures() {
   $("#power-note").hidden = b.power_button !== false;
   $("#net-speed").hidden = $("#net-note").hidden = !b.link_mbps;
 }
-function handle(m) { handleMsg(m); renderDock(); }
+function handle(m) { handleMsg(m); renderDock(); stageLayout(); }
 function handleMsg(m) {
   switch (m.type) {
     case "hello":
@@ -189,7 +197,7 @@ function renderDock() {
   const m = AMP || {};
   $("#dk-volbox").hidden = $("#amp").hidden || !m.reachable || m.power === false;
   $("#dk-vol").textContent = $("#ml-vol-v").textContent;
-  const v = S.status.system?.mscos; $("#rail-ver").textContent = v ? `mscOS ${v}` : "";
+  const v = S.status.system?.mscos; $("#rail-ver").textContent = v ? `mscOS ${v}` : ""; $("#about-ver").textContent = v || "";
 }
 function soloistEvent(ev) {
   const p = S.playback;
@@ -608,7 +616,7 @@ function renderOpts() {
     const gi = items.filter((i) => i.group === g), gc = gi.filter((i) => i.state !== "optional");
     const gok = gc.filter((i) => i.state === "ok").length, gwarn = gc.length - gok;
     return `<details class="opt-group${gwarn ? " warn" : ""}" data-g="${esc(g)}"${gwarn || open.has(g) ? " open" : ""}>
-      <summary>${gwarn ? MARK.warn : MARK.ok}<span class="g-name">${esc(g)}</span><span class="g-count">${gok} av ${gc.length}</span></summary>
+      <summary>${gwarn ? MARK.warn : MARK.ok}<span class="g-name">${esc(g)}</span><span class="g-count">${tr`${gok} av ${gc.length}`}</span></summary>
       ${gi.map((i) => `<div class="opt ${i.state}">${MARK[i.state]}<p class="opt-title">${esc(i.title)}</p><p class="opt-value">${esc(i.value)}</p><p class="opt-why">${esc(i.why)}</p></div>`).join("")}
     </details>`;
   }).join("");

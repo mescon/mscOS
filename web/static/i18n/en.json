@@ -612,5 +612,12 @@
  "Bläddra i katalogen": "Browse the catalogue",
  "Lägg till en modul från en annan utgivare": "Add a module from another publisher",
  "Klistra in adressen till modulens module.json. En modul körs inuti panelen med full åtkomst till enheten. Installera bara moduler från någon du litar på.": "Paste the address of the module's module.json. A module runs inside the panel with full access to the device. Only install modules from someone you trust.",
- "Sparar och kontrollerar…": "Saving and checking…"
+ "Sparar och kontrollerar…": "Saving and checking…",
+ "Enheten kan säga till när något händer med ljudkedjan: DAC:en försvinner, en källa stannar eller ljudet får avbrott. Välj hur larmen ska skickas, eller hoppa över.": "The device can tell you when something happens to the audio chain: the DAC disappears, a source stops or the sound drops out. Choose how alerts are sent, or skip this.",
+ "Adressen dit larmen skickas anger du under Moduler efter guiden.": "You enter the address the alerts go to under Modules after the guide.",
+ "Larm": "Alerts",
+ "Steg": "Steps",
+ "Det namn enheten får i Spotify-appen och andra appar som hittar den i nätverket.": "The name the device gets in the Spotify app and other apps that find it on the network.",
+ "Acoustics": "Acoustics",
+ "vivajAcoustics": "vivajAcoustics"
 }

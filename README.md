@@ -1,5 +1,7 @@
 # mscOS
 
+*by vivajAcoustics*
+
 mscOS ("music OS") turns a small computer into a network music player for a USB DAC: a
 bit-perfect endpoint for Spotify, Roon and HQPlayer, set up and watched from a web panel
 in Swedish or English.

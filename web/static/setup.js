@@ -16,10 +16,12 @@ export async function maybeSetup({ access, post, toast }) {
   try { settings = await getJSON("/api/settings"); } catch (e) { return false; }
   if (settings.setup_done || (access.configured && !saved)) return false;  // an existing installation
   const el = $("#setup");
-  const st = { step: saved?.step || 0, sources: saved?.sources || null, amp: saved?.amp ?? "", names: saved?.names || {} };
+  const st = { step: saved?.step || 0, sources: saved?.sources || null, amp: saved?.amp ?? "", names: saved?.names || {},
+    net: saved?.net || "streamer", notify: saved?.notify || [] };
   let mods = [], status = {}, names = {};
   try { mods = (await getJSON("/api/plugins")).plugins; status = await getJSON("/api/status"); } catch (e) {}
   const srcs = mods.filter((m) => m.kind === "source"), amps = mods.filter((m) => m.kind === "amp");
+  const notifiers = mods.filter((m) => m.kind === "notify" || m.id === "homeassistant");
   if (!st.sources) st.sources = srcs.filter((m) => m.enabled).map((m) => m.id);
   if (access.configured && st.step < 2) st.step = 2;  // came back after the password was created
 
@@ -53,8 +55,18 @@ export async function maybeSetup({ access, post, toast }) {
         <p class="fine">${tr("Din förstärkare eller DAC, till exempel märke och modell. Namnet visas överst i panelen.")}</p>
         <label for="su-str">${tr("Streamer")}</label>
         <input id="su-str" type="text" maxlength="60" autocomplete="off" value="${esc(st.names.streamer || "")}" placeholder="${esc(det.streamer || "")}">
-        <p class="fine">${tr("Lämna tomt för det som identifierats automatiskt.")}</p>`; },
-      next: async () => { st.names = { output: $("#su-out").value.trim(), streamer: $("#su-str").value.trim() }; return true; } },
+        <p class="fine">${tr("Lämna tomt för det som identifierats automatiskt.")}</p>
+        <h3>${tr("Namn i nätverket")}</h3>
+        <div class="seg" role="radiogroup" aria-label="${tr("Namn i nätverket")}" id="su-net">
+          <button type="button" role="radio" data-v="streamer" aria-checked="${st.net !== "output"}">${tr("Streamerns")}</button>
+          <button type="button" role="radio" data-v="output" aria-checked="${st.net === "output"}">${tr("DAC:ens")}</button>
+        </div>
+        <p class="fine">${tr("Det namn enheten får i Spotify-appen och andra appar som hittar den i nätverket.")}</p>`; },
+      next: async () => {
+        st.names = { output: $("#su-out").value.trim(), streamer: $("#su-str").value.trim() };
+        st.net = el.querySelector('#su-net [aria-checked="true"]')?.dataset.v || "streamer";
+        return true;
+      } },
     { title: tr("Källor"), body: () => `
         <p class="setup-lead">${tr("Välj hur du vill spela. En källa åt gången äger DAC:en, och du växlar mellan dem överst i panelen. Spelarna hämtas från sina utgivare efter guiden.")}</p>
         <ul class="mods">${srcs.map((m) => `
@@ -72,22 +84,33 @@ export async function maybeSetup({ access, post, toast }) {
             <span class="mod-t"><b>${esc(loc(m.name))}</b><span>${esc(loc(m.description))}</span></span></label></li>`).join("")}
         </ul>`,
       next: async () => { st.amp = el.querySelector("input[name=su-amp]:checked")?.value || ""; return true; } },
+    { title: tr("Larm till telefonen"), body: () => `
+        <p class="setup-lead">${tr("Enheten kan säga till när något händer med ljudkedjan: DAC:en försvinner, en källa stannar eller ljudet får avbrott. Välj hur larmen ska skickas, eller hoppa över.")}</p>
+        <ul class="mods">${notifiers.map((m) => `
+          <li><label class="toggle"><input type="checkbox" data-notify="${esc(m.id)}" ${st.notify.includes(m.id) ? "checked" : ""}>
+            <span class="toggle-ui" aria-hidden="true"></span>
+            <span class="mod-t"><b>${esc(loc(m.name))}</b><span>${esc(loc(m.description))}</span></span></label></li>`).join("")}</ul>
+        <p class="fine">${tr("Adressen dit larmen skickas anger du under Moduler efter guiden.")}</p>`,
+      next: async () => { st.notify = [...el.querySelectorAll("input[data-notify]:checked")].map((i) => i.dataset.notify); return true; } },
   ];
+  const short = [tr("Välkommen"), tr("Lösenord"), tr("Enheten"), tr("Källor"), tr("Förstärkare"), tr("Larm")];
 
+  let want = new Set();
   async function finish() {
     $("#su-next").disabled = true; $("#su-back").hidden = true;
     $("#su-body").innerHTML = `<p class="setup-lead">${tr("Sparar och startar om panelen…")}</p>`;
     try {
       let tz; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) {}
-      await post("/api/settings", { language: LANG, output_name: st.names.output || "", streamer_name: st.names.streamer || "", setup_done: true });
+      await post("/api/settings", { language: LANG, output_name: st.names.output || "", streamer_name: st.names.streamer || "",
+        network_name: st.net, setup_done: true });
       if (tz) await post("/api/settings", { timezone: tz }).catch(() => {});  // the device keeps the browser's time zone
-      const want = new Set([...st.sources, ...(st.amp ? [st.amp] : [])]);
-      const all = mods.filter((m) => m.kind === "source" || m.kind === "amp");
+      want = new Set([...st.sources, ...st.notify, ...(st.amp ? [st.amp] : [])]);
+      const all = mods.filter((m) => m.kind === "source" || m.kind === "amp" || notifiers.includes(m));
       for (const m of all) if (m.enabled !== want.has(m.id)) await post("/api/plugins/set", { id: m.id, enabled: want.has(m.id) });
       const any = all[0];
       if (any) await post("/api/plugins/set", { id: any.id, enabled: want.has(any.id), restart: true });
     } catch (e) { $("#su-next").disabled = false; render(); return; }
-    try { sessionStorage.removeItem(KEY); if (st.sources.length) localStorage.setItem("open-fold", "f-mods"); } catch (e) {}
+    try { sessionStorage.removeItem(KEY); if (want.size) localStorage.setItem("open-fold", "f-mods"); } catch (e) {}
     for (let i = 0; i < 30; i++) {  // wait for the panel to come back
       await new Promise((r) => setTimeout(r, 1000));
       try { if (i > 2 && (await fetch("/api/auth")).ok) break; } catch (e) {}
@@ -99,6 +122,8 @@ export async function maybeSetup({ access, post, toast }) {
     const s = steps[st.step];
     mem(st);
     $("#su-count").textContent = tr`Steg ${st.step + 1} av ${steps.length}`;
+    // progress as a signal chain: a lamp per step, lit up to where you are
+    $("#su-steps").innerHTML = short.map((t, i) => `<li class="${i <= st.step ? "ok" : ""}"${i === st.step ? ' aria-current="step"' : ""}><i></i><b>${esc(t)}</b></li>`).join("");
     $("#su-title").textContent = s.title;
     $("#su-body").innerHTML = s.body();
     $("#su-back").hidden = st.step === 0 || st.step === 2;  // the password is not created twice
@@ -118,6 +143,8 @@ export async function maybeSetup({ access, post, toast }) {
   });
   $("#su-back").addEventListener("click", () => { st.step = Math.max(0, st.step - 1); render(); });
   el.addEventListener("click", (e) => {
+    const n = e.target.closest("#su-net button");
+    if (n) el.querySelectorAll("#su-net button").forEach((x) => x.setAttribute("aria-checked", x === n));
     const b = e.target.closest("#su-lang button");
     if (b && b.dataset.v !== LANG) { mem(st); setLang(b.dataset.v); }
   });

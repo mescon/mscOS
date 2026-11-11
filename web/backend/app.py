@@ -452,6 +452,14 @@ class Hub:
                 if n % 6 == 0:
                     await self.sample_xruns()
                 cur = self.source
+                # nothing chosen, or what is chosen has no player yet (a new installation): take the
+                # first source that is installed
+                if n % 2 == 0 and (cur is None or not await cur.installed()):
+                    for sid, p in self.sources.items():
+                        if p is not cur and await p.installed():
+                            log.info("no source chosen: taking %s", sid)
+                            await self.switch_source(sid)
+                            break
                 if cur and not cur.pushes_playing:
                     p = await cur.playing()
                     self._set_playing(collect.dac_info().get("state") == "RUNNING" if p is None else p)
