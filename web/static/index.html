@@ -15,14 +15,17 @@
 <link rel="preload" href="fonts/jost-wght.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/cormorant-wght.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="app.css">
+<script>
+  try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
 </head>
 <body>
 <div class="shell">
 
 <header class="masthead">
   <div class="ident">
-    <div class="ident-name"><h1 id="dev-name">Mark Levinson 585.5</h1><span class="link-led" id="conn" role="img" aria-label="Ingen kontakt med enheten"></span></div>
-    <p id="dev-sub">mscOS, ansluter…</p>
+    <div class="ident-name"><h1 class="wordmark">mscOS</h1><span class="link-led" id="conn" role="img" aria-label="Ingen kontakt med enheten"></span></div>
+    <p><span id="dev-name">Mark Levinson 585.5</span> <span id="dev-sub">ansluter…</span></p>
   </div>
   <div class="source" role="radiogroup" aria-label="Källa" id="source">
     <button role="radio" data-v="spotify" aria-checked="true"><i aria-hidden="true"></i>Spotify</button>
@@ -358,6 +361,18 @@
           <label class="toggle"><input type="checkbox" id="alerts-on"><span class="toggle-ui" aria-hidden="true"></span><span>Skicka larm</span></label>
           <p class="fine">Larmet går via Home Assistant till din telefon när DAC:en är borta i mer än en minut, när Soloist stannar, vid avbrott under uppspelning, när en verifiering avviker och när Soloist-bygget har två veckor kvar. Samma larm skickas högst var sjätte timme, avbrott högst en gång i timmen.</p>
           <button class="btn" id="alerts-test">Skicka testlarm</button>
+        </div>
+      </details>
+
+      <details class="fold" id="f-look" data-k="look">
+        <summary><span>Utseende</span><span class="fv" id="fv-look"></span></summary>
+        <div class="fold-body">
+          <div class="seg" role="radiogroup" aria-label="Tema" id="theme">
+            <button role="radio" data-v="auto" aria-checked="true">Som telefonen</button>
+            <button role="radio" data-v="light" aria-checked="false">Ljust</button>
+            <button role="radio" data-v="dark" aria-checked="false">Mörkt</button>
+          </div>
+          <p class="fine">Sparas bara i den här webbläsaren.</p>
         </div>
       </details>
 

@@ -70,8 +70,10 @@ button, input, select { font: inherit; color: inherit; letter-spacing: inherit; 
 }
 .ident { flex: 1; min-width: 0; }
 .ident-name { display: flex; align-items: center; gap: 10px; }
-.ident h1 { font-weight: 400; font-size: 1rem; letter-spacing: .05em; line-height: 1.2; }
-.ident p { font-size: .8125rem; color: var(--engraved); letter-spacing: .02em; margin-top: 2px; }
+.ident .wordmark { font-weight: 500; font-size: 1.75rem; letter-spacing: .01em; line-height: 1; }
+.ident p { font-size: .8125rem; color: var(--engraved); letter-spacing: .02em; margin-top: 6px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#dev-name { color: var(--ink); }
 .link-led { width: 6px; height: 6px; border-radius: 50%; background: var(--engraved); opacity: .5; flex: none; }
 .source { display: flex; gap: 2px; }
 .source button { appearance: none; background: none; border: 0; cursor: pointer; display: flex; align-items: center; gap: 7px;

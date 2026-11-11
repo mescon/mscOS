@@ -81,7 +81,7 @@ function connect() {
   ws.onopen = () => { retry = 1000; const l = $("#conn"); l.classList.add("on"); l.setAttribute("aria-label", "Ansluten till enheten"); };
   ws.onclose = () => {
     const l = $("#conn"); l.classList.remove("on"); l.setAttribute("aria-label", "Ingen kontakt med enheten");
-    $("#dev-sub").textContent = "Ingen kontakt med enheten. Försöker igen…";
+    $("#dev-sub").textContent = "– ingen kontakt, försöker igen…";
     setTimeout(connect, retry); retry = Math.min(retry * 2, 15000);
   };
   ws.onmessage = (e) => handle(JSON.parse(e.data));
@@ -329,7 +329,7 @@ function renderStatus() {
   const st = S.status, sys = st.system || {}, solo = st.soloist || {};
   $("#dev-name").textContent = devName();
   document.title = `mscOS: ${devName()}`;
-  $("#dev-sub").textContent = `mscOS på sMS-200Ultra${sys.pmic_temp_c != null ? `, ${dec(sys.pmic_temp_c)} °C` : ""}`;
+  $("#dev-sub").textContent = "via SOtM";
   // Soloist
   const days = solo.days_left;
   spec($("#solo-kv"), [
@@ -912,3 +912,24 @@ refreshAuth();
 connect();
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 document.addEventListener("visibilitychange", () => { if (!document.hidden && ws && ws.readyState > 1) connect(); });
+
+// ---- appearance: follow the phone, or a fixed light/dark theme (per browser)
+const THEMES = { auto: "Som telefonen", light: "Ljust", dark: "Mörkt" };
+function applyTheme(t) {
+  if (!THEMES[t]) t = "auto";
+  if (t === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  const dark = t === "dark" || (t === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
+  $$('meta[name="theme-color"]').forEach((m) => { m.media = ""; m.content = dark ? "#121315" : "#e4e2dc"; });
+  $$("#theme button").forEach((b) => b.setAttribute("aria-checked", b.dataset.v === t));
+  fv("look", THEMES[t]);
+}
+let theme = "auto";
+try { theme = localStorage.getItem("theme") || "auto"; } catch (e) {}
+applyTheme(theme);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => applyTheme(theme));
+$("#theme").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  theme = b.dataset.v;
+  try { if (theme === "auto") localStorage.removeItem("theme"); else localStorage.setItem("theme", theme); } catch (e2) {}
+  applyTheme(theme);
+});
