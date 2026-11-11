@@ -330,11 +330,6 @@
             <button class="btn" id="solo-update">Sök ny version</button>
           </div>
           <div class="admin">
-            <h4 class="sub">Namn i Spotify</h4>
-            <form class="row" id="name-form">
-              <input id="name-in" maxlength="40" aria-label="Namn i Spotify" autocomplete="off">
-              <button class="btn">Spara namn</button>
-            </form>
             <h4 class="sub">Volymnormalisering</h4>
             <label class="toggle"><input type="checkbox" id="norm"><span class="toggle-ui" aria-hidden="true"></span><span>Normalisera volymen</span></label>
             <p class="fine">Av ger bitperfekt ljud. Spotify-appens reglage når inte Soloist, så det styrs här.</p>
@@ -369,11 +364,19 @@
           <div class="admin dev-ctl">
             <h4 class="sub">Namn</h4>
             <form class="names" id="names-form">
-              <label><span>Ansluten till</span><input id="output-name" maxlength="60" autocomplete="off" placeholder=""></label>
-              <label><span>Streamer</span><input id="streamer-name" maxlength="60" autocomplete="off" placeholder=""></label>
+              <label><span>DAC eller förstärkare</span><input id="output-name" maxlength="60" autocomplete="off" placeholder=""></label>
+              <label><span>Streamer (den här enheten)</span><input id="streamer-name" maxlength="60" autocomplete="off" placeholder=""></label>
+              <p class="fine">Visas överst som "DAC via streamer". Lämna tomt för det som identifieras automatiskt.</p>
+              <span class="names-l" id="net-name-l">Namn i nätverket</span>
+              <div class="seg" role="radiogroup" aria-labelledby="net-name-l" id="net-name">
+                <button type="button" role="radio" data-v="streamer" aria-checked="true">Streamerns</button>
+                <button type="button" role="radio" data-v="output" aria-checked="false">DAC:ens</button>
+                <button type="button" role="radio" data-v="custom" aria-checked="false">Eget</button>
+              </div>
+              <input id="net-name-custom" maxlength="40" autocomplete="off" aria-label="Eget namn i nätverket" hidden>
+              <p class="fine" id="net-name-now"></p>
               <button class="btn">Spara namn</button>
             </form>
-            <p class="fine">Visas överst som "förstärkare via streamer". Lämna tomt för det som identifieras automatiskt. Namnet i Spotify-appen ställs in under Moduler.</p>
             <label class="toggle"><input type="checkbox" id="leds"><span class="toggle-ui" aria-hidden="true"></span><span>Aktivitetslampa</span></label>
             <p class="fine">Den gröna lampan blinkar när SD-kortet läses. Av gör enheten helt mörk.</p>
             <div class="seg net-seg" role="radiogroup" aria-label="Nätverkshastighet" id="net-speed">

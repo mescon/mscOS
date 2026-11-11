@@ -533,8 +533,11 @@ input.line::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; ba
 .strip li.ok b { color: var(--g-ink); }
 .strip li.ok i { background: var(--red); border-color: var(--red); box-shadow: 0 0 9px var(--red-glow); }
 .strip li.ok:has(+ li.ok)::after { background: rgba(227, 38, 47, .55); }
-.strip.flow li.ok:has(+ li.ok)::after { background: linear-gradient(90deg, rgba(227, 38, 47, .4) 0 35%, #ff7a80 50%, rgba(227, 38, 47, .4) 65% 100%) 0 0 / 300% 100%; animation: flow 2.2s linear infinite; }
-@keyframes flow { from { background-position: 100% 0; } to { background-position: -50% 0; } }
+.strip { position: relative; }
+.strip.flow::before { content: ""; position: absolute; z-index: 1; top: 26px; left: var(--from, 10%); width: 56px; height: 3px; margin-left: -28px; border-radius: 2px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, #ff8f94 55%, #fff 78%, transparent); filter: drop-shadow(0 0 6px var(--red));
+  animation: flow 2.6s cubic-bezier(.45, 0, .55, 1) infinite; }
+@keyframes flow { 0% { left: var(--from, 10%); opacity: 0; } 10%, 88% { opacity: 1; } 100% { left: var(--to, 90%); opacity: 0; } }
 .strip li.bad { color: var(--g-amber); }
 .strip li.bad i { border-color: var(--g-amber); background: color-mix(in srgb, var(--g-amber) 30%, transparent); }
 
@@ -656,7 +659,7 @@ body[data-view="v-play"] .dock, body.in-setup .dock { display: none; }
   body[data-view="v-play"] .job { bottom: 20px; }
 }
 @media (min-width: 1680px) { #v-signal .panels { columns: 3; } }
-@media (prefers-reduced-motion: reduce) { .strip.flow li::after { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .strip.flow::before { display: none; } }
 
 /* small corrections */
 .row .btn.danger { margin-top: 0; }
@@ -665,3 +668,6 @@ body[data-view="v-play"] .dock, body.in-setup .dock { display: none; }
 .mod-panel .toggle { align-items: flex-start; padding: 6px 0; line-height: 1.35; }
 .mod-panel .toggle .toggle-ui { margin-top: 1px; }
 @media (min-width: 1024px) { .cover { justify-self: start; } }
+.names .names-l { font-size: .8125rem; color: var(--engraved); margin-top: 8px; }
+.names .seg { justify-self: start; }
+.names .fine { margin: 0; }

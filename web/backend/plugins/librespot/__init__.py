@@ -59,7 +59,7 @@ class Librespot(SourcePlugin):
     defaults = {"librespot_name": "", "librespot_bitrate": 320, "librespot_volume": "software"}
     options = (
         {"key": "librespot_name", "type": "text", "label": {"sv": "Namn i Spotify-appen", "en": "Name in the Spotify app"},
-         "help": {"sv": "Tomt: samma namn som det enheten spelar till.", "en": "Empty: the name of what this device plays into."}},
+         "help": {"sv": "Tomt: enhetens namn i nätverket (System, Enheten).", "en": "Empty: the device's name on the network (System, The device)."}},
         {"key": "librespot_bitrate", "type": "select", "label": {"sv": "Kvalitet", "en": "Quality"},
          "options": [[320, {"sv": "320 kbit/s", "en": "320 kbit/s"}], [160, {"sv": "160 kbit/s", "en": "160 kbit/s"}],
                      [96, {"sv": "96 kbit/s", "en": "96 kbit/s"}]]},
@@ -111,7 +111,7 @@ class Librespot(SourcePlugin):
 
     # ---- configuration (go-librespot reads config.yml at start)
     def device_name(self) -> str:
-        return self.hub.settings.get("librespot_name") or self.hub.names()["output"]
+        return self.hub.settings.get("librespot_name") or self.hub.names()["network"]
 
     def config(self) -> str:
         s = self.hub.settings
@@ -173,6 +173,9 @@ class Librespot(SourcePlugin):
             if b["librespot_volume"] not in ("fixed", "software"):
                 raise web.HTTPBadRequest(text=T("Okänt volymläge"))
             upd["librespot_volume"] = b["librespot_volume"]
+
+    async def names_changed(self) -> None:
+        await self.settings_applied({})
 
     async def settings_applied(self, upd: dict) -> None:
         if await self.installed() and await self.write_config() and await self.active():

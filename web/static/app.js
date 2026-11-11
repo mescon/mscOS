@@ -110,6 +110,9 @@ function renderNames() {
   if (document.activeElement !== o) o.value = set.output_name || "";
   if (document.activeElement !== st) st.value = set.streamer_name || "";
   o.placeholder = n.detected?.output || ""; st.placeholder = n.detected?.streamer || "";
+  const c = $("#net-name-custom");
+  if (!$("#names-form").contains(document.activeElement)) { netNameMode(set.network_name || "streamer"); c.value = set.network_name_custom || ""; }
+  $("#net-name-now").textContent = n.network ? tr`Enheten heter ${n.network} i Spotify-appen och för andra spelare som visar sig i nätverket.` : "";
 }
 // Only what this installation has: no amplifier driver, no amplifier parts; no Arcam, no Arcam row.
 function renderFeatures() {
@@ -396,7 +399,10 @@ function renderSignal() {
   // strip in the display
   const strip = $("#strip");
   strip.innerHTML = c.stages.map((s) => `<li class="${s.state === "ok" ? "ok" : s.state === "bad" ? "bad" : ""}"><i></i><b>${esc(s.name)}</b>${s.tag ? `<small>${esc(s.tag)}</small>` : ""}</li>`).join("");
-  strip.classList.toggle("flow", !!c.running);
+  // one pulse travels the lit part of the chain, from its first stage to its last
+  const lit = c.stages.map((s, i) => (s.state === "ok" ? i : -1)).filter((i) => i >= 0), n = c.stages.length;
+  strip.classList.toggle("flow", !!c.running && lit.length > 1);
+  if (lit.length > 1) { strip.style.setProperty("--from", `${(lit[0] + .5) / n * 100}%`); strip.style.setProperty("--to", `${(lit[lit.length - 1] + .5) / n * 100}%`); }
   // readout
   $(".display").classList.toggle("idle", !c.running);
   // idle: the display keeps showing the locked format, dimmed, like hardware in standby
@@ -454,8 +460,6 @@ function renderStatus() {
       ? tr`Spotify-bygget gäller ${days} dagar till. En ny version hämtas automatiskt varje natt.`
       : tr("Spotify-bygget har gått ut. Sök ny version.");
   }
-  const nameIn = $("#name-in");
-  if (document.activeElement !== nameIn) nameIn.value = solo.device_name || "";
   $("#norm").checked = !!solo.normalization;
   const k = solo.api_key || {};
   $("#key-state").textContent = k.set ? tr`Inställd${k.changed ? tr`, senast ändrad ${stamp(k.changed)}` : ""}.` : tr("Ingen nyckel är inställd. Soloist kan inte starta.");
@@ -618,17 +622,21 @@ $("#job-close").addEventListener("click", () => { $("#job").hidden = true; });
 // ------------------------------------------------------------------ system actions
 $("#solo-restart").addEventListener("click", async () => { await post("/api/soloist/restart"); toast(tr("Soloist startades om")); });
 $("#solo-update").addEventListener("click", () => startJob("/api/soloist/update", tr("Söker ny Soloist-version…")));
-$("#name-form").addEventListener("submit", async (e) => {
-  e.preventDefault(); const name = $("#name-in").value.trim();
-  try { await post("/api/soloist/name", { name }); toast(tr`Heter nu ${name} i Spotify`); } catch {}
-});
 $("#names-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   try {
-    await post("/api/settings", { output_name: $("#output-name").value.trim(), streamer_name: $("#streamer-name").value.trim() });
+    const mode = $('#net-name [aria-checked="true"]').dataset.v;
+    await post("/api/settings", { output_name: $("#output-name").value.trim(), streamer_name: $("#streamer-name").value.trim(),
+      network_name: mode, ...(mode === "custom" ? { network_name_custom: $("#net-name-custom").value.trim() } : {}) });
     document.activeElement?.blur(); toast(tr("Namnen är sparade"));
   } catch {}
 });
+// the name on the network (Spotify Connect and other players that announce themselves)
+function netNameMode(v) {
+  $$("#net-name button").forEach((b) => b.setAttribute("aria-checked", b.dataset.v === v));
+  $("#net-name-custom").hidden = v !== "custom";
+}
+$("#net-name").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { netNameMode(b.dataset.v); if (b.dataset.v === "custom") $("#net-name-custom").focus(); } });
 $("#key-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const inp = $("#key-in"), b = $("#key-save"), key = inp.value.trim();

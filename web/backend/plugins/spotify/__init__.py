@@ -43,6 +43,10 @@ class Spotify(SourcePlugin):
             return ""  # installed but no key yet: nothing to start, the panel asks for the key
         return await super().start()
 
+    async def names_changed(self) -> None:
+        if await self.installed():
+            await self.hub.set_soloist_name(self.hub.names()["network"])
+
     def slider(self) -> dict | None:
         h = self.hub
         return {"active": bool(h.soloist_ws and h.auth.get("is_active")), "volume": h.playback.get("volume"),

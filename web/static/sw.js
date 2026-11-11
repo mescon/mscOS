@@ -1,6 +1,6 @@
 // App shell cache: the panel opens instantly and shows "no contact" if the device is off.
 // API and WebSocket traffic is never cached.
-const CACHE = "mscos-v44";
+const CACHE = "mscos-v46";
 const SHELL = ["/", "index.html", "app.css", "app.js", "i18n.js", "setup.js", "i18n/en.json", "manifest.webmanifest", "fonts/jost-wght.woff2", "fonts/cormorant-wght.woff2", "fonts/cormorant-wght-italic.woff2",
   "icons/icon.svg", "icons/icon-192.png", "icons/icon-512.png"];
 self.addEventListener("install", (e) => e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())));

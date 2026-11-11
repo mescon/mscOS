@@ -314,8 +314,33 @@ class Hub:
         s, a = self.settings, self.amp
         det_out = (getattr(a, "model", "") if a else "") or collect.detect_dac() or "DAC"
         det_str = collect.detect_streamer()
-        return {"output": s.get("output_name") or det_out, "streamer": s.get("streamer_name") or det_str,
-                "detected": {"output": det_out, "streamer": det_str}}
+        out, strm = s.get("output_name") or det_out, s.get("streamer_name") or det_str
+        # what the device is called on the network (Spotify Connect, ...): one of the two, or a name of its own
+        mode = s.get("network_name", "streamer")
+        net = (s.get("network_name_custom") if mode == "custom" else out if mode == "output" else strm) or strm or out
+        return {"output": out, "streamer": strm, "network": net, "detected": {"output": det_out, "streamer": det_str}}
+
+    async def set_soloist_name(self, name: str) -> bool:
+        """Soloist's name in the Spotify app (an argument in its unit). True if it changed;
+        Soloist is restarted then. Read and written as the audio user: the unit lives in its
+        home, and root follows nothing there."""
+        name = re.sub(r"[^\w .\-]", "", name)[:40].strip() or "mscOS"  # what Soloist takes
+        p = collect.SOLOIST_UNIT
+        rc, text, _ = await collect.run(["cat", p], as_user=True, timeout=5)
+        if rc or "--device-name" not in text:
+            raise RuntimeError(T("Soloist är inte installerat"))
+        new = re.sub(r'--device-name\s+"[^"]*"', lambda m: f'--device-name "{name}"', text)
+        if new == text:
+            return False
+        rc, _, err = await collect.run(["sh", "-c", 'cat > "$1.tmp" && mv -f "$1.tmp" "$1"', "sh", p], as_user=True,
+                                       timeout=5, input_=new.encode())
+        if rc:
+            raise RuntimeError(err.strip()[:200])
+        persist(p)
+        await user_systemctl("daemon-reload")
+        if self.soloist:
+            await user_systemctl("restart", "soloist.service")
+        return True
 
     def features(self) -> dict:
         """What this installation has, so the panel shows only that."""
@@ -1019,27 +1044,6 @@ async def soloist_update(request):
     return ok()
 
 
-@routes.post("/api/soloist/name")
-async def soloist_name(request):
-    name = str((await body(request)).get("name", "")).strip()
-    if not re.fullmatch(r"[\w .\-åäöÅÄÖ]{1,40}", name):
-        raise web.HTTPBadRequest(text=T("Namnet får vara 1–40 tecken: bokstäver, siffror, mellanslag, punkt och bindestreck."))
-    p = collect.SOLOIST_UNIT
-    # read and written as the audio user: the unit lives in its home, root follows nothing there
-    rc, text, _ = await collect.run(["cat", p], as_user=True, timeout=5)
-    if rc or "--device-name" not in text:
-        raise web.HTTPConflict(text=T("Soloist är inte installerat"))
-    text = re.sub(r'--device-name\s+"[^"]*"', f'--device-name "{name}"', text)
-    rc, _, err = await collect.run(["sh", "-c", 'cat > "$1.tmp" && mv -f "$1.tmp" "$1"', "sh", p], as_user=True,
-                                   timeout=5, input_=text.encode())
-    if rc:
-        raise web.HTTPInternalServerError(text=err.strip()[:200])
-    persist(p)
-    await user_systemctl("daemon-reload")
-    await user_systemctl("restart", "soloist.service")
-    return ok(name=name)
-
-
 @routes.post("/api/soloist/normalization")
 async def soloist_normalization(request):
     enabled = bool((await body(request)).get("enabled"))
@@ -1195,6 +1199,18 @@ async def set_settings(request):
             if len(v) > 60 or any(ord(c) < 32 for c in v):
                 raise web.HTTPBadRequest(text=T("Namnet får vara högst 60 tecken."))
             upd[k] = v  # "" = the detected name
+    if "network_name" in b:
+        if b["network_name"] not in ("streamer", "output", "custom"):
+            raise web.HTTPBadRequest(text=T("Okänt val"))
+        upd["network_name"] = b["network_name"]
+    if "network_name_custom" in b:
+        v = re.sub(r"\s+", " ", str(b["network_name_custom"])).strip()
+        if len(v) > 40 or any(ord(c) < 32 for c in v):
+            raise web.HTTPBadRequest(text=T("Namnet får vara högst 40 tecken."))
+        upd["network_name_custom"] = v
+    if upd.get("network_name", hub.settings.get("network_name")) == "custom" \
+            and not upd.get("network_name_custom", hub.settings.get("network_name_custom")):
+        raise web.HTTPBadRequest(text=T("Ange ett namn."))
     if "language" in b:  # the system language: alerts and other texts written without a browser
         if b["language"] not in i18n.LANGS:
             raise web.HTTPBadRequest(text=T("Okänt språk"))
@@ -1216,6 +1232,12 @@ async def set_settings(request):
         # the bridge setting decides how a source with a slider handles volume
         if any(k in upd for k in p.defaults) or ("spotify_vol_to_amp" in upd and getattr(type(p), "has_slider", False)):
             await p.settings_applied(upd)
+    if any(k in upd for k in ("output_name", "streamer_name", "network_name", "network_name_custom")):
+        for p in hub.sources.values():  # the players take the device's name on the network
+            try:
+                await p.names_changed()
+            except RuntimeError as e:
+                log.warning("name for %s: %s", p.id, e)
     if b.get("net_speed") in (100, 1000) and b["net_speed"] != hub.settings.get("net_speed"):
         hub.settings["net_speed"] = b["net_speed"]
         # the link renegotiates (~3 s); answer first so the reply is not lost
@@ -1501,7 +1523,7 @@ async def index(request):
     return web.FileResponse(os.path.join(STATIC, "index.html"), headers={"Cache-Control": "no-cache"})
 
 
-PROTECTED = ("/api/system/", "/api/logs", "/api/soloist/apikey", "/api/soloist/name", "/api/soloist/normalization",
+PROTECTED = ("/api/system/", "/api/logs", "/api/soloist/apikey", "/api/soloist/normalization",
              "/api/soloist/restart", "/api/soloist/update", "/api/settings", "/api/alerts/", "/api/tests/",
              "/api/auth/password",
              "/api/source",  # stops/starts the audio stacks as root (also /api/sources/install)
@@ -1605,6 +1627,15 @@ async def cache_headers(request, handler):
 
 async def on_startup(app):
     collect.apply_leds(hub.settings.get("leds", True))
+    if "network_name" not in hub.settings:  # from before the name on the network was a choice: keep Soloist's
+        cur, n = collect.soloist_device_name(), hub.names()
+        if cur and cur == n["output"]:
+            hub.settings["network_name"] = "output"
+        elif cur and cur != n["streamer"]:
+            hub.settings.update(network_name="custom", network_name_custom=cur)
+        else:
+            hub.settings["network_name"] = "streamer"
+        hub.save_settings()
     async def restore():
         """Bring up the saved source. Spotify normally starts with the soloist session by itself;
         start it only if it is not running (e.g. Roon mode was ended by editing settings)."""

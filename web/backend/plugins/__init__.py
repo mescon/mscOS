@@ -174,6 +174,9 @@ class SourcePlugin(Plugin):
         """Extra facts for the panel's status (version, ...)."""
         return {}
 
+    async def names_changed(self) -> None:
+        """The device's names changed (hub.names()): take the new name on the network."""
+
     async def version(self) -> str | None:
         """The installed player's version, None if not known."""
         return None
