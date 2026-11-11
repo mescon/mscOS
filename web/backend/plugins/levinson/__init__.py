@@ -45,6 +45,55 @@ class LevinsonAmp(AmpPlugin):
 
     model = "Mark Levinson Nº585.5"  # default name of the output (System -> Names changes it)
 
+    def option_list(self) -> list[dict]:
+        lab = {v: k for k, v in self.labels().items()}
+        return [
+            {"key": "ml_play_input", "type": "select", "label": {"sv": "Ingången den här enheten sitter på", "en": "The input this device is connected to"},
+             "options": [[i, {"sv": f"{lab[i]} ({i})" if i in lab else i, "en": f"{lab[i]} ({i})" if i in lab else i}] for i in INPUTS]},
+            {"key": "ml_auto_on", "type": "toggle", "label": {"sv": "Slå på och välj den ingången när musik börjar spela", "en": "Turn on and select that input when music starts"}},
+            self.BRIDGE_OPTION,
+            {"key": "ml_auto_off_min", "type": "select", "label": {"sv": "Standby när inget spelas", "en": "Standby when nothing plays"},
+             "options": [[0, {"sv": "Aldrig", "en": "Never"}], [15, {"sv": "Efter 15 min", "en": "After 15 min"}],
+                         [30, {"sv": "Efter 30 min", "en": "After 30 min"}], [60, {"sv": "Efter 1 h", "en": "After 1 h"}]],
+             "help": {"sv": "Gäller bara när panelen själv har slagit på förstärkaren, så att en skivspelare eller annan källa inte stängs av mitt i.",
+                      "en": "Only when the panel itself turned the amplifier on, so a turntable or another source is not cut off."}},
+            {"key": "ml_max_db", "type": "number", "min": 20, "max": 80, "step": 0.5, "unit": "dB",
+             "label": {"sv": "Högsta volym från panelen", "en": "Highest volume from the panel"}},
+            {"key": "ml_host", "type": "text", "label": {"sv": "Adress", "en": "Address"},
+             "placeholder": {"sv": "Hittas automatiskt", "en": "Found automatically"},
+             "help": {"sv": "På förstärkaren: Setup, Advanced, Connect = Ethernet, och standbyläget Normal. I läget Green stängs nätverket av i standby, och då kan panelen inte väcka den.",
+                      "en": "On the amplifier: Setup, Advanced, Connect = Ethernet, and standby mode Normal. In Green mode the network is off in standby, and the panel cannot wake it."}},
+        ]
+
+    def status(self) -> dict | None:
+        m, host = self.state or {}, self.ml.host
+        if not host:
+            return {"state": "warn", "text": {"sv": "Inte hittad än. Panelen söker var tionde minut.", "en": "Not found yet. The panel searches every ten minutes."}}
+        if not m.get("reachable"):
+            return {"state": "warn", "text": {"sv": f"Ingen kontakt på {host}", "en": f"No contact at {host}"}}
+        auto = "" if self.hub.settings.get("ml_host") else {"sv": ", hittad automatiskt", "en": ", found automatically"}
+        return {"state": "ok", "text": {"sv": f"Ansluten på {host}{auto and auto['sv']}", "en": f"Connected at {host}{auto and auto['en']}"}}
+
+    def log(self) -> list[str] | None:
+        return [f"{time.strftime('%H:%M:%S', time.localtime(t))}  {'→' if d == 'tx' else '←'} {txt}" for t, d, txt in (self.state or {}).get("log") or []]
+
+    def amp_state(self) -> dict:
+        m, host = self.state or {}, self.ml.host
+        lab = m.get("labels") or {}
+        note = None
+        if m.get("reachable") is None:
+            note = {"sv": "Söker förstärkaren i nätverket…", "en": "Looking for the amplifier on the network…"}
+        elif not host:
+            note = {"sv": "Hittar inte förstärkaren i nätverket. Anslut nätverkskabeln och välj Connect = Ethernet i dess Setup-meny.",
+                    "en": "Cannot find the amplifier on the network. Connect the network cable and choose Connect = Ethernet in its Setup menu."}
+        elif not m.get("reachable"):
+            note = {"sv": f"Ingen kontakt med förstärkaren på {host}. Står den i standbyläget Green är nätverket avstängt.",
+                    "en": f"No contact with the amplifier at {host}. In standby mode Green its network is off."}
+        return {"reachable": m.get("reachable") if host or m.get("reachable") is None else False,
+                "power": m.get("power"), "muted": bool(m.get("muted")), "volume_db": m.get("volume_db"),
+                "max_db": self.max_db, "input": m.get("input"), "note": note,
+                "inputs": [{"id": i, "label": lab.get(i) or i} for i in INPUTS]}
+
     def __init__(self, hub):
         super().__init__(hub)
         s = hub.settings
@@ -202,7 +251,7 @@ class LevinsonAmp(AmpPlugin):
             self.ml.input = self.state["input"] = self.labels().get(lab)
         self.state["labels"] = {v: k for k, v in self.labels().items()}
         self.state["found"] = self.found
-        await self.hub.broadcast({"type": "levinson", "levinson": self.state})
+        await self.hub.broadcast({"type": "amp", "amp": self.amp_state()})
 
     # ---- background: find it, poll it, auto standby
     def tasks(self) -> list:
@@ -245,9 +294,6 @@ class LevinsonAmp(AmpPlugin):
             await asyncio.sleep(10 if hub.clients else 60)
 
     # ---- panel and API
-    def hello(self) -> dict:
-        return {"levinson": self.state, "ml_inputs": INPUTS}
-
     def features(self) -> dict:
         return {"amp": self.id}
 
@@ -270,10 +316,14 @@ class LevinsonAmp(AmpPlugin):
         }}
 
     def routes(self, routes) -> None:
-        @routes.post("/api/levinson")
+        @routes.post("/api/levinson")  # the name before amplifiers shared /api/amp; automations use it
         async def levinson_action(request):
-            hub = self.hub
-            b = await hub.body(request)
+            await self.amp_action(await self.hub.body(request))
+            return self.hub.ok(levinson=self.state, amp=self.amp_state(), **self.summary())
+
+    async def amp_action(self, b: dict) -> None:
+        hub = self.hub
+        if True:
             try:
                 if "power" in b:
                     await self.ml.set_power(bool(b["power"]))
@@ -309,7 +359,6 @@ class LevinsonAmp(AmpPlugin):
             await self.refresh()
             if "volume_db" in b or "volume_step_db" in b:
                 asyncio.ensure_future(hub.vol.sync_from_amp())  # the Spotify slider follows
-            return hub.ok(levinson=self.state, **self.summary())
 
     # ---- for scenes (TV mode)
     async def standby_if_on(self, inp: str) -> dict:

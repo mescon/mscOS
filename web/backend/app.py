@@ -285,6 +285,23 @@ class Hub:
     def plugin(self, pid: str):
         return self.plugins.get(pid)
 
+    # ---- cards the modules describe (Plugin.panel)
+    def panels(self) -> dict:
+        out = {}
+        for pid, p in self.plugins.items():
+            try:
+                d = p.panel()
+            except Exception:  # noqa: BLE001 - a module's card must not take the panel down
+                log.exception("panel of %s", pid)
+                d = None
+            if d:
+                out[pid] = d
+        return out
+
+    def panel_changed(self, plugin=None) -> None:
+        """A module's card changed (or any may have): tell the open panels."""
+        asyncio.ensure_future(self.broadcast({"type": "panels", "panels": self.panels()}))
+
     @property
     def playing_here(self) -> bool:
         return self._was_playing
@@ -410,6 +427,31 @@ class Hub:
         p = os.path.join(STATE_DIR, "settings.json")
         with open(p + ".tmp", "w") as f:
             json.dump(self.settings, f)
+        os.replace(p + ".tmp", p)
+        persist(p)
+
+    # ---- secrets: addresses with tokens, keys. A root-only file; never in the settings
+    # (those are sent to the panel) and never sent anywhere but to the service they are for.
+    def secret(self, key: str) -> str:
+        if not hasattr(self, "_secrets"):
+            try:
+                with open(os.path.join(STATE_DIR, "secrets.json")) as f:
+                    self._secrets = json.load(f)
+            except (OSError, ValueError):
+                self._secrets = {}
+        return self._secrets.get(key, "")
+
+    def set_secret(self, key: str, value: str) -> None:
+        self.secret(key)
+        if value:
+            self._secrets[key] = value
+        else:
+            self._secrets.pop(key, None)
+        os.makedirs(STATE_DIR, exist_ok=True)
+        p = os.path.join(STATE_DIR, "secrets.json")
+        fd = os.open(p + ".tmp", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump(self._secrets, f)
         os.replace(p + ".tmp", p)
         persist(p)
 
@@ -640,8 +682,12 @@ class Hub:
                              cooldown=3600)
 
     # ---- alerts, delivered by the modules that are a transport (Home Assistant, ...)
+    def can_alert(self) -> bool:
+        """Is any module that delivers alerts on and set up?"""
+        return any(p.can_notify() for p in self.plugins.values())
+
     async def alert(self, kind: str, title: str, message: str, cooldown: float = 6 * 3600, force=False) -> bool:
-        if not self.settings.get("alerts") and not force:
+        if (not self.settings.get("alerts") or kind in self.settings.get("alerts_off", [])) and not force:
             return False
         now = time.time()
         if not force and now - self.alert_sent.get(kind, 0) < cooldown:
@@ -917,8 +963,8 @@ async def ws_handler(request):
         "type": "hello", "status": hub.status, "playback": hub.playback, "auth": hub.auth,
         "queue": hub.queue, "xruns": list(hub.xruns)[-2880:], "last_test": hub.last_test,
         "features": hub.features(), "names": hub.names(), **{k: v for p in hub.plugins.values() for k, v in p.hello().items()}, "quality": hub.track_quality,
-        "now": hub.source.now_playing() if hub.source else None,
-        "tests": list(hub.tests)[-30:], "settings": {**hub.settings, "alerts_configured": bool(hub.features().get("ha_alerts"))},
+        "now": hub.source.now_playing() if hub.source else None, "panels": hub.panels(),
+        "tests": list(hub.tests)[-30:], "settings": {**hub.settings, "alerts_configured": hub.can_alert()},
         "jobs": {k: {kk: vv for kk, vv in v.items()} for k, v in hub.jobs.items()},
     }))
     try:
@@ -1184,9 +1230,12 @@ async def get_names(request):
 
 
 # ---- Settings, alerts
+ALERT_KINDS = ("dac", "soloist", "dropouts", "verify", "expiry")  # what hub.alert is called with
+
+
 @routes.get("/api/settings")
 async def get_settings(request):
-    return web.json_response({**hub.settings, "alerts_configured": bool(hub.features().get("ha_alerts"))})
+    return web.json_response({**hub.settings, "alerts_configured": hub.can_alert()})
 
 
 @routes.post("/api/settings")
@@ -1199,6 +1248,10 @@ async def set_settings(request):
             if len(v) > 60 or any(ord(c) < 32 for c in v):
                 raise web.HTTPBadRequest(text=T("Namnet får vara högst 60 tecken."))
             upd[k] = v  # "" = the detected name
+    if "alerts_off" in b:  # the kinds of alert the user does not want
+        if not isinstance(b["alerts_off"], list) or any(k not in ALERT_KINDS for k in b["alerts_off"]):
+            raise web.HTTPBadRequest(text=T("Okänt val"))
+        upd["alerts_off"] = sorted(set(b["alerts_off"]))
     if "network_name" in b:
         if b["network_name"] not in ("streamer", "output", "custom"):
             raise web.HTTPBadRequest(text=T("Okänt val"))
@@ -1222,7 +1275,15 @@ async def set_settings(request):
             raise web.HTTPBadRequest(text=T("Okänd tidszon"))
     for p in hub.plugins.values():
         p.update_settings(b, upd)
+    secrets = {o["key"]: p for p in hub.plugins.values() for o in p.option_list() if o["type"] == "secret" and o["key"] in b}
+    for k in secrets:
+        v = str(b[k]).strip()
+        if len(v) > 2000 or any(ord(c) < 32 for c in v):
+            raise web.HTTPBadRequest(text=T("Ogiltigt värde"))
     # all valid: apply
+    for k, p in secrets.items():
+        hub.set_secret(k, str(b[k]).strip())
+        await p.settings_applied({k: True})
     if tz is not None:
         await collect.run(["timedatectl", "set-timezone", tz], timeout=10)
     hub.settings.update(upd)
@@ -1243,12 +1304,37 @@ async def set_settings(request):
         # the link renegotiates (~3 s); answer first so the reply is not lost
         asyncio.get_running_loop().call_later(1, lambda: asyncio.ensure_future(collect.apply_net_speed(b["net_speed"])))
     await asyncio.get_running_loop().run_in_executor(None, hub.save_settings)
-    await hub.broadcast({"type": "settings", "settings": hub.settings, "features": hub.features(), "names": hub.names()})
-    return ok(settings=hub.settings)
+    shown = {**hub.settings, "alerts_configured": hub.can_alert()}
+    await hub.broadcast({"type": "settings", "settings": shown, "features": hub.features(), "names": hub.names()})
+    return ok(settings=shown)
+
+
+# ---- the amplifier (whichever module is on) and the modules' own cards
+@routes.post("/api/amp")
+async def amp_action(request):
+    a = hub.amp
+    if a is None:
+        raise web.HTTPNotFound(text=T("Ingen förstärkarmodul är på."))
+    await a.amp_action(await body(request))
+    hub.panel_changed()  # cards that show the amplifier's input (TV mode) follow
+    return ok(amp=a.amp_state())
+
+
+@routes.post("/api/panels/{id}")
+async def panel_action(request):
+    p = hub.plugins.get(request.match_info["id"])
+    if p is None or p.panel() is None:
+        raise web.HTTPNotFound(text=T("Okänd modul"))
+    b = await body(request)
+    try:
+        await p.panel_action(str(b.get("name", "")), b.get("value"))
+    except RuntimeError as e:
+        raise web.HTTPBadGateway(text=str(e))
+    return ok(panel=p.panel())
 
 
 # ---- modules: which are installed, which are on
-KIND_ORDER = {"source": 0, "amp": 1, "device": 2, "integration": 3}
+KIND_ORDER = {"source": 0, "amp": 1, "device": 2, "notify": 3, "integration": 4}
 
 
 async def _plugin_list() -> list[dict]:
@@ -1259,8 +1345,12 @@ async def _plugin_list() -> list[dict]:
              "running": pid in hub.plugins}
         if pid in hub.plugins:
             d["status"] = hub.plugins[pid].status()
-        if pid in hub.plugins and cls.options:
-            d["options"] = [{**o, "value": hub.settings.get(o["key"])} for o in cls.options]
+        if pid in hub.plugins:
+            opts = hub.plugins[pid].option_list()
+            if opts:  # a secret's value never leaves the device: only whether one is set
+                d["options"] = [{**o, "value": None, "set": bool(hub.secret(o["key"]))} if o["type"] == "secret"
+                                else {**o, "value": hub.settings.get(o["key"])} for o in opts]
+            d["log"] = hub.plugins[pid].log()
         if cls.kind == "source":  # its player is installed on the device, from its publisher
             d.update(terms=cls.terms, terms_url=cls.terms_url, updates=cls.updates,
                      installed=await hub.plugins[pid].installed() if pid in hub.plugins else None)
@@ -1342,12 +1432,12 @@ async def plugins_set(request):
 
 @routes.post("/api/alerts/test")
 async def alerts_test(request):
-    if not any(p.features().get("ha_alerts") for p in hub.plugins.values()):
-        raise web.HTTPConflict(text=T("Ingen modul skickar larm (slå på Home Assistant under Moduler)"))
+    if not hub.can_alert():
+        raise web.HTTPConflict(text=T("Ingen modul som skickar larm är inställd. Slå på en under Moduler."))
     sent = await hub.alert("test", T("Testlarm från {name}", name=hub.names()["output"]),
                            T("Larmen fungerar. Så här ser det ut när något händer med ljudkedjan."), force=True)
     if not sent:
-        raise web.HTTPBadGateway(text=T("Home Assistant tog inte emot larmet"))
+        raise web.HTTPBadGateway(text=T("Larmet kunde inte skickas. Kontrollera modulens inställningar."))
     return ok()
 
 

@@ -7,6 +7,7 @@ a particular setup is a module that the user turns on under System -> Modules:
                Roon Bridge, HQPlayer NAA, ...; the source switch lists the enabled ones
   amp          an amplifier or volume control (Mark Levinson IP, Arcam, ...); at most one
                is the volume: the Spotify slider and the panel's volume drive it
+  notify       a way to deliver alerts to a phone (ntfy, ...)
   integration  outside systems (Home Assistant) and scenes (TV mode)
   device       board or DAC extras (native DSD for C-Media CM6632A)
 
@@ -27,16 +28,22 @@ log = logging.getLogger("plugins")
 
 class Plugin:
     id = ""
-    kind = "integration"          # source | amp | integration | device
+    kind = "integration"          # source | amp | device | notify | integration
     name: dict[str, str] = {}     # {"sv": ..., "en": ...}
     description: dict[str, str] = {}
     defaults: dict[str, Any] = {}  # its settings, merged into hub.settings (keys owned by the module)
     requires: tuple[str, ...] = ()  # other module kinds/ids it needs, e.g. ("amp",)
     # Settings the panel shows under the module (Modules view) and saves through /api/settings:
-    #   {"key": ..., "type": "text" | "select" | "toggle", "label": {sv, en}, "help": {sv, en},
-    #    "options": [[value, {sv, en}], ...] (select), "placeholder": ...}
-    # Modules with a view of their own (the amplifier) leave this empty.
+    #   {"key": ..., "type": "text" | "number" | "select" | "toggle" | "secret",
+    #    "label": {sv, en}, "help": {sv, en}, "options": [[value, {sv, en}], ...] (select),
+    #    "placeholder": ..., "min"/"max"/"step"/"unit" (number)}
+    # A "secret" (an address with a token, a key) is kept in the root-only secrets file,
+    # never in the settings and never sent to the panel: hub.secret(key) reads it.
     options: tuple[dict, ...] = ()
+
+    def option_list(self) -> list[dict]:
+        """The options as shown now; a module whose choices depend on other modules overrides it."""
+        return list(self.options)
 
     def __init__(self, hub):
         self.hub = hub
@@ -73,6 +80,10 @@ class Plugin:
         """Deliver an alert; True if delivered. Modules that are not a transport ignore it."""
         return False
 
+    def can_notify(self) -> bool:
+        """Is this module a way to deliver alerts, and set up?"""
+        return False
+
     def summary(self) -> dict:
         """Fields for the compact state API (/api/ha and the like)."""
         return {}
@@ -81,11 +92,49 @@ class Plugin:
         """One line for the Modules view: {"state": "ok" | "warn" | "idle", "text": {sv, en}}."""
         return None
 
+    def log(self) -> list[str] | None:
+        """Recent lines of its communication, for troubleshooting in the Modules view."""
+        return None
+
+    # ---- a card of its own in the Listen view
+    def panel(self) -> dict | None:
+        """Controls the panel draws without knowing the module:
+          {"title": {sv, en}, "summary": {sv, en}, "lead": {sv, en}, "controls": [
+             {"type": "button", "name", "label": {sv, en}, "value": what a press sends, "pressed": bool},
+             {"type": "range", "name", "label", "min", "max", "step", "value", "unit"},
+             {"type": "choice", "name", "label", "options": [[value, label], ...], "value"}]}
+        None: no card."""
+        return None
+
+    async def panel_action(self, name: str, value) -> None:
+        """A control was used. name "refresh": the card was opened, read the device now.
+        Raise RuntimeError with a text for the user when it cannot be done."""
+
 
 class AmpPlugin(Plugin):
-    """An amplifier (or any volume control) the core can drive. Levels are in dB."""
+    """An amplifier (or any volume control) the core can drive. Levels are in dB.
+
+    The panel's volume dial, input list, power and mute are drawn from amp_state() and act
+    through amp_action() (POST /api/amp): an amplifier module needs no page of its own."""
     kind = "amp"
     model = ""  # the default name of what this device plays into, e.g. "Mark Levinson Nº585.5"
+    # the Spotify slider as the amplifier's remote control is the core's (the volume bridge)
+    BRIDGE_OPTION = {"key": "spotify_vol_to_amp", "type": "toggle",
+                     "label": {"sv": "Spotify-reglaget styr förstärkarens volym", "en": "The Spotify slider drives the amplifier's volume"},
+                     "help": {"sv": "Samplen lämnas orörda, så signalen förblir bitperfekt.", "en": "The samples are left untouched, so the signal stays bit-perfect."}}
+
+    def amp_state(self) -> dict:
+        """{"reachable": bool | None (None: not known yet), "power": bool | None, "muted": bool,
+        "volume_db": float | None, "max_db": the panel's ceiling, "input": id,
+        "inputs": [{"id", "label"}], "note": {sv, en} when it cannot be controlled (why)}"""
+        return {"reachable": None}
+
+    async def amp_action(self, b: dict) -> None:
+        """power: bool, mute: bool, volume_db: float, volume_step_db: float, input: id.
+        Raise aiohttp HTTP errors with a text for the user."""
+
+    def hello(self) -> dict:
+        return {"amp": self.amp_state()}
 
     @property
     def max_db(self) -> float:

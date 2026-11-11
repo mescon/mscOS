@@ -533,11 +533,10 @@ input.line::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; ba
 .strip li.ok b { color: var(--g-ink); }
 .strip li.ok i { background: var(--red); border-color: var(--red); box-shadow: 0 0 9px var(--red-glow); }
 .strip li.ok:has(+ li.ok)::after { background: rgba(227, 38, 47, .55); }
-.strip { position: relative; }
-.strip.flow::before { content: ""; position: absolute; z-index: 1; top: 26px; left: var(--from, 10%); width: 56px; height: 3px; margin-left: -28px; border-radius: 2px; pointer-events: none;
-  background: linear-gradient(90deg, transparent, #ff8f94 55%, #fff 78%, transparent); filter: drop-shadow(0 0 6px var(--red));
-  animation: flow 2.6s cubic-bezier(.45, 0, .55, 1) infinite; }
-@keyframes flow { 0% { left: var(--from, 10%); opacity: 0; } 10%, 88% { opacity: 1; } 100% { left: var(--to, 90%); opacity: 0; } }
+.strip-wrap { position: relative; margin-top: clamp(26px, 4vw, 40px); }
+.strip-wrap .strip { margin-top: 0; }
+#wave { position: absolute; left: 0; top: -4px; width: 100%; height: 64px; pointer-events: none; }
+.strip li i { position: relative; z-index: 1; }
 .strip li.bad { color: var(--g-amber); }
 .strip li.bad i { border-color: var(--g-amber); background: color-mix(in srgb, var(--g-amber) 30%, transparent); }
 
@@ -659,7 +658,6 @@ body[data-view="v-play"] .dock, body.in-setup .dock { display: none; }
   body[data-view="v-play"] .job { bottom: 20px; }
 }
 @media (min-width: 1680px) { #v-signal .panels { columns: 3; } }
-@media (prefers-reduced-motion: reduce) { .strip.flow::before { display: none; } }
 
 /* small corrections */
 .row .btn.danger { margin-top: 0; }
@@ -671,3 +669,13 @@ body[data-view="v-play"] .dock, body.in-setup .dock { display: none; }
 .names .names-l { font-size: .8125rem; color: var(--engraved); margin-top: 8px; }
 .names .seg { justify-self: start; }
 .names .fine { margin: 0; }
+
+/* module options of every type; module-described cards */
+.mod-opts .toggle { margin-top: 6px; align-items: flex-start; line-height: 1.35; }
+.mod-opts .toggle > span:last-child { font-size: .9375rem; color: var(--ink); }
+.mo-num { display: flex; align-items: center; gap: 10px; }
+.mo-num input, .mod-opts input[type=password] { min-height: 44px; padding: 0 12px; border: 1px solid var(--btn-line); border-radius: 2px; background: transparent; font: inherit; font-size: 1rem; color: var(--ink); min-width: 0; }
+.mo-num input { width: 8em; }
+.mo-num small { color: var(--engraved); font-size: .8125rem; }
+.mod-body .raw { margin-top: 10px; border-top: 1px solid var(--hair); }
+#panels .fold-body > .row:first-child { margin-top: 0; }

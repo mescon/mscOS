@@ -57,6 +57,51 @@ class TvMode(Plugin):
     def summary(self) -> dict:
         return {"mode": self.mode()}
 
+    def option_list(self) -> list[dict]:
+        a = self._amp()
+        st = a.amp_state() if a else {}
+        return [{"key": "tv_input", "type": "select", "label": {"sv": "Förstärkarens ingång för TV och AV-receiver", "en": "The amplifier's input for the TV and AV receiver"},
+                 "options": [[i["id"], {"sv": i["label"], "en": i["label"]}] for i in st.get("inputs", [])]}]
+
+    def panel(self) -> dict | None:
+        m = self.mode()
+        if self._amp() is None:
+            return None
+        names = {"tv": {"sv": "TV", "en": "TV"}, "stereo": {"sv": "Musik", "en": "Music"}, "off": {"sv": "Av", "en": "Off"},
+                 "other": {"sv": "Annan ingång", "en": "Another input"}}
+        return {"title": {"sv": "TV-läge", "en": "TV mode"}, "summary": names.get(m, {"sv": "", "en": ""}), "controls": [
+            {"type": "button", "name": "mode", "value": "tv", "pressed": m == "tv", "label": {"sv": "TV", "en": "TV"}},
+            {"type": "button", "name": "mode", "value": "stereo", "pressed": m == "stereo", "label": {"sv": "Musik", "en": "Music"}},
+            {"type": "button", "name": "mode", "value": "tv_off", "label": {"sv": "Stäng av efter TV", "en": "Off after TV"}}]}
+
+    async def panel_action(self, name: str, value) -> None:
+        if name == "refresh":
+            return
+        if name != "mode" or value not in ("tv", "stereo", "tv_off"):
+            raise RuntimeError(T("Okänt reglage"))
+        a = self._amp()
+        if a is None or not a.host:
+            raise RuntimeError(T("Förstärkaren är inte hittad"))
+        try:
+            await self._switch(a, value)
+        except a.errors as e:
+            raise RuntimeError(T("Förstärkaren: {error}", error=e))
+        await a.refresh()
+        self.hub.panel_changed(self)
+
+    async def _switch(self, a, mode: str) -> dict:
+        hub, tv, did = self.hub, self.hub.settings.get("tv_input", "RCA3"), {}
+        if mode == "tv":
+            if await hub.pause_if_playing():
+                did["paused_soloist"] = True
+            did |= await a.select(tv, unmute=True)
+        elif mode == "stereo":
+            did |= await a.select(a.play_input, unmute=True)
+            a.mark_selected()  # the next music start need not do it again
+        else:
+            did |= await a.standby_if_on(tv)
+        return did
+
     def features(self) -> dict:
         return {"tvmode": True}
 
@@ -66,23 +111,13 @@ class TvMode(Plugin):
             hub = self.hub
             b = await hub.body(request)
             mode = b.get("mode")
-            tv = hub.settings.get("tv_input", "RCA3")
             if mode not in ("tv", "stereo", "tv_off"):
                 raise web.HTTPBadRequest(text=T("mode ska vara tv, stereo eller tv_off"))
             a = self._amp()
             if a is None or not a.host:
                 raise web.HTTPServiceUnavailable(text=T("Förstärkaren är inte hittad"))
-            did: dict = {}
             try:
-                if mode == "tv":
-                    if await hub.pause_if_playing():
-                        did["paused_soloist"] = True
-                    did |= await a.select(tv, unmute=True)
-                elif mode == "stereo":
-                    did |= await a.select(a.play_input, unmute=True)
-                    a.mark_selected()  # the next music start need not do it again
-                else:
-                    did |= await a.standby_if_on(tv)
+                did = await self._switch(a, mode)
             except a.errors as e:
                 raise web.HTTPBadGateway(text=T("Förstärkaren: {error}", error=e))
             await a.refresh()

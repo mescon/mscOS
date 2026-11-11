@@ -4,7 +4,7 @@ await initI18n();  // before anything renders: texts below are looked up as they
 import { maybeSetup } from "./setup.js";
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
-const S = { status: {}, playback: {}, auth: {}, queue: {}, xruns: [], lastTest: null, arcam: {}, sources: [], opts: null,
+const S = { status: {}, playback: {}, auth: {}, queue: {}, xruns: [], lastTest: null, panels: {}, opts: null,
   tests: [], settings: {}, access: { configured: true, logged_in: false } };
 
 // ------------------------------------------------------------------ formatting
@@ -50,6 +50,35 @@ const desktop = matchMedia("(min-width: 1024px)");
 const fv = (id, text, warn = false) => { const el = $(`#fv-${id}`); if (el) { el.textContent = text ?? ""; el.classList.toggle("warn", !!warn); } };
 let optT = 0, testSecs = 30, dacT = 0;
 
+// ------------------------------------------------------------------ the signal as an oscilloscope trace
+// A burst of waveform travels the lit part of the chain, stage to stage, then starts over.
+const WAVE = { on: false, from: 0, to: 1, t0: 0, raf: 0 };
+const calm = matchMedia("(prefers-reduced-motion: reduce)");
+function waveFrame(now) {
+  const cv = $("#wave"), g = cv.getContext("2d"); WAVE.raf = 0;
+  const dpr = devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+  g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  if (!WAVE.on || document.hidden || !w || !$("#v-signal").classList.contains("active")) return;
+  const x0 = WAVE.from * w, x1 = WAVE.to * w, cycle = 3400, p = ((now - WAVE.t0) % cycle) / cycle;
+  const head = x0 - 30 + (x1 - x0 + 60) * Math.min(1, p / .86);  // travels for most of the cycle, then a short rest
+  const mid = h / 2, t = now / 1000;
+  g.beginPath();
+  for (let x = x0; x <= x1; x += 1.5) {
+    const d = (x - head) / 78, env = Math.exp(-d * d * (d > 0 ? 9 : .7));  // a sharp front and a tail behind it
+    const edge = Math.min(1, (x - x0) / 14, (x1 - x) / 14);                // still at the stages it starts and ends in
+    const y = mid + env * edge * (Math.sin(x * .17 - t * 10) * 11 + Math.sin(x * .41 - t * 15) * 4.6 + Math.sin(x * .9 + t * 7) * 2);
+    if (x === x0) g.moveTo(x, y); else g.lineTo(x, y);
+  }
+  g.strokeStyle = "#ff5a62"; g.lineWidth = 1.4; g.lineJoin = "round"; g.shadowColor = "rgba(227, 38, 47, .95)"; g.shadowBlur = 9; g.stroke();
+  if (!calm.matches) WAVE.raf = requestAnimationFrame(waveFrame);
+}
+function waveSet(on, from = WAVE.from, to = WAVE.to) {
+  Object.assign(WAVE, { on, from, to });
+  if (!WAVE.raf) { if (!WAVE.t0) WAVE.t0 = performance.now(); WAVE.raf = requestAnimationFrame(waveFrame); }
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) waveSet(WAVE.on); });
+
 // ------------------------------------------------------------------ views
 const LEGACY = { "v-dac": "v-signal", "v-arcam": "v-play", "system": "v-sys" };
 function showView(id) {
@@ -60,6 +89,7 @@ function showView(id) {
   document.body.dataset.view = id;
   if (id === "v-signal") { loadOpts(); loadDac(); requestAnimationFrame(() => { renderSpark(); if (S.dacd?.clock_avg) renderClockChart(S.dacd.clock_avg.series || []); }); }
   if (id === "v-mods") loadMods();
+  if (id === "v-signal") waveSet(WAVE.on);
 }
 document.addEventListener("click", (e) => {
   const a = e.target.closest('a[href^="#v-"]'); if (!a) return;
@@ -77,7 +107,6 @@ $$("details.fold").forEach((d) => {
     if (d.id === "f-drop") renderSpark();
     if (d.id === "f-clock" && S.dacd?.clock_avg) renderClockChart(S.dacd.clock_avg.series || []);
     if (d.id === "f-opt") loadOpts(true);
-    if (d.id === "f-arcam") arcam({});  // read on demand: HA holds the Arcam's only connection
   });
 });
 
@@ -118,9 +147,6 @@ function renderNames() {
 function renderFeatures() {
   const f = S.features || {}, amp = f.amp && f.amp !== "none";
   $("#amp").hidden = !amp; $("#f-amp").hidden = !amp;
-  $("#f-arcam").hidden = !f.arcam;
-  $("#f-ml").hidden = !amp;
-  $("#f-alerts").hidden = !(f.plugins || []).includes("homeassistant");
   $("#f-spotify").hidden = !(f.plugins || []).includes("spotify");  // Soloist: key, name, updates
   const led = $("#leds").closest("label"); led.hidden = f.leds === false; led.nextElementSibling.hidden = f.leds === false;
 }
@@ -128,16 +154,16 @@ function handle(m) { handleMsg(m); renderDock(); }
 function handleMsg(m) {
   switch (m.type) {
     case "hello":
-      Object.assign(S, { status: m.status || {}, playback: m.playback || {}, auth: m.auth || {}, queue: m.queue || {}, xruns: m.xruns || [], lastTest: m.last_test, arcam: m.arcam || {}, sources: m.arcam_sources || [], tests: m.tests || [], settings: m.settings || {}, quality: m.quality || {}, features: m.features || { amp: "levinson", arcam: true }, names: m.names || {}, now: m.now || null });
-      ML.state = m.levinson || {}; ML.inputs = m.ml_inputs || [];
+      Object.assign(S, { status: m.status || {}, playback: m.playback || {}, auth: m.auth || {}, queue: m.queue || {}, xruns: m.xruns || [], lastTest: m.last_test, panels: m.panels || {}, tests: m.tests || [], settings: m.settings || {}, quality: m.quality || {}, features: m.features || {}, names: m.names || {}, now: m.now || null });
+      AMP = m.amp || null;
       renderFeatures(); renderAll(); break;
     case "now": if (m.source === srcId()) { S.now = m.now; renderPlay(); renderSignal(); } break;
     case "status": S.status = m.status; if (roonMode()) S.now = m.status.now ?? null; renderStatus(); renderSignal(); if (roonMode()) renderPlay(); else renderSource(); break;
     case "soloist": soloistEvent(m.event); break;
     case "xrun": S.xruns.push(m.point); if (S.xruns.length > 2880) S.xruns.shift(); renderSpark(); renderSignal(); break;
-    case "arcam": S.arcam = m.arcam; renderArcam(); break;
+    case "panels": S.panels = m.panels || {}; renderPanels(); break;
     case "quality": S.quality = m.quality; renderSignal(); renderPlay(); break;
-    case "levinson": ML.state = m.levinson; renderLevinson(); break;
+    case "amp": AMP = m.amp; renderAmp(); break;
     case "job": jobEvent(m); break;
     case "settings": S.settings = { ...S.settings, ...m.settings }; if (m.features) { S.features = m.features; renderFeatures(); } if (m.names) { S.names = m.names; renderNames(); } renderSettings(); renderPlay(); renderSignal(); break;
     case "history_cleared": S.xruns = []; S.tests = []; renderSpark(); renderVlog(); renderSignal(); break;
@@ -153,7 +179,7 @@ function renderDock() {
   const playing = !$("#i-pause").hidden;
   $("#dk-i").setAttribute("d", playing ? DK.pause : DK.play);
   $("#dk-play").setAttribute("aria-label", playing ? tr("Pausa") : tr("Spela"));
-  const m = ML.state || {};
+  const m = AMP || {};
   $("#dk-volbox").hidden = $("#amp").hidden || !m.reachable || m.power === false;
   $("#dk-vol").textContent = $("#ml-vol-v").textContent;
   const v = S.status.system?.mscos; $("#rail-ver").textContent = v ? `mscOS ${v}` : "";
@@ -399,10 +425,8 @@ function renderSignal() {
   // strip in the display
   const strip = $("#strip");
   strip.innerHTML = c.stages.map((s) => `<li class="${s.state === "ok" ? "ok" : s.state === "bad" ? "bad" : ""}"><i></i><b>${esc(s.name)}</b>${s.tag ? `<small>${esc(s.tag)}</small>` : ""}</li>`).join("");
-  // one pulse travels the lit part of the chain, from its first stage to its last
   const lit = c.stages.map((s, i) => (s.state === "ok" ? i : -1)).filter((i) => i >= 0), n = c.stages.length;
-  strip.classList.toggle("flow", !!c.running && lit.length > 1);
-  if (lit.length > 1) { strip.style.setProperty("--from", `${(lit[0] + .5) / n * 100}%`); strip.style.setProperty("--to", `${(lit[lit.length - 1] + .5) / n * 100}%`); }
+  if (lit.length > 1) waveSet(!!c.running, (lit[0] + .5) / n, (lit[lit.length - 1] + .5) / n); else waveSet(false);
   // readout
   $(".display").classList.toggle("idle", !c.running);
   // idle: the display keeps showing the locked format, dimmed, like hardware in standby
@@ -484,14 +508,14 @@ function renderStatus() {
   renderSysHead();
 }
 function renderSysHead() {
-  const st = S.status, solo = st.soloist || {}, dac = st.dac || {}, sys = st.system || {}, m = ML.state || {};
+  const st = S.status, solo = st.soloist || {}, dac = st.dac || {}, sys = st.system || {}, m = AMP || {};
   if (!st.system) return;
   const roon = roonMode(), issues = [], sname = roon ? (SRC() ? loc(SRC().name) : "") : "Soloist";
   if (!dac.present) issues.push(tr("DAC:n hittas inte"));
   if (roon ? SRC() && !srcState().active : solo.service !== "active") issues.push(tr`${sname} kör inte`);
   if (!SRC()) issues.push(tr("ingen källa är påslagen"));
   if (solo.days_left != null && solo.days_left < 14) issues.push(tr`Spotify-bygget går ut om ${solo.days_left} dagar`);
-  if (m.host && m.reachable === false) issues.push(tr("förstärkaren svarar inte"));
+  if (m.reachable === false) issues.push(tr("förstärkaren svarar inte"));
   const t = $("#sys-title");
   t.textContent = issues.length ? tr("Behöver uppmärksamhet") : tr("Allt i ordning");
   t.classList.toggle("warn", issues.length > 0);
@@ -697,10 +721,12 @@ function renderSettings() {
   $("#auto-verify").checked = !!st.auto_verify;
   $("#alerts-on").checked = !!st.alerts;
   $("#alerts-state").textContent = st.alerts_configured
-    ? (st.alerts ? tr("Kopplat till Home Assistant. Larm skickas till din telefon.") : tr("Kopplat till Home Assistant, men larmen är avstängda."))
-    : tr("Inte kopplat till Home Assistant.");
+    ? (st.alerts ? tr("Larm skickas till din telefon.") : tr("Larmen är avstängda."))
+    : tr("Ingen modul som skickar larm är inställd. Slå på ntfy eller Home Assistant under Moduler.");
+  const off = st.alerts_off || [];
+  $$("#alert-kinds input").forEach((i) => { i.checked = !off.includes(i.dataset.kind); i.disabled = !st.alerts_configured || !st.alerts; });
   $("#alerts-on").disabled = !st.alerts_configured; $("#alerts-test").disabled = !st.alerts_configured || !st.alerts;
-  fv("alerts", !st.alerts_configured ? tr("Inte kopplat") : st.alerts ? tr("På") : tr("Av"), !st.alerts_configured || !st.alerts);
+  fv("alerts", !st.alerts_configured ? tr("Inte inställt") : st.alerts ? tr("På") : tr("Av"), !st.alerts_configured || !st.alerts);
   $$("#net-speed button").forEach((b) => b.setAttribute("aria-checked", +b.dataset.v === (st.net_speed || 100)));
 }
 async function setSetting(key, on, el) {
@@ -709,6 +735,11 @@ async function setSetting(key, on, el) {
 }
 $("#auto-verify").addEventListener("change", (e) => setSetting("auto_verify", e.target.checked, e.target));
 $("#alerts-on").addEventListener("change", (e) => setSetting("alerts", e.target.checked, e.target));
+$("#alert-kinds").addEventListener("change", async () => {
+  const off = [...$$("#alert-kinds input")].filter((i) => !i.checked).map((i) => i.dataset.kind);
+  try { const r = await post("/api/settings", { alerts_off: off }); S.settings = { ...S.settings, ...r.settings }; } catch {}
+  renderSettings();
+});
 $("#alerts-test").addEventListener("click", async () => { try { await post("/api/alerts/test"); toast(tr("Testlarmet är skickat till telefonen")); } catch {} });
 $("#hist-clear").addEventListener("click", async (e) => {
   const b = e.currentTarget;
@@ -753,30 +784,52 @@ $("#pw-change-form").addEventListener("submit", async (e) => {
     $("#pw-cur").value = $("#pw-next").value = ""; $("#pw-change-form").hidden = true; toast(tr("Lösenordet är bytt. Andra enheter är utloggade.")); } catch {}
 });
 
-// ------------------------------------------------------------------ Arcam
-function renderArcam() {
-  const a = S.arcam, ctl = $("#arcam-ctl");
-  if (a.reachable === false) { $("#arcam-state").textContent = tr("Receivern svarar inte. Kontrollera att den är på nätverket och att IP-styrning är aktiverad."); ctl.hidden = true; fv("arcam", tr("Svarar inte")); return; }
-  if (a.reachable == null) return;
-  ctl.hidden = false;
-  ctl.classList.toggle("off", !a.power);
-  $("#arcam-state").textContent = a.power ? tr`På, källa ${a.source}${a.muted ? tr(", ljudet avstängt") : ""}` : tr("I standby");
-  fv("arcam", a.power ? tr`På, ${a.source}` : tr("I standby"));
-  const pb = $("#arcam-power"); pb.textContent = a.power ? tr("Stäng av") : tr("Slå på");
-  const mb = $("#arcam-mute"); mb.textContent = a.muted ? tr("Slå på ljudet") : tr("Stäng av ljudet"); mb.setAttribute("aria-pressed", !!a.muted);
-  const vol = $("#arcam-vol"); if (document.activeElement !== vol && a.volume != null) vol.value = a.volume;
-  $("#arcam-vol-v").textContent = a.volume ?? "–";
-  const src = $("#arcam-src");
-  if (!src.children.length) src.innerHTML = S.sources.map((s) => `<button class="src" role="radio" data-src="${esc(s)}"><i aria-hidden="true"></i>${esc(s)}</button>`).join("");
-  src.querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", b.dataset.src === a.source));
+// ------------------------------------------------------------------ cards the modules describe
+// A module (an AV receiver, a scene) sends a title, a summary and controls; the page draws them
+// without knowing the module. Opening a card asks the module to read its device.
+const locs = (o) => (typeof o === "string" ? o : loc(o));
+function panelControls(id, list) {
+  let out = "", row = [];
+  const flush = () => { if (row.length) { out += `<div class="row wrap">${row.join("")}</div>`; row = []; } };
+  const at = (c, v) => `data-pn="${esc(c.name)}" data-pv="${esc(JSON.stringify(v))}"`;
+  list.forEach((c) => {
+    if (c.type === "button") { row.push(`<button class="btn" ${at(c, c.value)}${c.pressed != null ? ` aria-pressed="${!!c.pressed}"` : ""}>${esc(locs(c.label))}</button>`); return; }
+    flush();
+    if (c.type === "range") out += `<label class="fader"><span class="fader-head"><span>${esc(locs(c.label))}</span><b>${c.value ?? "–"}${c.unit ? ` ${esc(c.unit)}` : ""}</b></span>
+      <input type="range" data-pn="${esc(c.name)}" min="${+c.min}" max="${+c.max}" step="${+c.step || 1}" value="${+(c.value ?? c.min)}" aria-label="${esc(locs(c.label))}"></label>`;
+    else if (c.type === "choice") out += `<div class="sources" role="radiogroup" aria-label="${esc(locs(c.label))}">${c.options.map(([v, l]) =>
+      `<button class="src" role="radio" ${at(c, v)} aria-checked="${v === c.value}"><i aria-hidden="true"></i>${esc(locs(l))}</button>`).join("")}</div>`;
+  });
+  flush();
+  return out;
 }
-const arcam = (data) => post("/api/arcam", data).catch(() => {});
-$("#arcam-power").addEventListener("click", () => { toast(S.arcam.power ? tr("Stänger av receivern…") : tr("Slår på receivern…")); arcam({ power: !S.arcam.power }); });
-$("#arcam-mute").addEventListener("click", () => arcam({ mute: !S.arcam.muted }));
-$("#arcam-vol").addEventListener("input", (e) => { $("#arcam-vol-v").textContent = e.target.value; });
-$("#arcam-vol").addEventListener("change", (e) => arcam({ volume: +e.target.value }));
-$("#arcam-src").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) arcam({ source: b.dataset.src }); });
-
+function renderPanels() {
+  const box = $("#panels"), P = S.panels || {};
+  if (box.contains(document.activeElement) && document.activeElement.type === "range") return;  // not under a thumb being dragged
+  const open = new Set([...box.querySelectorAll("details[open]")].map((d) => d.dataset.panel));
+  const was = (id) => { try { return localStorage.getItem(`fold:panel-${id}`) === "1"; } catch { return false; } };
+  const first = !box.dataset.drawn; box.dataset.drawn = "1";
+  box.innerHTML = Object.entries(P).map(([id, p]) => `<details class="fold" data-panel="${esc(id)}"${open.has(id) || (first && was(id)) ? " open" : ""}>
+    <summary><span>${esc(locs(p.title))}</span><span class="fv${p.warn ? " warn" : ""}">${esc(locs(p.summary))}</span></summary>
+    <div class="fold-body">${p.lead ? `<p class="lead">${esc(locs(p.lead))}</p>` : ""}${panelControls(id, p.controls || [])}</div></details>`).join("");
+}
+const panelAct = (id, name, value) => post(`/api/panels/${encodeURIComponent(id)}`, { name, value })
+  .then((r) => { S.panels = { ...S.panels, [id]: r.panel }; renderPanels(); }).catch(() => {});
+$("#panels").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-pn]"); if (!b) return;
+  panelAct(b.closest("details").dataset.panel, b.dataset.pn, JSON.parse(b.dataset.pv));
+});
+$("#panels").addEventListener("input", (e) => { if (e.target.type === "range") e.target.closest("label").querySelector("b").textContent = e.target.value; });
+$("#panels").addEventListener("change", (e) => {
+  if (e.target.type !== "range") return;
+  const id = e.target.closest("details").dataset.panel, name = e.target.dataset.pn, v = +e.target.value;
+  e.target.blur(); panelAct(id, name, v);
+});
+$("#panels").addEventListener("toggle", (e) => {  // toggle does not bubble: caught on the way down
+  const d = e.target; if (!d.dataset?.panel) return;
+  try { localStorage.setItem(`fold:panel-${d.dataset.panel}`, d.open ? "1" : "0"); } catch {}
+  if (d.open && !d.dataset.read) { d.dataset.read = "1"; panelAct(d.dataset.panel, "refresh", null); }
+}, true);
 
 // ------------------------------------------------------------------ DAC (Eunhasu's /dacinfo/, interpreted)
 const dacVisible = () => desktop.matches || $("#v-signal").classList.contains("active");
@@ -923,27 +976,18 @@ $("#net-speed").addEventListener("click", async (e) => {
   try { await post("/api/settings", { net_speed: +b.dataset.v }); S.settings = { ...S.settings, net_speed: +b.dataset.v }; renderSettings(); toast(tr`Byter till ${b.dataset.v} Mbit/s. Panelen kopplar upp igen om några sekunder.`); } catch {}
 });
 
-// ------------------------------------------------------------------ Mark Levinson 585.5
-const ML = { state: {}, inputs: [] };
-function renderLevinson() {
-  const m = ML.state || {}, st = S.settings || {};
-  const max = +(st.ml_max_db || 40);
-  let lead;
-  if (m.reachable === null || m.reachable === undefined) lead = tr("Söker förstärkaren i nätverket…");
-  else if (!m.host) lead = tr("Hittar inte förstärkaren i nätverket. Anslut nätverkskabeln och välj Connect = Ethernet i dess Setup-meny.");
-  else if (!m.reachable) lead = tr`Ingen kontakt med förstärkaren på ${m.host}. Står den i standbyläget Green är nätverket avstängt.`;
-  else if (m.power === false) lead = tr("I standby");
-  else {
-    const name = m.label ? (m.input && m.input !== m.label ? `${m.label} (${m.input})` : m.label) : m.input;
-    lead = tr`På${name ? `, ${name}` : ""}${m.muted ? ", ljudet av" : ""}`;
-  }
-  $("#ml-state").textContent = lead;
+// ------------------------------------------------------------------ the amplifier: whichever amplifier module is on
+let AMP = null;
+function renderAmp() {
+  const m = AMP || {}, max = +(m.max_db || 40);
+  const inp = (m.inputs || []).find((i) => i.id === m.input);
+  const name = inp ? (inp.label !== inp.id ? `${inp.label} (${inp.id})` : inp.id) : "";
+  $("#ml-state").textContent = m.note ? loc(m.note) : m.power === false ? tr("I standby") : tr`På${name ? `, ${name}` : ""}${m.muted ? ", ljudet av" : ""}`;
   $("#ml-ctl").hidden = !m.reachable;
   $("#ml-step").hidden = !m.reachable || m.power === false;
   $("#amp").classList.toggle("live", !!m.reachable && m.power !== false);
-  fv("amp", !m.reachable ? "" : m.power === false ? "Standby" : (m.label || m.input || ""));
-  fv("ml", m.host || tr("Söker"), m.reachable === false);
   $("#amp").classList.toggle("off", m.power === false);
+  fv("amp", !m.reachable ? "" : m.power === false ? "Standby" : (inp?.label || ""));
   $("#ml-power").textContent = m.power === false ? tr("Slå på") : "Standby";
   $("#ml-mute").setAttribute("aria-pressed", !!m.muted);
   $("#ml-mute").textContent = m.muted ? tr("Ljud på") : tr("Ljud av");
@@ -959,71 +1003,41 @@ function renderLevinson() {
   $("#ml-limit").textContent = over
     ? tr`Volymen är ställd med fjärrkontrollen över panelens gräns på ${dec(max)} dB. Panelen kan bara sänka den.`
     : tr`Panelen går högst till ${dec(max)} dB. Högre volym ställer du med fjärrkontrollen.`;
-  const src = $("#ml-src");
-  // inputs, with the names the amplifier's display uses once the panel has seen them
-  const labels = m.labels || {}, key = JSON.stringify(labels);
-  if (ML.inputs.length && src.dataset.k !== key) {
+  const src = $("#ml-src"), key = JSON.stringify(m.inputs || []);
+  if (src.dataset.k !== key) {  // the inputs, with the names the amplifier itself uses
     src.dataset.k = key;
-    src.innerHTML = ML.inputs.map((s) => `<button class="src" role="radio" data-src="${esc(s)}"><i aria-hidden="true"></i>${esc(labels[s] && labels[s] !== s ? labels[s] : s)}</button>`).join("");
+    src.innerHTML = (m.inputs || []).map((i) => `<button class="src" role="radio" data-src="${esc(i.id)}"><i aria-hidden="true"></i>${esc(i.label)}</button>`).join("");
   }
   src.querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", b.dataset.src === m.input));
-  // settings
-  $("#ml-conn").textContent = !m.host ? tr("Inte hittad än. Panelen söker var tionde minut.")
-    : m.reachable ? tr`Ansluten på ${m.host}${st.ml_host ? "" : ", hittad automatiskt"}.` : tr`Ingen kontakt på ${m.host}.`;
-  $("#ml-auto-on").checked = !!st.ml_auto_on;
-  $("#spotify-vol-amp").checked = !!st.spotify_vol_to_amp;
-  $$("#ml-off button").forEach((b) => b.setAttribute("aria-checked", +b.dataset.v === (st.ml_auto_off_min || 0)));
-  const mx = $("#ml-max"); if (document.activeElement !== mx) mx.value = max;
-  const h = $("#ml-host"); if (document.activeElement !== h) h.value = st.ml_host || "";
-  $("#ml-log").textContent = (m.log || []).length
-    ? m.log.map(([t, dir, txt]) => `${clock(t)}  ${dir === "tx" ? "→" : "←"} ${txt}`).join("\n") : tr("Ingen trafik än.");
   renderDock();
 }
-const ml = (data) => post("/api/levinson", data).then((r) => { ML.state = r.levinson; renderLevinson(); }).catch(() => {});
-async function mlSetting(data, msg) {
-  try {
-    const r = await post("/api/settings", data);
-    S.settings = { ...S.settings, ...r.settings }; renderSettings(); renderLevinson();
-    if (msg) toast(msg(r.settings));
-  } catch {}
-}
+const amp = (data) => post("/api/amp", data).then((r) => { AMP = r.amp; renderAmp(); }).catch(() => {});
 $("#ml-power").addEventListener("click", () => {
-  const on = ML.state.power === false;
+  const on = AMP?.power === false;
   toast(on ? tr("Slår på förstärkaren…") : tr("Försätter förstärkaren i standby…"));
-  ml({ power: on });
+  amp({ power: on });
 });
-$("#ml-mute").addEventListener("click", () => ml({ mute: !ML.state.muted }));
+$("#ml-mute").addEventListener("click", () => amp({ mute: !AMP?.muted }));
 $("#ml-vol").addEventListener("input", (e) => {
   $("#ml-vol-v").textContent = dec(+e.target.value);
   $("#dial-arc").setAttribute("stroke-dasharray", `${+e.target.value / +e.target.max * 100} 100`);
 });
-$("#dk-down").addEventListener("click", () => mlStep(-1));
-$("#dk-up").addEventListener("click", () => mlStep(1));
+$("#dk-down").addEventListener("click", () => ampStep(-1));
+$("#dk-up").addEventListener("click", () => ampStep(1));
 $("#dk-play").addEventListener("click", () => $("#b-play").click());
 // ± one dB per press; never above the panel ceiling, and never "raising" a remote-set level down to it
-function mlStep(d) {
-  const m = ML.state || {}, max = +(S.settings?.ml_max_db || 40);
+function ampStep(d) {
+  const m = AMP || {}, max = +(m.max_db || 40);
   if (m.volume_db == null) return;
   if (d > 0 && m.volume_db >= max) { toast(tr`Panelen går högst till ${dec(max)} dB. Högre volym ställer du med fjärrkontrollen.`); return; }
   const v = Math.max(0, Math.min(max, Math.round((m.volume_db + d) * 2) / 2));
   $("#ml-vol-v").textContent = $("#dk-vol").textContent = dec(v);
-  ml({ volume_db: v });
+  amp({ volume_db: v });
 }
-$("#ml-down").addEventListener("click", () => mlStep(-1));
-$("#ml-up").addEventListener("click", () => mlStep(1));
-$("#ml-vol").addEventListener("change", (e) => ml({ volume_db: +e.target.value }));
-$("#ml-src").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) ml({ input: b.dataset.src }); });
-$("#ml-auto-on").addEventListener("change", (e) => setSetting("ml_auto_on", e.target.checked, e.target));
-$("#spotify-vol-amp").addEventListener("change", (e) => setSetting("spotify_vol_to_amp", e.target.checked, e.target));
-$("#ml-off").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) mlSetting({ ml_auto_off_min: +b.dataset.v }); });
-$("#ml-max-form").addEventListener("submit", (e) => {
-  e.preventDefault();
-  mlSetting({ ml_max_db: +$("#ml-max").value }, (s) => tr`Högsta volym från panelen: ${dec(s.ml_max_db)} dB`);
-});
-$("#ml-host-form").addEventListener("submit", (e) => {
-  e.preventDefault();
-  mlSetting({ ml_host: $("#ml-host").value }, (s) => s.ml_host ? tr`Använder ${s.ml_host}` : tr("Söker förstärkaren automatiskt"));
-});
+$("#ml-down").addEventListener("click", () => ampStep(-1));
+$("#ml-up").addEventListener("click", () => ampStep(1));
+$("#ml-vol").addEventListener("change", (e) => amp({ volume_db: +e.target.value }));
+$("#ml-src").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) amp({ input: b.dataset.src }); });
 
 // ------------------------------------------------------------------ source switch
 $("#source").addEventListener("click", async (e) => {
@@ -1042,7 +1056,7 @@ $("#source").addEventListener("click", async (e) => {
 });
 
 // ------------------------------------------------------------------ boot
-function renderAll() { renderStatus(); renderPlay(); renderQueue(); renderSignal(); renderSpark(); renderTest(S.lastTest); renderArcam(); renderVlog(); renderSettings(); renderLevinson(); if (desktop.matches) loadOpts(); if (dacVisible()) loadDac(); }
+function renderAll() { renderStatus(); renderPlay(); renderQueue(); renderSignal(); renderSpark(); renderTest(S.lastTest); renderPanels(); renderVlog(); renderSettings(); renderAmp(); if (desktop.matches) loadOpts(); if (dacVisible()) loadDac(); }
 document.body.classList.add("locked");
 refreshAuth().then(() => maybeSetup({ access: S.access || {}, post, toast })).catch(() => {});
 connect();
@@ -1075,9 +1089,9 @@ $("#theme").addEventListener("click", (e) => {
 });
 
 // ---- modules: grouped by kind, each with its state, version and settings in one card
-const KINDS = { source: tr("Källor"), amp: tr("Förstärkare"), device: tr("Utrustning"), integration: tr("Integrationer") };
+const KINDS = { source: tr("Källor"), amp: tr("Förstärkare"), device: tr("Utrustning"), notify: tr("Larm till telefonen"), integration: tr("Integrationer") };
 const KIND_HELP = { source: tr("En källa i taget äger DAC:en. Du byter överst i panelen."), amp: tr("Volym och ingångar över nätverket. En förstärkare åt gången."),
-  device: "", integration: "" };
+  device: "", notify: tr("Vad som larmas om väljer du under Profil."), integration: "" };
 const lang = () => (document.documentElement.lang || "sv").slice(0, 2);
 const loc = (o) => (o && (o[lang()] || o.en || o.sv)) || "";
 let MODS = { plugins: [], restart_needed: false };
@@ -1095,7 +1109,8 @@ function modCard(p, open) {
   const wait = p.enabled !== p.running, st = p.status;
   const state = wait ? "wait" : !p.enabled ? "off" : (p.installed === false || st?.state === "warn") ? "warn" : "on";
   const panel = document.querySelector(`.mod-panel[data-for="${p.id}"]`);
-  const more = p.running && (p.options || (panel && !panel.hidden));
+  const more = p.running && (p.options || p.log?.length || (panel && !panel.hidden));
+  const logbox = p.running && p.log?.length ? `<details class="raw admin"><summary>${tr("Kommunikation")}</summary><pre class="console">${esc(p.log.join("\n"))}</pre></details>` : "";
   const meta = [st ? loc(st.text) : "", modVersion(p), wait ? (p.enabled ? tr("Slås på när panelen startas om") : tr("Stängs av när panelen startas om")) : ""].filter(Boolean);
   return `<li class="mod ${state}" data-id="${esc(p.id)}">
     <div class="mod-head"><i class="mod-led" aria-hidden="true"></i>
@@ -1104,11 +1119,12 @@ function modCard(p, open) {
     </div>
     <p class="mod-meta">${meta.map((t) => `<span>${esc(t)}</span>`).join("")}</p>
     ${modUpdate(p) ? `<div class="mod-install admin"><button class="btn primary" data-install="${esc(p.id)}" data-update="1">${tr`Uppdatera till ${p.latest}`}</button></div>` : ""}${modInstall(p)}
-    ${more ? `<details class="mod-more"${open ? " open" : ""}><summary>${tr("Inställningar")}</summary><div class="mod-body">${modOptions(p)}</div></details>` : ""}
+    ${more ? `<details class="mod-more"${open ? " open" : ""}><summary>${tr("Inställningar")}</summary><div class="mod-body">${modOptions(p)}${logbox}</div></details>` : ""}
   </li>`;
 }
 function renderMods() {
   const box = $("#mods"), stash = $("#mod-panels");
+  if (box.contains(document.activeElement) && /^(text|password|number)$/.test(document.activeElement.type || "")) return;
   const open = new Set([...box.querySelectorAll("details[open]")].map((d) => d.closest("li").dataset.id));
   $$(".mod-panel").forEach((el) => stash.append(el));  // back to the shelf while the cards are rebuilt
   box.innerHTML = Object.keys(KINDS).map((k) => {
@@ -1130,18 +1146,21 @@ function renderMods() {
 function modOptions(p) {
   if (!p.options || !p.running) return "";
   return `<div class="mod-opts admin">${p.options.map((o) => {
-    const id = `mo-${o.key}`, v = o.value ?? "";
+    const id = `mo-${o.key}`, v = o.value ?? "", key = `data-opt="${esc(o.key)}"`, help = o.help ? `<p class="fine">${esc(loc(o.help))}</p>` : "";
+    const ph = esc(typeof o.placeholder === "object" ? loc(o.placeholder) : o.placeholder || "");
+    if (o.type === "toggle") return `<label class="toggle"><input type="checkbox" id="${id}" ${key}${v ? " checked" : ""}><span class="toggle-ui" aria-hidden="true"></span><span>${esc(loc(o.label))}</span></label>${help}`;
     const input = o.type === "select"
-      ? `<select id="${id}" data-opt="${esc(o.key)}">${o.options.map(([val, l]) => `<option value="${esc(JSON.stringify(val))}"${val === v ? " selected" : ""}>${esc(loc(l))}</option>`).join("")}</select>`
-      : o.type === "toggle" ? `<input type="checkbox" id="${id}" data-opt="${esc(o.key)}"${v ? " checked" : ""}>`
-      : `<input type="text" id="${id}" data-opt="${esc(o.key)}" value="${esc(v)}" placeholder="${esc(o.placeholder || "")}" autocomplete="off">`;
-    return `<label for="${id}">${esc(loc(o.label))}</label>${input}${o.help ? `<p class="fine">${esc(loc(o.help))}</p>` : ""}`;
+      ? `<select id="${id}" ${key}>${o.options.map(([val, l]) => `<option value="${esc(JSON.stringify(val))}"${val === v ? " selected" : ""}>${esc(loc(l))}</option>`).join("")}</select>`
+      : o.type === "number" ? `<span class="mo-num"><input type="number" id="${id}" ${key} value="${esc(v)}" min="${+o.min}" max="${+o.max}" step="${+o.step || 1}" inputmode="decimal">${o.unit ? `<small>${esc(o.unit)}</small>` : ""}</span>`
+      : o.type === "secret" ? `<input type="password" id="${id}" ${key} data-secret="1" autocomplete="off" spellcheck="false" placeholder="${o.set ? tr("Sparad. Skriv en ny för att byta.") : ph}">`
+      : `<input type="text" id="${id}" ${key} value="${esc(v)}" placeholder="${ph}" autocomplete="off">`;
+    return `<label for="${id}">${esc(loc(o.label))}</label>${input}${help}`;
   }).join("")}</div>`;
 }
 $("#mods").addEventListener("change", async (e) => {
   const i = e.target.closest("[data-opt]"); if (!i) return;
-  const val = i.tagName === "SELECT" ? JSON.parse(i.value) : i.type === "checkbox" ? i.checked : i.value;
-  try { await post("/api/settings", { [i.dataset.opt]: val }); toast(tr("Sparat")); } catch { loadMods(); }
+  const val = i.tagName === "SELECT" ? JSON.parse(i.value) : i.type === "checkbox" ? i.checked : i.type === "number" ? +i.value : i.value;
+  try { await post("/api/settings", { [i.dataset.opt]: val }); toast(tr("Sparat")); if (i.dataset.secret) i.value = ""; loadMods(); } catch { loadMods(); }
 });
 // A source's player is not part of mscOS: it is downloaded to the device from its publisher.
 function modInstall(p) {

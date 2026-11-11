@@ -141,23 +141,7 @@
               <ol class="queue" id="queue"><li class="empty">Kön visas när något spelas.</li></ol>
             </div>
           </details>
-    <details class="fold" id="f-arcam" data-k="arcam">
-            <summary><span>Arcam</span><span class="fv" id="fv-arcam"></span></summary>
-            <div class="fold-body">
-              <p class="lead" id="arcam-state">Söker receivern…</p>
-              <div class="arcam" id="arcam-ctl" hidden>
-                <div class="row">
-                  <button class="btn" id="arcam-power" aria-pressed="false">Slå på</button>
-                  <button class="btn" id="arcam-mute" aria-pressed="false">Ljud av</button>
-                </div>
-                <label class="fader">
-                  <span class="fader-head"><span>Volym</span><b id="arcam-vol-v">–</b></span>
-                  <input type="range" id="arcam-vol" min="0" max="50" step="1" value="30">
-                </label>
-                <div class="sources" id="arcam-src" role="radiogroup" aria-label="Källa"></div>
-              </div>
-            </div>
-          </details>
+            <div id="panels"></div>
         </div>
       </div>
     </div>
@@ -186,7 +170,7 @@
           </div>
         </div>
       </div>
-      <ol class="strip" id="strip" aria-label="Signalväg"></ol>
+      <div class="strip-wrap"><canvas id="wave" aria-hidden="true"></canvas><ol class="strip" id="strip" aria-label="Signalväg"></ol></div>
     </section>
 
     <div class="panels">
@@ -293,35 +277,6 @@
     <div id="mods"></div>
     <!-- settings that belong to one module; app.js moves each into its module's card -->
     <div id="mod-panels" hidden>
-      <div class="mod-panel admin" id="f-ml" data-for="levinson">
-          <p class="lead" id="ml-conn">–</p>
-          <label class="toggle"><input type="checkbox" id="ml-auto-on"><span class="toggle-ui" aria-hidden="true"></span><span>Slå på och välj den här enhetens ingång när musik börjar spela</span></label>
-          <label class="toggle"><input type="checkbox" id="spotify-vol-amp"><span class="toggle-ui" aria-hidden="true"></span><span>Spotify-reglaget styr förstärkarens volym (signalen förblir bitperfekt)</span></label>
-          <h4 class="sub">Standby när inget spelas</h4>
-          <div class="seg" role="radiogroup" aria-label="Standby efter" id="ml-off">
-            <button role="radio" data-v="0" aria-checked="false">Aldrig</button>
-            <button role="radio" data-v="15" aria-checked="false">15 min</button>
-            <button role="radio" data-v="30" aria-checked="false">30 min</button>
-            <button role="radio" data-v="60" aria-checked="false">1 h</button>
-          </div>
-          <p class="fine">Gäller bara när panelen själv har slagit på förstärkaren, så att en skivspelare eller annan källa inte stängs av mitt i.</p>
-          <h4 class="sub">Högsta volym från panelen</h4>
-          <form class="row" id="ml-max-form">
-            <input id="ml-max" type="number" min="20" max="80" step="0.5" inputmode="decimal" aria-label="Högsta volym i dB">
-            <button class="btn">Spara</button>
-          </form>
-          <h4 class="sub">Adress</h4>
-          <form class="row" id="ml-host-form">
-            <input id="ml-host" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="Hittas automatiskt" aria-label="Förstärkarens IP-adress">
-            <button class="btn">Spara</button>
-          </form>
-          <p class="fine">På förstärkaren: Setup → Advanced → Connect = Ethernet, och standbyläget Normal. I läget Green stängs nätverket av i standby, och då kan panelen inte väcka den.</p>
-          <details class="raw">
-            <summary>Kommunikation</summary>
-            <pre class="console" id="ml-log">Ingen trafik än.</pre>
-          </details>
-        
-      </div>
       <div class="mod-panel" id="f-spotify" data-for="spotify">
           <dl class="spec" id="solo-kv"></dl>
           <div class="validity" id="validity" hidden><div class="validity-bar"><i id="validity-fill"></i></div><p class="fine" id="validity-txt"></p></div>
@@ -480,7 +435,15 @@
         <div class="fold-body">
           <p class="lead" id="alerts-state">–</p>
           <label class="toggle"><input type="checkbox" id="alerts-on"><span class="toggle-ui" aria-hidden="true"></span><span>Skicka larm</span></label>
-          <p class="fine">Larmet går via Home Assistant till din telefon när DAC:en är borta i mer än en minut, när Soloist stannar, vid avbrott under uppspelning, när en verifiering avviker och när Soloist-bygget har två veckor kvar. Samma larm skickas högst var sjätte timme, avbrott högst en gång i timmen.</p>
+          <h4 class="sub">Larma om</h4>
+          <div id="alert-kinds">
+            <label class="toggle"><input type="checkbox" data-kind="dac"><span class="toggle-ui" aria-hidden="true"></span><span>DAC:en är borta i mer än en minut</span></label>
+            <label class="toggle"><input type="checkbox" data-kind="soloist"><span class="toggle-ui" aria-hidden="true"></span><span>Källan har stannat</span></label>
+            <label class="toggle"><input type="checkbox" data-kind="dropouts"><span class="toggle-ui" aria-hidden="true"></span><span>Avbrott i ljudet under uppspelning</span></label>
+            <label class="toggle"><input type="checkbox" data-kind="verify"><span class="toggle-ui" aria-hidden="true"></span><span>En verifiering avviker</span></label>
+            <label class="toggle"><input type="checkbox" data-kind="expiry"><span class="toggle-ui" aria-hidden="true"></span><span>Spotify-bygget går snart ut</span></label>
+          </div>
+          <p class="fine">Samma larm skickas högst var sjätte timme, avbrott högst en gång i timmen. Hur larmen skickas ställer du in under <a href="#v-mods">Moduler</a>.</p>
           <button class="btn" id="alerts-test">Skicka testlarm</button>
         </div>
       </details>
