@@ -1025,10 +1025,15 @@ async def soloist_name(request):
     if not re.fullmatch(r"[\w .\-åäöÅÄÖ]{1,40}", name):
         raise web.HTTPBadRequest(text=T("Namnet får vara 1–40 tecken: bokstäver, siffror, mellanslag, punkt och bindestreck."))
     p = collect.SOLOIST_UNIT
-    text = collect.read(p)
+    # read and written as the audio user: the unit lives in its home, root follows nothing there
+    rc, text, _ = await collect.run(["cat", p], as_user=True, timeout=5)
+    if rc or "--device-name" not in text:
+        raise web.HTTPConflict(text=T("Soloist är inte installerat"))
     text = re.sub(r'--device-name\s+"[^"]*"', f'--device-name "{name}"', text)
-    with open(p, "w") as f:
-        f.write(text)
+    rc, _, err = await collect.run(["sh", "-c", 'cat > "$1.tmp" && mv -f "$1.tmp" "$1"', "sh", p], as_user=True,
+                                   timeout=5, input_=text.encode())
+    if rc:
+        raise web.HTTPInternalServerError(text=err.strip()[:200])
     persist(p)
     await user_systemctl("daemon-reload")
     await user_systemctl("restart", "soloist.service")
@@ -1167,6 +1172,11 @@ async def dac(request):
     return web.json_response(d)
 
 
+@routes.get("/api/names")
+async def get_names(request):
+    return web.json_response(hub.names())
+
+
 # ---- Settings, alerts
 @routes.get("/api/settings")
 async def get_settings(request):
@@ -1176,7 +1186,7 @@ async def get_settings(request):
 @routes.post("/api/settings")
 async def set_settings(request):
     b = await body(request)
-    upd: dict = {k: bool(b[k]) for k in ("auto_verify", "alerts", "leds", "spotify_vol_to_amp") if k in b}
+    upd: dict = {k: bool(b[k]) for k in ("auto_verify", "alerts", "leds", "spotify_vol_to_amp", "setup_done") if k in b}
     for k in ("output_name", "streamer_name"):
         if k in b:
             v = re.sub(r"\s+", " ", str(b[k])).strip()

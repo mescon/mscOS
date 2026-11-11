@@ -14,10 +14,8 @@ install -m 755 "$HERE/soloist-update" /usr/local/sbin/soloist-update
 # The key file: readable by the audio user only. Kept if it already has a key.
 [ -e /etc/soloist.env ] || install -o root -g "$AUDIO_USER" -m 640 /dev/null /etc/soloist.env
 
-if [ ! -e "$USER_UNITS/soloist.service" ]; then  # keep the device name of an existing install
-    sed "s|@DEVICE_NAME@|$DEVICE_NAME|" "$HERE/soloist.service" > /tmp/soloist.service.$$
-    install_user_unit /tmp/soloist.service.$$ soloist.service
-    rm -f /tmp/soloist.service.$$
+if ! run_user test -e "$USER_UNITS/soloist.service"; then  # keep the device name of an existing install
+    sed "s|@DEVICE_NAME@|$DEVICE_NAME|" "$HERE/soloist.service" | install_user_unit - soloist.service
 fi
 install -m 755 "$HERE/soloist-rt" /usr/local/bin/soloist-rt
 install_user_unit "$HERE/soloist-rt.service"

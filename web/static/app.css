@@ -488,3 +488,22 @@ body.src-other .spotify-only, body:not(.src-other) .roon-only { display: none !i
 .mod-opts select option { background: var(--paper, #fff); color: #111; }
 .mod-t > .mod-st { color: var(--ink); }
 .mod-t > .mod-st.warn { color: var(--red); }
+
+/* first start: one step at a time on the faceplate; the title in the book face */
+.setup { position: fixed; inset: 0; z-index: 50; background: var(--chassis); overflow-y: auto; display: grid; place-items: start center; padding: clamp(24px, 8vh, 96px) 16px 32px; }
+.setup[hidden] { display: none; }
+body.in-setup { overflow: hidden; }
+.setup-card { width: min(100%, 34rem); display: grid; gap: 14px; }
+.setup-top { display: flex; justify-content: space-between; align-items: baseline; color: var(--engraved); font-size: .875rem; border-bottom: 1px solid var(--hair); padding-bottom: 14px; }
+.setup-top .wordmark { color: var(--ink); }
+.setup h2 { font: 500 clamp(2rem, 7vw, 2.75rem)/1.1 var(--serif); margin-top: 18px; }
+.setup h3 { font-size: .875rem; font-weight: 500; color: var(--engraved); margin-top: 10px; }
+.setup-lead { font-size: 1.0625rem; max-width: 46ch; }
+#su-body { display: grid; gap: 10px; justify-items: start; }
+#su-body input[type=password], #su-body input[type=text] { width: 100%; min-height: 48px; padding: 0 12px; border: 1px solid var(--btn-line); border-radius: 2px; background: transparent; font-size: 1rem; color: var(--ink); }
+#su-body label:not(.toggle) { font-size: .8125rem; color: var(--engraved); margin-top: 8px; }
+#su-body .fine { margin-top: 0; }
+#su-body .mods { width: 100%; margin: 0; }
+#su-body .mods li:first-child { border-top: 0; }
+.setup-nav { display: flex; justify-content: space-between; gap: 12px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--hair); }
+.setup-nav .btn.primary { margin-left: auto; min-width: 9rem; }

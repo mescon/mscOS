@@ -32,6 +32,19 @@
   <p class="vh" id="source-note" aria-live="polite"></p>
 </header>
 
+<!-- First start: the guide (setup.js), shown on a new installation only -->
+<section class="setup" id="setup" aria-labelledby="su-title" hidden>
+  <form class="setup-card" id="su-form">
+    <p class="setup-top"><span class="wordmark">mscOS</span><span id="su-count"></span></p>
+    <h2 id="su-title"></h2>
+    <div id="su-body"></div>
+    <div class="setup-nav">
+      <button type="button" class="btn" id="su-back">Tillbaka</button>
+      <button class="btn primary" id="su-next">Fortsätt</button>
+    </div>
+  </form>
+</section>
+
 <main id="views">
 
   <!-- ===================================================== Lyssna -->

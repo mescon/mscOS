@@ -23,21 +23,19 @@ if ! getent group pipewire >/dev/null; then   # no such group: the limits direct
 fi
 
 # --- 2. PipeWire: 44.1 kHz, no resampling, the USB DAC as a raw device -------------------
-as_user() { install -o "$U" -g "$U" "$@"; }
-as_user -d "$H/.config" "$H/.config/pipewire" "$H/.config/pipewire/pipewire.conf.d" \
-    "$H/.config/wireplumber" "$H/.config/wireplumber/wireplumber.conf.d" "$H/.config/systemd" "$H/.config/systemd/user"
-as_user -m 644 "$SHARE/pipewire/10-bitperfect.conf" "$H/.config/pipewire/pipewire.conf.d/10-bitperfect.conf"
-as_user -m 644 "$SHARE/pipewire/50-usb-dac.conf" "$H/.config/wireplumber/wireplumber.conf.d/50-usb-dac.conf"
+# Everything under the audio user's home is written as that user, never as root: root must
+# not follow whatever the user (or a player running as it) has put there.
+asu() { setpriv --reuid="$UID_" --regid="$GID_" --init-groups -- env HOME="$H" "$@"; }
+C=$H/.config
+asu mkdir -p "$C/pipewire/pipewire.conf.d" "$C/wireplumber/wireplumber.conf.d" \
+    "$C/systemd/user/sockets.target.wants" "$C/systemd/user/pipewire.service.wants" "$H/.cache"
+asu install -m 644 "$SHARE/pipewire/10-bitperfect.conf" "$C/pipewire/pipewire.conf.d/10-bitperfect.conf"
+asu install -m 644 "$SHARE/pipewire/50-usb-dac.conf" "$C/wireplumber/wireplumber.conf.d/50-usb-dac.conf"
 # PipeWire and WirePlumber start with the session (Debian enables them for every user; make sure).
-for w in sockets.target.wants/pipewire.socket:/usr/lib/systemd/user/pipewire.socket \
-         pipewire.service.wants/wireplumber.service:/usr/lib/systemd/user/wireplumber.service; do
-    d=$H/.config/systemd/user/${w%%:*}
-    as_user -d "$(dirname "$d")"
-    [ -e "$d" ] || { ln -s "${w#*:}" "$d"; chown -h "$U:$U" "$d"; }
-done
+asu ln -sfn /usr/lib/systemd/user/pipewire.socket "$C/systemd/user/sockets.target.wants/pipewire.socket"
+asu ln -sfn /usr/lib/systemd/user/wireplumber.service "$C/systemd/user/pipewire.service.wants/wireplumber.service"
 # The players' stream cache in RAM: no writes to the SD card while playing.
 CACHE="$H/.cache"
-as_user -d "$CACHE"
 grep -q " $CACHE tmpfs " /etc/fstab || \
     echo "tmpfs $CACHE tmpfs rw,nosuid,nodev,noatime,size=400M,mode=0755,uid=$UID_,gid=$GID_ 0 0" >> /etc/fstab
 

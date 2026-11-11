@@ -20,9 +20,12 @@ run_user() {  # a command in the audio user's session
     runuser -u "$AUDIO_USER" -- env XDG_RUNTIME_DIR="/run/user/$AUDIO_UID" \
         DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$AUDIO_UID/bus" "$@"
 }
-install_user_unit() {  # install_user_unit <file> [name]
-    install -d -o "$AUDIO_USER" -g "$AUDIO_USER" "$USER_UNITS"
-    install -o "$AUDIO_USER" -g "$AUDIO_USER" -m 644 "$1" "$USER_UNITS/${2:-$(basename "$1")}"
+# Files under the audio user's home are written as that user, never as root: root must not
+# follow whatever the user (or a player running as it) has put there.
+install_user_unit() {  # install_user_unit <file> [name] ; "-" reads the unit from stdin
+    run_user mkdir -p "$USER_UNITS"
+    if [ "$1" = - ]; then run_user sh -c 'cat > "$1"' sh "$USER_UNITS/$2"
+    else run_user install -m 644 "$1" "$USER_UNITS/${2:-$(basename "$1")}"; fi
     run_user systemctl --user daemon-reload
 }
 fetch() {  # fetch <url> <file>

@@ -35,7 +35,7 @@ def js_keys(s):
         _, k = template(m.end()); out.append(k)
     return out
 
-for f in ("app.js",):
+for f in ("app.js", "setup.js"):
     keys += js_keys(open(f"{root}/{f}").read())
 
 import glob, ast

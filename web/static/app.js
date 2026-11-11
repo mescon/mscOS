@@ -1,6 +1,7 @@
 // mscOS panel. One WebSocket for live state, POSTs for actions.
 import { tr, initI18n, decSep, LANG, LANGS, chosenLang, setLang } from "./i18n.js";
 await initI18n();  // before anything renders: texts below are looked up as they are built
+import { maybeSetup } from "./setup.js";
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
 const S = { status: {}, playback: {}, auth: {}, queue: {}, xruns: [], lastTest: null, arcam: {}, sources: [], opts: null,
@@ -988,8 +989,12 @@ $("#source").addEventListener("click", async (e) => {
 // ------------------------------------------------------------------ boot
 function renderAll() { renderStatus(); renderPlay(); renderQueue(); renderSignal(); renderSpark(); renderTest(S.lastTest); renderArcam(); renderVlog(); renderSettings(); renderLevinson(); if (desktop.matches) loadOpts(); if (dacVisible()) loadDac(); }
 document.body.classList.add("locked");
-refreshAuth();
+refreshAuth().then(() => maybeSetup({ access: S.access || {}, post, toast })).catch(() => {});
 connect();
+try {  // after the first-start guide: straight to the modules, where the chosen players are installed
+  const f = localStorage.getItem("open-fold");
+  if (f) { localStorage.removeItem("open-fold"); const d = document.getElementById(f); if (d) { showView("system"); d.open = true; d.scrollIntoView(); } }
+} catch (e) {}
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 document.addEventListener("visibilitychange", () => { if (!document.hidden && ws && ws.readyState > 1) connect(); });
 
