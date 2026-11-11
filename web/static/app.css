@@ -231,6 +231,9 @@ input.line::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; ba
 .np-title { font-family: var(--serif); font-weight: 500; font-size: 1.875rem; line-height: 1.1; overflow-wrap: anywhere; }
 .np-artist { font-size: 1rem; margin-top: 6px; letter-spacing: .02em; }
 .np-album { font-family: var(--serif); font-style: italic; font-size: 1.125rem; color: var(--engraved); margin-top: 2px; }
+.np-format { font-size: .8125rem; letter-spacing: .04em; margin-top: 10px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.np-format.pending { color: var(--engraved); }
+.np-format.lossy { color: var(--red); }
 
 .scrub { margin-top: 18px; cursor: pointer; padding: 8px 0 0; touch-action: none; }
 .scrub-track { height: 1px; background: var(--hair); position: relative; }

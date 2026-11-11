@@ -227,6 +227,9 @@ class Hub:
                         ev = json.loads(raw)
                         if ev.get("type") in ("error", "command_result") and self._cmd_reply and not self._cmd_reply.done():
                             self._cmd_reply.set_result(ev)
+                        if ev.get("type") in ("device_changed", "playback_changed"):
+                            log.info("soloist %s: active=%s status=%s", ev["type"], ev.get("is_active", self.auth.get("is_active")),
+                                     ev.get("status", self.playback.get("status")))
                         self._apply_soloist(ev)
                         self._on_playback_change()
                         await self.broadcast({"type": "soloist", "event": ev})
@@ -479,9 +482,9 @@ class Hub:
         self._quality_busy = True
         try:
             await asyncio.sleep(8)  # past the track start (gapless join, fades)
-            if (self.playback.get("item") or {}).get("uri") != uri or self.playback.get("status") != "playing" \
+            if (self.playback.get("item") or {}).get("uri") != uri or self.playback.get("status") != "playing" or not self.auth.get("is_active") \
                     or self.jobs.get("audio-test", {}).get("running"):
-                log.info("track quality: skipped (track changed, paused or a verification running)")
+                log.info("track quality: skipped (track changed, paused, played elsewhere or a verification running)")
                 return
             sink = (self.status.get("pipewire") or {}).get("sink") or {}
             if not sink.get("name"):
@@ -610,7 +613,9 @@ class Hub:
         if active and prev is not True:
             self.vol.on_active()  # slider from the amplifier, after Spotify restored its own
         self._was_active = active
-        playing = self.playback.get("status") == "playing"
+        # Soloist mirrors the account's playback: "playing" also arrives while another device
+        # (the phone) plays. Only playback on this device counts as a start.
+        playing = active and self.playback.get("status") == "playing"
         if not getattr(self, "_playing_known", True) and "status" in self.playback:
             # first report after (re)connecting: music already playing is not a new start,
             # so a panel restart never wakes the amplifier

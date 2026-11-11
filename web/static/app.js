@@ -21,6 +21,13 @@ const fmtWord = (f) => FMT[f] || f || "";
 const trackQuality = () => { const q = S.quality || {}, u = (S.playback.item || {}).uri; return u && q.uri === u ? q : null; };
 const verifiedBits = () => { const q = trackQuality(); if (q) return q.verdict === "bitperfect" ? q.bits : null;
   return (S.lastTest && S.lastTest.verdict === "bitperfect" && S.lastTest.bits) || null; };
+// What this track really is, measured from the samples (null: not measured yet).
+function formatOf() {
+  const q = trackQuality();
+  if (q && q.verdict === "bitperfect" && q.bits) return { text: `FLAC ${q.bits} bit, 44,1 kHz`, lossy: false };
+  if (q && q.verdict === "lossy_or_processed") return { text: "Förlustkomprimerat, inte Lossless", lossy: true };
+  return null;
+}
 const fmtCarry = (f, bits = verifiedBits()) => /32/.test(f || "") && bits && bits < 32 ? `${bits} bit i 32-bitarsformat` : fmtWord(f);
 const bitsOf = (fmt) => { const m = /S(\d+)/.exec(fmt || ""); return m ? (m[1] === "32" ? 32 : +m[1]) : null; };
 
@@ -89,7 +96,7 @@ function handle(m) {
     case "soloist": soloistEvent(m.event); break;
     case "xrun": S.xruns.push(m.point); if (S.xruns.length > 2880) S.xruns.shift(); renderSpark(); renderSignal(); break;
     case "arcam": S.arcam = m.arcam; renderArcam(); break;
-    case "quality": S.quality = m.quality; renderSignal(); break;
+    case "quality": S.quality = m.quality; renderSignal(); renderPlay(); break;
     case "levinson": ML.state = m.levinson; renderLevinson(); break;
     case "job": jobEvent(m); break;
     case "settings": S.settings = { ...S.settings, ...m.settings }; renderSettings(); renderPlay(); renderSignal(); break;
@@ -135,7 +142,7 @@ function renderPlay() {
     const d = S.status.dac || {}, running = d.state === "RUNNING";
     $("#np-title").textContent = running ? "Spelar via Roon" : "Roon";
     $("#np-artist").textContent = running ? `${fmtWord(d.hw_params?.format)}, ${khz(parseInt(d.hw_params?.rate) || 44100)} kHz till 585.5` : "Välj Mark Levinson 585.5 i Roon-appen";
-    $("#np-album").textContent = "";
+    $("#np-album").textContent = ""; $("#np-format").hidden = true;
     $("#np-cover").hidden = true; $("#cover-empty").hidden = false; $("#vol-warn").hidden = true;
     return;
   }
@@ -143,6 +150,11 @@ function renderPlay() {
   $("#np-title").textContent = it ? nameOf(it) : "Inget spelas";
   $("#np-artist").textContent = it ? artistsOf(it) : (S.auth.logged_in ? "Starta musik i Spotify-appen" : `Välj ${devName()} i Spotify-appen`);
   $("#np-album").textContent = it ? nameOf(deco(it).parent?.entity) : "";
+  const f = it && S.auth.is_active ? formatOf() : null, fe = $("#np-format");
+  fe.hidden = !(it && S.auth.is_active && (f || playing));  // "measuring" only while it plays
+  fe.textContent = f ? f.text : "Mäter formatet …";
+  fe.classList.toggle("lossy", !!f?.lossy);
+  fe.classList.toggle("pending", !f);
   const img = $("#np-cover"), url = it && coverOf(it);
   if (url) { if (img.src !== url) img.src = url; img.hidden = false; } else img.hidden = true;
   $("#cover-empty").hidden = !!url;
@@ -245,9 +257,9 @@ function chain() {
   const stages = [
     { k: "spotify", name: "Spotify", tag: "Lossless",
       state: S.auth.logged_in ? (playing ? "ok" : "idle") : "bad",
-      facts: (() => { const q = trackQuality();
-        if (q && q.verdict === "bitperfect" && q.bits) return `FLAC ${q.bits} bit, 44,1 kHz (uppmätt)`;
-        if (q && q.verdict === "lossy_or_processed") return "Förlustkomprimerat (uppmätt), inte Lossless";
+      facts: (() => {
+        const f = formatOf();
+        if (f) return `${f.text} (uppmätt)`;
         return "FLAC upp till 24 bit, 44,1 kHz, mäts när låten spelat några sekunder"; })(),
       note: !S.auth.logged_in ? "Inte ansluten. Välj enheten i Spotify-appen." : playing ? (nameOf(p.item) || "Spelar") : "Ansluten, väntar" },
     { k: "soloist", name: "Soloist", tag: (solo.version || "").replace(/^soloist /, "").split(" ")[0],
