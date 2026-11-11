@@ -36,12 +36,14 @@ from levinson import INPUTS as ML_INPUTS, USB_INPUT, Levinson, LevinsonError, di
 STATIC = os.environ.get("SOTM_STATIC", os.path.join(os.path.dirname(__file__), "..", "static"))
 STATE_DIR = os.environ.get("SOTM_STATE", "/var/lib/sotm-web")
 SOLOIST_WS = "ws://127.0.0.1:9090"
-ARCAM_HOST = os.environ.get("ARCAM_HOST", "192.168.1.176")
+ARCAM_HOST = os.environ.get("ARCAM_HOST", "").strip()  # empty: no Arcam (site setting, /etc/mscos/site.env)
 RO_LOWER = "/media/root-ro"
-PUBLIC_URL = os.environ.get("SOTM_PUBLIC_URL", "http://mscos.local")
-# Only the reverse proxy and the device itself may talk to the panel directly; everyone
-# else is sent to the HTTPS name, so the password never crosses the LAN in clear text.
-TRUSTED_PEERS = set(os.environ.get("SOTM_TRUSTED_PEERS", "192.168.1.42").split()) | {"127.0.0.1", "::1"}
+# Site settings (/etc/mscos/site.env). Default: local mode, the panel answers everyone on the
+# LAN at http://<hostname>.local. With SOTM_PUBLIC_URL set (an HTTPS reverse proxy in front),
+# only the proxy (SOTM_TRUSTED_PEERS) and the device itself may talk to the panel directly;
+# everyone else is sent to the HTTPS name, so the password never crosses the LAN in clear text.
+PUBLIC_URL = os.environ.get("SOTM_PUBLIC_URL", "").strip().rstrip("/")
+TRUSTED_PEERS = set(os.environ.get("SOTM_TRUSTED_PEERS", "").split()) | {"127.0.0.1", "::1"}
 HA_WEBHOOK_URL = os.environ.get("HA_WEBHOOK_URL", "")  # from /etc/sotm-web.env, never logged
 SESSION_COOKIE = "sotm_session"
 AUTO_VERIFY_EVERY = 3600
@@ -135,7 +137,7 @@ class Hub:
         self.last_err: dict = {}
         self.last_test: dict | None = None
         self.jobs: dict[str, dict] = {}
-        self.arcam = Arcam(ARCAM_HOST)
+        self.arcam = Arcam(ARCAM_HOST) if ARCAM_HOST else None
         self.arcam_state: dict = {"reachable": None}
         self.tests = collections.deque(maxlen=200)  # verification log, manual and automatic
         self.settings: dict = {"auto_verify": True, "alerts": True, "leds": True, "net_speed": 100,
@@ -150,6 +152,8 @@ class Hub:
         self.since: dict[str, float] = {}  # when a bad condition was first seen
         self.http: ClientSession | None = None
         self._load()
+        if "amp" not in self.settings:  # installs from before the setting: a known 585.5 keeps it
+            self.settings["amp"] = "levinson" if (self.settings.get("ml_host") or self.settings.get("ml_host_found")) else "none"
         self.ml = Levinson(self.settings.get("ml_host") or self.settings.get("ml_host_found") or None)
         self.ml_state: dict = {"reachable": None}
         self.vol = VolumeBridge(self)  # Spotify slider -> 585.5, stream kept at unity
@@ -720,9 +724,13 @@ class Hub:
         last_scan = 0.0
         while True:
             try:
+                if self.settings.get("amp") != "levinson":
+                    await asyncio.sleep(10)  # no amplifier driver: never scan the LAN
+                    continue
                 if not self.ml.host and time.time() - last_scan > 600:
                     last_scan = time.time()
-                    ip = await ml_discover(skip={ARCAM_HOST, "192.168.1.1", "192.168.1.42", "192.168.1.100", "192.168.1.200"})
+                    net, own = await collect.local_network()
+                    ip = await ml_discover(net, skip=own | {ARCAM_HOST}) if net else None
                     if ip:
                         log.info("585.5 found at %s", ip)
                         self.ml_found = self.ml.host = ip
@@ -825,7 +833,7 @@ async def ws_handler(request):
         "type": "hello", "status": hub.status, "playback": hub.playback, "auth": hub.auth,
         "queue": hub.queue, "xruns": list(hub.xruns)[-2880:], "last_test": hub.last_test,
         "arcam": hub.arcam_state, "arcam_sources": list(SOURCE_RC5),
-        "levinson": hub.ml_state, "ml_inputs": ML_INPUTS, "quality": hub.track_quality,
+        "levinson": hub.ml_state, "ml_inputs": ML_INPUTS, "features": features(), "quality": hub.track_quality,
         "tests": list(hub.tests)[-30:], "settings": {**hub.settings, "alerts_configured": bool(HA_WEBHOOK_URL)},
         "jobs": {k: {kk: vv for kk, vv in v.items()} for k, v in hub.jobs.items()},
     }))
@@ -1167,6 +1175,10 @@ async def set_settings(request):
             except ValueError:
                 raise web.HTTPBadRequest(text="Ange en IP-adress, till exempel 192.168.1.150, eller lämna tomt.")
         upd["ml_host"] = h
+        if h:
+            upd["amp"] = "levinson"  # an address given: that is the amplifier
+    if b.get("amp") in ("none", "levinson"):
+        upd["amp"] = b["amp"]
     # all valid: apply
     hub.settings.update(upd)
     if "leds" in upd:
@@ -1180,7 +1192,7 @@ async def set_settings(request):
         # the link renegotiates (~3 s); answer first so the reply is not lost
         asyncio.get_running_loop().call_later(1, lambda: asyncio.ensure_future(collect.apply_net_speed(b["net_speed"])))
     await asyncio.get_running_loop().run_in_executor(None, hub.save_settings)
-    await hub.broadcast({"type": "settings", "settings": hub.settings})
+    await hub.broadcast({"type": "settings", "settings": hub.settings, "features": features()})
     return ok(settings=hub.settings)
 
 
@@ -1354,8 +1366,15 @@ async def living_room_mode(request):
     return ok(mode=mode, did=did, amp=_ha_amp())
 
 
+def features() -> dict:
+    """What this installation has, so the panel shows only that."""
+    return {"amp": hub.settings.get("amp", "none"), "arcam": hub.arcam is not None}
+
+
 @routes.post("/api/arcam")
 async def arcam_action(request):
+    if hub.arcam is None:
+        raise web.HTTPNotFound(text="Ingen Arcam är inställd (ARCAM_HOST).")
     b = await body(request)
     try:
         if "power" in b:
@@ -1471,7 +1490,7 @@ def _peer(request) -> str:
 
 @web.middleware
 async def only_via_proxy(request, handler):
-    if _peer(request) not in TRUSTED_PEERS:
+    if PUBLIC_URL and _peer(request) not in TRUSTED_PEERS:
         if request.path.startswith("/api/"):
             raise web.HTTPForbidden(text=f"Använd {PUBLIC_URL}")
         raise web.HTTPPermanentRedirect(PUBLIC_URL + request.path_qs)
@@ -1485,7 +1504,8 @@ async def same_origin_json(request, handler):
     preflight, which cannot be application/json; browsers also send Origin on POST."""
     if request.method not in ("GET", "HEAD", "OPTIONS"):
         origin = request.headers.get("Origin")
-        if origin and origin.rstrip("/") != PUBLIC_URL.rstrip("/"):
+        own = PUBLIC_URL or f"{request.headers.get('X-Forwarded-Proto', request.scheme)}://{request.host}"
+        if origin and origin.rstrip("/") != own:
             raise web.HTTPForbidden(text="Begäran kommer från en annan webbplats.")
         if request.content_type != "application/json":
             raise web.HTTPUnsupportedMediaType(text="Begäran måste vara JSON.")

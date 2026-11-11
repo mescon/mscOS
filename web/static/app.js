@@ -86,12 +86,18 @@ function connect() {
   };
   ws.onmessage = (e) => handle(JSON.parse(e.data));
 }
+// Only what this installation has: no amplifier driver, no amplifier parts; no Arcam, no Arcam row.
+function renderFeatures() {
+  const f = S.features || {}, amp = f.amp && f.amp !== "none";
+  $("#amp").hidden = !amp; $("#f-amp").hidden = !amp;
+  $("#f-arcam").hidden = !f.arcam;
+}
 function handle(m) {
   switch (m.type) {
     case "hello":
-      Object.assign(S, { status: m.status || {}, playback: m.playback || {}, auth: m.auth || {}, queue: m.queue || {}, xruns: m.xruns || [], lastTest: m.last_test, arcam: m.arcam || {}, sources: m.arcam_sources || [], tests: m.tests || [], settings: m.settings || {}, quality: m.quality || {} });
+      Object.assign(S, { status: m.status || {}, playback: m.playback || {}, auth: m.auth || {}, queue: m.queue || {}, xruns: m.xruns || [], lastTest: m.last_test, arcam: m.arcam || {}, sources: m.arcam_sources || [], tests: m.tests || [], settings: m.settings || {}, quality: m.quality || {}, features: m.features || { amp: "levinson", arcam: true } });
       ML.state = m.levinson || {}; ML.inputs = m.ml_inputs || [];
-      renderAll(); break;
+      renderFeatures(); renderAll(); break;
     case "status": S.status = m.status; renderStatus(); renderSignal(); if (roonMode()) renderPlay(); else renderSource(); break;
     case "soloist": soloistEvent(m.event); break;
     case "xrun": S.xruns.push(m.point); if (S.xruns.length > 2880) S.xruns.shift(); renderSpark(); renderSignal(); break;
@@ -99,7 +105,7 @@ function handle(m) {
     case "quality": S.quality = m.quality; renderSignal(); renderPlay(); break;
     case "levinson": ML.state = m.levinson; renderLevinson(); break;
     case "job": jobEvent(m); break;
-    case "settings": S.settings = { ...S.settings, ...m.settings }; renderSettings(); renderPlay(); renderSignal(); break;
+    case "settings": S.settings = { ...S.settings, ...m.settings }; if (m.features) { S.features = m.features; renderFeatures(); } renderSettings(); renderPlay(); renderSignal(); break;
     case "history_cleared": S.xruns = []; S.tests = []; renderSpark(); renderVlog(); renderSignal(); break;
   }
 }

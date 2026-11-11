@@ -9,7 +9,7 @@
 # (nothing then holds the DAC) and run: rmmod snd_usb_audio && modprobe snd_usb_audio
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
-HOST=${1:-root@192.168.1.200}
+HOST=${1:-${MSCOS_HOST:-root@mscos.local}}
 REL=$(ssh "$HOST" uname -r)
 if [ "${2:-}" = "--remove" ]; then
     ssh "$HOST" "rm -f /lib/modules/$REL/updates/snd-usb-audio.ko && depmod -a && modinfo -n snd-usb-audio"

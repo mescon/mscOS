@@ -2,7 +2,7 @@
 # Record what PipeWire sends to the USB DAC for N seconds and count digital-silence gaps.
 # Usage: gapcheck.sh [seconds] [host]
 set -euo pipefail
-SECS=${1:-30}; HOST=${2:-root@192.168.1.200}
+SECS=${1:-30}; HOST=${2:-${MSCOS_HOST:-root@mscos.local}}
 OUT=$(mktemp --suffix=.wav)
 trap 'rm -f "$OUT"' EXIT
 ssh "$HOST" "U=\$(id -u soloist); S=\$(runuser -u soloist -- env XDG_RUNTIME_DIR=/run/user/\$U pw-dump | grep -o '\"alsa_output.usb-[^\"]*' | head -1 | tr -d '\"');

@@ -5,6 +5,7 @@ import asyncio
 import logging
 import datetime as dt
 import glob
+import ipaddress
 import json
 import os
 import re
@@ -919,3 +920,18 @@ async def spotify_stream_unity(oid: int | None = None):
         ch = len(_spotify_nodes.get(n) or [0, 0]) or 2
         vols = ", ".join(["1.0"] * ch)
         await run(["pw-cli", "set-param", str(n), "Props", f"{{ softVolumes: [ {vols} ] }}"], as_user=True, timeout=5)
+
+
+async def local_network() -> tuple[str | None, set[str]]:
+    """The LAN of the default route as a CIDR (at most a /22, so a scan stays small), and
+    the addresses not to probe: this device and the gateway."""
+    rc, out, _ = await run(["ip", "-j", "route", "show", "default"], timeout=5)
+    try:
+        r = json.loads(out)[0]
+        dev, gw = r["dev"], r.get("gateway")
+        rc, out, _ = await run(["ip", "-j", "-4", "addr", "show", "dev", dev], timeout=5)
+        a = next(i for i in json.loads(out)[0]["addr_info"] if i.get("family") == "inet")
+    except (ValueError, IndexError, KeyError, StopIteration):
+        return None, set()
+    net = ipaddress.ip_network(f"{a['local']}/{max(int(a['prefixlen']), 22)}", strict=False)
+    return str(net), {a["local"]} | ({gw} if gw else set())

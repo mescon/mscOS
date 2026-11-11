@@ -3,7 +3,7 @@
 # Usage: solo.sh <command> [json-extra]   e.g. solo.sh play ; solo.sh get_state
 set -euo pipefail
 CMD=${1:?command}; EXTRA=${2:-}
-HOST=${HOST:-root@192.168.1.200}
+HOST=${HOST:-${MSCOS_HOST:-root@mscos.local}}
 ssh "$HOST" "python3 - $(printf %q "$CMD") $(printf %q "${EXTRA:-{\}}")" <<'EOF'
 import asyncio, json, sys, websockets
 cmd, extra = sys.argv[1], (sys.argv[2] if len(sys.argv) > 2 else "")

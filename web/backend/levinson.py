@@ -268,7 +268,7 @@ class Levinson:
                 "log": list(self.rx_log)[-20:]}
 
 
-async def discover(cidr: str = "192.168.1.0/24", skip: set[str] = frozenset(), timeout: float = 0.6) -> str | None:
+async def discover(cidr: str, skip: set[str] = frozenset(), timeout: float = 0.6) -> str | None:
     """Find a host with TCP 7701 open on the LAN (the 585.5 gets its address over DHCP)."""
     sem = asyncio.Semaphore(64)
 

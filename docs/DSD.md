@@ -50,7 +50,7 @@ Upstream-ändringar i snd-usb-audio rör sällan just de här raderna. Patchen s
 ```sh
 kernel/mscos-dsd/build-module.sh            # mot armbian-build/cache/sources/linux-kernel-worktree/6.18__sunxi__armhf
 kernel/mscos-dsd/install-module.sh          # till /lib/modules/<release>/updates/
-kernel/mscos-dsd/install-module.sh root@192.168.1.200 --remove   # tillbaka till originalet
+kernel/mscos-dsd/install-module.sh root@mscos.local --remove   # tillbaka till originalet
 ```
 
 - **Modulen:** den byggs i Armbians byggcontainer med samma gcc som kärnan, och kärnträdet monteras skrivskyddat.

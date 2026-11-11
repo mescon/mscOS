@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Deploy the control panel to the device. Usage: web/deploy.sh [root@host]
 set -euo pipefail
-HOST=${1:-root@192.168.1.200}
+HOST=${1:-${MSCOS_HOST:-root@mscos.local}}
 HERE=$(cd "$(dirname "$0")" && pwd)
 ssh "$HOST" 'mkdir -p /opt/sotm-web/backend /opt/sotm-web/static /var/lib/sotm-web'
 rsync -a --delete --exclude __pycache__ "$HERE/backend/" "$HOST:/opt/sotm-web/backend/"
