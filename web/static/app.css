@@ -703,13 +703,17 @@ body.in-setup .tabs, body.in-setup .masthead { display: none; }
    the lamp's red); "Acoustics" stands still, light and widely spaced, like an engraving */
 .maker { display: inline-flex; align-items: baseline; white-space: nowrap; line-height: 1; color: var(--ink); }
 .vivaj { font-family: var(--serif); font-style: italic; font-weight: 600; font-size: 1.9em; letter-spacing: .015em; margin-right: .16em; }
-.vivaj i { display: inline-block; font-style: inherit; transition: transform .5s cubic-bezier(.3, 1.6, .5, 1); }
-.vivaj i:nth-child(1) { transform: rotate(-10deg) translateY(.05em); }
-.vivaj i:nth-child(2) { transform: rotate(6deg) translateY(-.1em); }
-.vivaj i:nth-child(3) { transform: rotate(-5deg) translateY(.06em); }
-.vivaj i:nth-child(4) { transform: rotate(8deg) translateY(-.06em); }
-.vivaj i:nth-child(5) { transform: rotate(-7deg) translateY(.03em); color: var(--red); }
-.maker:hover .vivaj i { transform: rotate(0) translateY(-.14em); }
+.vivaj i { display: inline-block; font-style: inherit; transform: rotate(var(--r)) translateY(var(--y));
+  animation: vivaj-dance .75s cubic-bezier(.3, 1.6, .5, 1) both; }
+/* the letters start upright and dance out to where they stay; once on load, again when pointed at */
+@keyframes vivaj-dance { from { transform: rotate(0) translateY(-.14em); } to { transform: rotate(var(--r)) translateY(var(--y)); } }
+@keyframes vivaj-again { from { transform: rotate(0) translateY(-.14em); } to { transform: rotate(var(--r)) translateY(var(--y)); } }
+.maker:hover .vivaj i { animation-name: vivaj-again; }
+.vivaj i:nth-child(1) { --r: -10deg; --y: .05em; animation-delay: .05s; }
+.vivaj i:nth-child(2) { --r: 6deg; --y: -.1em; animation-delay: .11s; }
+.vivaj i:nth-child(3) { --r: -5deg; --y: .06em; animation-delay: .17s; }
+.vivaj i:nth-child(4) { --r: 8deg; --y: -.06em; animation-delay: .23s; }
+.vivaj i:nth-child(5) { --r: -7deg; --y: .03em; animation-delay: .29s; color: var(--red); }
 .acoustics { font-family: var(--sans); font-weight: 300; font-size: .82em; letter-spacing: .34em; text-transform: uppercase; }
 /* under the product's name: in the rail on a wide screen, beside it in the masthead on a phone */
 .rail-mark .by { display: block; margin-top: 12px; font-size: .8125rem; font-weight: 400; }
@@ -724,7 +728,7 @@ body.in-setup .tabs, body.in-setup .masthead { display: none; }
 .nameplate-by { margin-top: 12px; font-size: 1.0625rem; }
 @media (max-width: 639px) { .nameplate { width: 100%; text-align: left; } .nameplate-os { justify-content: flex-start; } }
 @media (min-width: 1024px) { .ident-name .by { display: none; } }
-@media (prefers-reduced-motion: reduce) { .vivaj i { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .vivaj i { animation: none; } }
 
 /* Listen with nothing beside the sleeve */
 @media (min-width: 1024px) {
