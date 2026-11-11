@@ -212,6 +212,16 @@ function renderPlay() {
     cover.hidden = true; $("#cover-empty").hidden = false;
     return;
   }
+  const sp = srcState("spotify");
+  if (sp.installed === false || sp.key_set === false) {  // Soloist chosen but not ready yet
+    $("#np-title").textContent = "Spotify Lossless";
+    $("#np-artist").textContent = sp.installed === false
+      ? tr("Soloist är inte installerat. Installera det under System, Moduler.")
+      : tr("Ange din Spotify-nyckel under System, Spotify.");
+    $("#np-album").textContent = ""; $("#np-format").hidden = true; $("#vol-warn").hidden = true;
+    $("#np-cover").hidden = true; $("#cover-empty").hidden = false;
+    return;
+  }
   const p = S.playback, it = p.item, playing = p.status === "playing";
   $("#np-title").textContent = it ? nameOf(it) : tr("Inget spelas");
   $("#np-artist").textContent = it ? artistsOf(it) : (S.auth.logged_in ? tr("Starta musik i Spotify-appen") : tr`Välj ${devName()} i Spotify-appen`);

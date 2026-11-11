@@ -1088,6 +1088,8 @@ async def soloist_apikey(request):
     new_text = re.sub(r"^SOLOIST_API_KEY=.*$", f"SOLOIST_API_KEY={key}", old, flags=re.M) \
         if re.search(r"^SOLOIST_API_KEY=", old, re.M) else old.rstrip("\n") + f"\nSOLOIST_API_KEY={key}\n"
     write(new_text)
+    if not hub.soloist:  # another source owns the DAC: the key is used when Spotify is chosen
+        return ok(changed=True, started=False)
     await user_systemctl("restart", "soloist.service")
     # Baseline after the manual restart (which resets the automatic-restart counter).
     _, before, _ = await user_systemctl("show", "soloist.service", "-p", "NRestarts", "--value")

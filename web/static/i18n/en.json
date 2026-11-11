@@ -596,5 +596,8 @@
  "Steg {0} av {1}": "Step {0} of {1}",
  "Soloist är inte installerat": "Soloist is not installed",
  "Tillbaka": "Back",
- "Okänd tidszon": "Unknown time zone"
+ "Okänd tidszon": "Unknown time zone",
+ "Soloist är inte installerat. Installera det under System, Moduler.": "Soloist is not installed. Install it under System, Modules.",
+ "Ange din Spotify-nyckel under System, Spotify.": "Enter your Spotify key under System, Spotify.",
+ "Skapa en egen nyckel på Spotifys utvecklarsida": "Create a key of your own on Spotify's developer site"
 }

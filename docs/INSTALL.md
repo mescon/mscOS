@@ -13,15 +13,17 @@ What you need:
 
 | Board | Image target | Tested |
 |---|---|---|
-| SOtM sMS-200, sMS-200ultra | `sotm` | yes (sMS-200ultra) |
+| SOtM sMS-200, sMS-200ultra | `sotm` | mscOS runs on an sMS-200ultra; the image itself is not yet built |
 | Raspberry Pi 4, 5, CM4, CM5 | `rpi` | not yet |
-| x86-64 PC with UEFI (mini PC, NUC) | `pc` | not yet |
+| x86-64 PC with UEFI (mini PC, NUC) | `pc` | starts in a virtual machine; not yet on hardware |
 | arm64 board with UEFI | `arm64` | not yet |
 
 ## A. From an image
 
-1. Get the image for your board, or build it: `image/build.sh <target>` (needs Docker; the
-   image lands in `kernel/armbian-build/output/images/`).
+1. Build the image for your board: `image/build.sh <target>` (needs Docker; the image lands
+   in `kernel/armbian-build/output/images/`). Building an ARM image on an x86 machine also
+   needs qemu user emulation registered on the build machine (`qemu-user-static` with
+   binfmt support).
 2. Write it to the SD card with [balenaEtcher](https://etcher.balena.io/), Raspberry Pi
    Imager ("Use custom"), or `dd`. On a PC, write it to a USB stick or the internal disk.
 3. Put the card in the device, connect network and DAC, and power it on. The first start

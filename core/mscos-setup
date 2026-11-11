@@ -64,7 +64,13 @@ else
     # every system call. irqaffinity: interrupts start on the system cores.
     ARGS="rt_group_sched=0 audit=0"
     [ -z "$AUDIO_CPU" ] || ARGS="$ARGS irqaffinity=$(echo "$SYS_CPUS" | tr ' ' ,)"
-    if [ -f /boot/armbianEnv.txt ]; then                      # Armbian with U-Boot
+    # GRUB first: Armbian's UEFI images have an armbianEnv.txt too, which GRUB does not read.
+    if [ -d /etc/default/grub.d ]; then                       # GRUB (PCs, UEFI boards)
+        # 99: after Armbian's 98-armbian.cfg, which sets the variable outright
+        rm -f /etc/default/grub.d/mscos.cfg
+        echo "GRUB_CMDLINE_LINUX_DEFAULT=\"\$GRUB_CMDLINE_LINUX_DEFAULT $ARGS\"" > /etc/default/grub.d/99-mscos.cfg
+        [ "$LIVE" = no ] || update-grub >/dev/null 2>&1 || true
+    elif [ -f /boot/armbianEnv.txt ]; then                      # Armbian with U-Boot
         ENV=/boot/armbianEnv.txt
         for a in $ARGS; do
             k=${a%%=*}
@@ -80,9 +86,6 @@ else
             k=${a%%=*}
             if grep -q "\b$k=" "$C"; then sed -i "s|\b$k=[^ ]*|$a|" "$C"; else sed -i "1s|\$| $a|" "$C"; fi
         done
-    elif [ -d /etc/default/grub.d ]; then                     # GRUB (PCs)
-        echo "GRUB_CMDLINE_LINUX_DEFAULT=\"\$GRUB_CMDLINE_LINUX_DEFAULT $ARGS\"" > /etc/default/grub.d/mscos.cfg
-        [ "$LIVE" = no ] || update-grub >/dev/null 2>&1 || true
     fi
 
     # The CPU split for services: the system on its cores, the audio user's session on the audio core.

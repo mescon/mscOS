@@ -34,8 +34,9 @@ Debian 13 or Armbian system, install the packages instead.
 
 | | State |
 |---|---|
-| SOtM sMS-200, sMS-200ultra (Allwinner A20) | in daily use; image target `image/build.sh sotm` |
-| Raspberry Pi 4/5, x86-64 PCs, other boards | profiles and image targets exist, **not yet tested on hardware** |
+| SOtM sMS-200, sMS-200ultra (Allwinner A20) | in daily use, installed from a checkout; the image target `image/build.sh sotm` has not been built yet |
+| x86-64 PCs | the image builds and starts in a virtual machine (first boot, board profile, kernel arguments, the guide); **not yet tested on hardware or with a DAC** |
+| Raspberry Pi 4/5, other boards | profiles and image targets exist, **not yet built or tested** |
 | Spotify Lossless (Soloist), Roon Bridge | in daily use on the SOtM |
 | Spotify Connect (go-librespot), HQPlayer NAA | modules and install scripts written, **not yet tested on a device** |
 | Native DSD for CM6632A | in use as a kernel patch; the DKMS package is **untested** |

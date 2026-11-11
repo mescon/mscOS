@@ -4,7 +4,9 @@
 # RT_GROUP_SCHED and AUDIT may still end up enabled (selected by other options); they are
 # switched off at boot with rt_group_sched=0 audit=0 (mscos-setup).
 function custom_kernel_config__mscos_audio() {
-	opts_y+=("PREEMPT" "HZ_1000")
+	# The initrd options are named because some configurations (x86) only get them through
+	# BOOT_CONFIG, which goes away with tracing; without them the image cannot boot.
+	opts_y+=("PREEMPT" "HZ_1000" "BLK_DEV_INITRD" "RD_GZIP" "RD_ZSTD")
 	opts_n+=("PREEMPT_NONE" "PREEMPT_VOLUNTARY" "HZ_250" "DEBUG_PREEMPT"
 		"RT_GROUP_SCHED" "PSI" "SCHED_AUTOGROUP" "INIT_ON_ALLOC_DEFAULT_ON"
 		"FTRACE" "FUNCTION_TRACER" "FUNCTION_GRAPH_TRACER" "DYNAMIC_FTRACE" "FTRACE_SYSCALLS"

@@ -544,7 +544,8 @@ def optimizations(status: dict, playback: dict, vol_bridge: bool = False, output
     if acpu is not None:
         audio_cpu = {t["cpus"] for t in th}
         mask = 1 << acpu
-        usb_ok = bool(irq) and all(int(v.replace(",", ""), 16) == mask for v in irq.values())
+        # no USB controller interrupt by that name (a profile that does not fit, a VM): the threads decide
+        usb_ok = all(int(v.replace(",", ""), 16) == mask for v in irq.values())
         split = usb_ok and (audio_cpu == {str(acpu)} or not via_pw)
         who = "USB + PipeWire" + (" + Soloist" if soloist else "") if via_pw else "USB"
         add(G, "cpu1", T("Egen processorkärna för ljud"),
