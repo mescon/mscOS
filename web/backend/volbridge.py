@@ -23,7 +23,6 @@ it becomes active are not taken as moves: the slider is set from the amplifier i
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import time
 
@@ -151,7 +150,7 @@ class VolumeBridge:
             await self._set_spotify(pct)
 
 
-    # ---- background: amplifier poll and PipeWire stream watch
+    # ---- background: amplifier poll
     async def amp_loop(self):
         while True:
             try:
@@ -160,43 +159,3 @@ class VolumeBridge:
             except Exception:
                 log.exception("volume bridge poll")
             await asyncio.sleep(POLL_S)
-
-    async def stream_loop(self):
-        """Keep the Spotify stream at unity: watch PipeWire (pw-dump -m) and set softVolumes
-        to 1.0 after every new channelVolumes from Soloist, also on a newly created stream.
-        Only Soloist needs this; other sources leave the samples alone themselves."""
-        while True:
-            if not (self.enabled() and self.hub.soloist):
-                await asyncio.sleep(10)
-                continue
-            proc = None
-            try:
-                proc = await collect.spawn_as_user(["pw-dump", "-m", "-N"])
-                dec, buf = json.JSONDecoder(), ""
-                while True:
-                    chunk = await proc.stdout.read(65536)
-                    if not chunk:
-                        break
-                    buf += chunk.decode(errors="replace")
-                    while True:
-                        buf = buf.lstrip()
-                        if not buf:
-                            break
-                        try:
-                            objs, end = dec.raw_decode(buf)
-                        except ValueError:
-                            break  # incomplete
-                        buf = buf[end:]
-                        for o in objs:
-                            oid = collect.spotify_stream_changed(o) if isinstance(o, dict) else None
-                            if oid is not None:
-                                await collect.spotify_stream_unity(oid)
-                    if not (self.enabled() and self.hub.soloist):
-                        break
-            except Exception:
-                log.exception("volume bridge stream watch")
-            finally:
-                if proc and proc.returncode is None:
-                    proc.kill()
-                    await proc.wait()
-            await asyncio.sleep(3)

@@ -173,7 +173,7 @@ class Hub:
                 pass
         if self.settings.get("plugins_v", 1) < 2:  # sources became modules: turn on what is installed
             en = self.settings["plugins"]
-            if os.path.exists(collect.SOLOIST_UNIT) and "spotify" not in en:
+            if os.path.exists(f"{collect.AUDIO_HOME}/.config/systemd/user/soloist.service") and "spotify" not in en:
                 en.append("spotify")
                 self.settings.setdefault("source", "spotify")
                 self.settings["source"] = self.settings["source"] or "spotify"
@@ -466,7 +466,9 @@ class Hub:
 
     async def refresh_status(self):
         pw = await collect.pipewire_info()
-        solo = await collect.soloist_info() if "spotify" in self.plugins else {}
+        extra: dict = {}
+        for p in self.plugins.values():
+            extra.update(await p.status_fields())
         srcs = {}
         for i, p in self.sources.items():
             srcs[i] = {"installed": await p.installed(), "active": await p.active(), **await p.state()}
@@ -478,7 +480,7 @@ class Hub:
             "system": collect.system_info(),
             "dac": collect.dac_info(),
             "pipewire": pw,
-            "soloist": solo,
+            **extra,
             "usb_errors": self._usb_err,
             "supply": collect.supply(),
             "source": self.settings.get("source", ""),
@@ -681,9 +683,10 @@ async def player_command(request):
 @routes.get("/api/optimizations")
 async def get_optimizations(request):
     cur = hub.source
-    items = await asyncio.to_thread(collect.optimizations, hub.status, getattr(cur, "playback", {}), hub.vol.enabled(),
+    items = await asyncio.to_thread(collect.optimizations, hub.status, {}, hub.vol.enabled(),
                                     hub.names()["output"],
-                                    {"id": cur.id, "pipewire": cur.pipewire, "label": cur.label, "slider": cur.slider()} if cur else None)
+                                    {"id": cur.id, "pipewire": cur.pipewire, "label": cur.label, "slider": cur.slider(),
+                                     "rt_proc": cur.rt_proc, "rows": cur.optimization_rows()} if cur else None)
     return web.json_response({"t": int(time.time()), "items": items})
 
 
@@ -1405,7 +1408,8 @@ async def cache_headers(request, handler):
 async def on_startup(app):
     collect.apply_leds(hub.settings.get("leds", True))
     if "network_name" not in hub.settings:  # from before the name on the network was a choice: keep Soloist's
-        cur, n = collect.soloist_device_name(), hub.names()
+        sp = hub.plugins.get("spotify")
+        cur, n = (sp.current_name() if sp else ""), hub.names()
         if cur and cur == n["output"]:
             hub.settings["network_name"] = "output"
         elif cur and cur != n["streamer"]:
@@ -1431,7 +1435,7 @@ async def on_startup(app):
     app["tasks"] = [asyncio.create_task(c) for p in hub.plugins.values() for c in p.tasks()]
     core = [hub.sample_loop()]
     if any(getattr(type(p), "has_slider", False) for p in hub.sources.values()):  # the volume bridge
-        core += [hub.vol.amp_loop(), hub.vol.stream_loop()]
+        core += [hub.vol.amp_loop()]
     app["tasks"] += [asyncio.create_task(c) for c in core]
 
 

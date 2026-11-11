@@ -31,9 +31,7 @@ def _audio_user() -> tuple[str, str]:
 
 
 SVC_USER, AUDIO_HOME = _audio_user()
-SOLOIST_HOME = AUDIO_HOME
 LIB = os.environ.get("MSCOS_LIB", "/usr/lib/mscos")  # install scripts of the sources live here
-SOLOIST_UNIT = f"{SOLOIST_HOME}/.config/systemd/user/soloist.service"
 
 
 def net_if() -> str:
@@ -48,7 +46,6 @@ def net_if() -> str:
     return ""
 
 
-BUILD_VALID_DAYS = 90
 
 
 async def run(cmd: str | list, timeout: float = 15, as_user: bool = False, input_: bytes | None = None):
@@ -56,10 +53,10 @@ async def run(cmd: str | list, timeout: float = 15, as_user: bool = False, input
     if isinstance(cmd, str):
         cmd = ["bash", "-c", cmd]
     if as_user:
-        uid = await soloist_uid()
+        uid = await audio_uid()
         # setpriv instead of runuser: no PAM session (no journal spam, less work).
         cmd = ["setpriv", f"--reuid={uid}", f"--regid={uid}", "--init-groups", "--",
-               "env", f"HOME={SOLOIST_HOME}", f"XDG_RUNTIME_DIR=/run/user/{uid}",
+               "env", f"HOME={AUDIO_HOME}", f"XDG_RUNTIME_DIR=/run/user/{uid}",
                f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus"] + cmd
     p = await asyncio.create_subprocess_exec(
         *cmd, stdin=asyncio.subprocess.PIPE if input_ else asyncio.subprocess.DEVNULL,
@@ -76,7 +73,7 @@ async def run(cmd: str | list, timeout: float = 15, as_user: bool = False, input
 _uid: int | None = None
 
 
-async def soloist_uid() -> int:
+async def audio_uid() -> int:
     global _uid
     if _uid is None:
         import pwd
@@ -284,150 +281,7 @@ async def pw_top_errors() -> dict:
     return res
 
 
-# --------------------------------------------------------------------------- Soloist
-def soloist_unit_text() -> str:
-    return read(SOLOIST_UNIT)
-
-
-def soloist_device_name() -> str:
-    m = re.search(r'--device-name\s+"([^"]+)"', soloist_unit_text())
-    return m.group(1) if m else ""
-
-
-def prefs_path() -> str | None:
-    p = sorted(glob.glob(f"{SOLOIST_HOME}/.local/share/soloist/settings/Users/*/prefs"))
-    return p[0] if p else None
-
-
-def account_dirs() -> list[str]:
-    """Real account directories only (no symlinks: the tree is the soloist user's)."""
-    base = f"{SOLOIST_HOME}/.local/share/soloist/settings/Users"
-    try:
-        with os.scandir(base) as it:
-            return sorted(f"{base}/{e.name}/" for e in it if e.is_dir(follow_symlinks=False))
-    except OSError:
-        return []
-
-
-def prefs_paths() -> list[str]:
-    """One prefs file per Spotify account that has used the device (you, and guests)."""
-    return sorted(glob.glob(f"{SOLOIST_HOME}/.local/share/soloist/settings/Users/*/prefs"))
-
-
-def _norm_on(path: str) -> bool:
-    m = re.search(r"^audio\.normalize_v2=(\w+)", read(path), re.M)
-    return True if not m else m.group(1) != "false"  # Spotify's default is on
-
-
-# What every account on the device needs (a guest's new account has neither): Spotify's
-# defaults are normalization on and a lossy bitrate. Quality 5 is Lossless; an account without
-# Lossless in its plan gets the best it has.
-LOSSLESS = ("audio.play_bitrate_non_metered_enumeration", "5")
-
-
-def required_prefs(normalization: bool) -> dict[str, str]:
-    return {"audio.normalize_v2": "true" if normalization else "false", LOSSLESS[0]: LOSSLESS[1]}
-
-
-def _pref(text: str, key: str) -> str | None:
-    m = re.search(rf"^{re.escape(key)}=(.*)$", text, re.M)
-    return m.group(1).strip() if m else None
-
-
-def normalization_enabled() -> bool | None:
-    """On for any account (a guest's new account starts with Spotify's default, on)."""
-    ps = prefs_paths()
-    return any(_norm_on(p) for p in ps) if ps else None
-
-
-def normalization_mismatch(want: bool) -> list[str]:
-    """Accounts whose prefs differ from what every account needs (normalization as wanted,
-    and Lossless). A missing normalize line is Spotify's default, on."""
-    bad = []
-    for d in account_dirs():
-        text = read(d + "prefs")
-        norm_on = _pref(text, "audio.normalize_v2") != "false"
-        if norm_on != want or _pref(text, LOSSLESS[0]) != LOSSLESS[1]:
-            bad.append(d + "prefs")
-    return bad
-
-
-_SET_NORM = r"""
-import os, re, sys
-path, lines = sys.argv[1], sys.argv[2:]
-try:
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
-    with os.fdopen(fd) as f:
-        text = f.read()
-except FileNotFoundError:
-    text = ""  # a new account Soloist has not written prefs for yet
-for line in lines:
-    key = line.split("=", 1)[0]
-    pat = r"^" + re.escape(key) + r"=.*$"
-    text = re.sub(pat, line, text, flags=re.M) if re.search(pat, text, re.M) \
-        else (text.rstrip("\n") + "\n" if text.strip() else "") + line + "\n"
-tmp = path + ".mscos-tmp"
-fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-with os.fdopen(fd, "w") as f:
-    f.write(text)
-os.replace(tmp, path)
-"""
-
-
-async def set_normalization_file(path: str, enabled: bool) -> bool:
-    """Edit one account's prefs AS THE SOLOIST USER: the Users/<account>/ tree is the
-    soloist user's (guests add accounts), so a root write there could be sent elsewhere
-    with a symlink. As that user it can only touch that user's own files."""
-    if not path.startswith(f"{SOLOIST_HOME}/.local/share/soloist/settings/Users/") or "/../" in path:
-        return False
-    lines = [f"{k}={v}" for k, v in required_prefs(enabled).items()]
-    rc, _, err = await run(["python3", "-I", "-c", _SET_NORM, path, *lines], as_user=True, timeout=15)
-    if rc != 0:
-        logging.getLogger("collect").warning("prefs %s: %s", path, err.strip()[-200:])
-    return rc == 0
-
-
-_version_cache: tuple[float, str] = (0.0, "")
-
-
-async def soloist_version() -> str:
-    """`soloist --version`, re-run only when the binary changes (it is a 29 MB executable)."""
-    global _version_cache
-    try:
-        mtime = os.stat("/usr/local/bin/soloist").st_mtime
-    except OSError:
-        return ""
-    if mtime != _version_cache[0]:
-        rc, out, _ = await run(["/usr/local/bin/soloist", "--version"], timeout=10)
-        _version_cache = (mtime, out.strip())
-    return _version_cache[1]
-
-
-async def soloist_info() -> dict:
-    version = await soloist_version()
-    build = re.search(r"\((\d{8})\)", version)
-    days_left = None
-    if build:
-        bdate = dt.datetime.strptime(build.group(1), "%Y%m%d").date()
-        days_left = (bdate + dt.timedelta(days=BUILD_VALID_DAYS) - dt.date.today()).days
-    rc2, active, _ = await run(["systemctl", "--user", "is-active", "soloist.service"], as_user=True)
-    rc3, rt_active, _ = await run(["systemctl", "--user", "is-active", "soloist-rt.service"], as_user=True)
-    rc4, timer, _ = await run("systemctl show soloist-update.timer -p NextElapseUSecRealtime -p LastTriggerUSec --value")
-    tl = timer.strip().splitlines()
-    return {
-        "version": version,
-        "build_date": build.group(1) if build else None,
-        "days_left": days_left,
-        "service": active.strip(),
-        "rt_watcher": rt_active.strip(),
-        "device_name": soloist_device_name(),
-        "normalization": normalization_enabled(),
-        "update_next": tl[0] if tl else "",
-        "update_last": tl[1] if len(tl) > 1 else "",
-        "api_key": api_key_info(),
-    }
-
-
+# --------------------------------------------------------------------------- packages, logs
 async def apt_upgradable() -> list[str]:
     rc, out, _ = await run("apt list --upgradable 2>/dev/null | tail -n +2", timeout=60)
     return [l.split("/")[0] for l in out.splitlines() if "/" in l]
@@ -436,7 +290,7 @@ async def apt_upgradable() -> list[str]:
 async def logs(source: str, lines: int = 200, errors_only: bool = False, player=((), ())) -> str:
     """player: the current source's (user units, system units)."""
     lines = max(10, min(int(lines), 2000))
-    uid = await soloist_uid()
+    uid = await audio_uid()
     if not all(re.fullmatch(r"[\w@.\-]+", u) for u in (*player[0], *player[1])):
         return ""
     pl = (f"journalctl _UID={uid} " + " ".join(f"--user-unit {u}" for u in player[0])) if player[0] else \
@@ -457,20 +311,13 @@ async def logs(source: str, lines: int = 200, errors_only: bool = False, player=
 
 
 # --------------------------------------------------------------------------- optimisation ledger
-SOLOIST_ENV = "/etc/soloist.env"
-WP_CONF = f"{SOLOIST_HOME}/.config/wireplumber/wireplumber.conf.d/50-usb-dac.conf"
-PW_CONF = f"{SOLOIST_HOME}/.config/pipewire/pipewire.conf.d/10-bitperfect.conf"
+WP_CONF = f"{AUDIO_HOME}/.config/wireplumber/wireplumber.conf.d/50-usb-dac.conf"
+PW_CONF = f"{AUDIO_HOME}/.config/pipewire/pipewire.conf.d/10-bitperfect.conf"
 QUIET_TIMERS = ("apt-daily.timer", "apt-daily-upgrade.timer", "man-db.timer", "e2scrub_all.timer", "dpkg-db-backup.timer")
 
 
-def api_key_info() -> dict:
-    """Whether a Soloist key is configured (never the key itself)."""
-    text = read(SOLOIST_ENV)
-    try:
-        changed = int(os.stat(SOLOIST_ENV).st_mtime)
-    except OSError:
-        changed = None
-    return {"set": bool(re.search(r"^SOLOIST_API_KEY=\S{8,}", text, re.M)), "changed": changed}
+# Processes whose threads matter for audio; a source module adds its player (SourcePlugin.rt_proc).
+RT_PROCS = {"pipewire", "wireplumber"}
 
 
 def _threads() -> list[dict]:
@@ -478,7 +325,7 @@ def _threads() -> list[dict]:
     out = []
     for pid in filter(str.isdigit, os.listdir("/proc")):
         pcomm = read(f"/proc/{pid}/comm").strip()
-        if pcomm not in ("pipewire", "soloist", "wireplumber"):
+        if pcomm not in RT_PROCS:
             continue
         cpus = re.search(r"^Cpus_allowed_list:\s*(\S+)", read(f"/proc/{pid}/status"), re.M)
         for tid in os.listdir(f"/proc/{pid}/task") if os.path.isdir(f"/proc/{pid}/task") else []:
@@ -513,11 +360,11 @@ def optimizations(status: dict, playback: dict, vol_bridge: bool = False, output
     a device tree overlay) and the current source (through PipeWire, or the DAC directly)."""
     cmd = read("/proc/cmdline")
     bp = board.profile()
-    sysi, pw, solo = status.get("system") or {}, status.get("pipewire") or {}, status.get("soloist") or {}
+    sysi, pw = status.get("system") or {}, status.get("pipewire") or {}
     sink, top = pw.get("sink") or {}, status.get("pw_top") or {}
     src = source or {}
     via_pw = bool(src.get("pipewire", True)) and bool(src)
-    soloist = src.get("id") == "spotify"
+    rt_proc, label = src.get("rt_proc") or "", src.get("label") or ""  # the player's own realtime threads, if it has any
     th = _threads()
     irq = _irq_affinity()
     items = []
@@ -550,19 +397,19 @@ def optimizations(status: dict, playback: dict, vol_bridge: bool = False, output
         # no USB controller interrupt by that name (a profile that does not fit, a VM): the threads decide
         usb_ok = all(int(v.replace(",", ""), 16) == mask for v in irq.values())
         split = usb_ok and (audio_cpu == {str(acpu)} or not via_pw)
-        who = "USB + PipeWire" + (" + Soloist" if soloist else "") if via_pw else "USB"
+        who = "USB + PipeWire" + (f" + {label}" if rt_proc else "") if via_pw else "USB"
         add(G, "cpu1", T("Egen processorkärna för ljud"),
             T("USB-avbrott och ljudtrådar på kärna {n}; nätverk, lagring och panel på de andra.", n=acpu), split,
             T("Kärna {n}: {who}", n=acpu, who=who) if split else T("Ljud på kärna {cpus}", cpus=", ".join(sorted(audio_cpu)) or "?"))
     if via_pw:
         dl = [t for t in th if t["proc"] == "pipewire" and t["name"].startswith("data-loop") and t["policy"] == 1]
-        so = [t for t in th if t["proc"] == "soloist" and t["policy"] == 1]
+        so = [t for t in th if t["proc"] == rt_proc and t["policy"] == 1]
         val = f"PipeWire {max((t['rtprio'] for t in dl), default=0)}"
-        if soloist:
-            val += f", Soloist {max((t['rtprio'] for t in so), default=0)} ({len(so)} {T('tråd') if len(so) == 1 else T('trådar')})"
+        if rt_proc:
+            val += f", {label} {max((t['rtprio'] for t in so), default=0)} ({len(so)} {T('tråd') if len(so) == 1 else T('trådar')})"
         add(G, "rt", T("Realtidsprioritet"),
             T("PipeWires ljudtråd och spelarens renderingstrådar går före allt annat."),
-            bool(dl) and (len(so) >= 1 or not soloist), val)
+            bool(dl) and (len(so) >= 1 or not rt_proc), val)
     add(G, "audit", T("Säkerhetsloggning av"),
         T("Ingen granskningslogg på varje systemanrop."), "audit=0" in cmd or _kernel_config("AUDIT") is None,
         "audit=0" if "audit=0" in cmd else T("Aktiv"))
@@ -580,8 +427,8 @@ def optimizations(status: dict, playback: dict, vol_bridge: bool = False, output
             T("Utgång {format} {khz} kHz", format=sink.get("format"), khz=decimal(44.1)) if live else (T("Låst till {khz} kHz", khz=decimal(44.1)) if locked else T("Inte låst")))
         sink_ok = sink.get("volume") is None or abs(sink["volume"] - 1) < 1e-6
         slider = src.get("slider")  # the source's own volume slider, if it has one that is on
-        if soloist or slider:
-            vol = playback.get("volume") if soloist else slider.get("volume")
+        if slider:
+            vol = slider.get("volume")
             if vol_bridge:  # the Spotify slider drives the amplifier; the stream is kept at unity
                 add(G, "volume", T("Full digital volym"),
                     T("Spotify-reglaget styr förstärkaren. Strömmen hålls på 100 %, så samplen räknas aldrig om."),
@@ -590,11 +437,8 @@ def optimizations(status: dict, playback: dict, vol_bridge: bool = False, output
                 add(G, "volume", T("Full digital volym"),
                     T("All volym under 100 % räknar om samplen. Volymen sköts i förstärkaren."), (vol in (None, 100)) and sink_ok,
                     f"Spotify {vol if vol is not None else '–'} %, PipeWire {round((sink.get('volume') or 0) * 100)} %")
-            if soloist:
-                norm = solo.get("normalization")
-                add(G, "norm", T("Volymnormalisering av"),
-                    T("Spotify sänker annars vissa låtar med flera dB."), norm is False,
-                    T("Av") if norm is False else (T("På") if norm else T("Okänt")))
+            for r in src.get("rows") or []:  # the source's own measures (volume normalization, ...)
+                add(G, r["id"], r["title"], r["why"], r["ok"], r["value"])
         else:
             add(G, "volume", T("Full digital volym"),
                 T("All volym under 100 % räknar om samplen. Volymen sköts i förstärkaren."), sink_ok,
@@ -963,60 +807,14 @@ async def units_active(units, user: bool) -> bool:
     return out.strip() == "active"
 
 
-# --------------------------------------------------------------------------- Spotify stream volume
-# Soloist applies the Spotify volume as PipeWire stream volume on its "spotify" stream node
-# (channelVolumes = (v/100)^3), and reads channelVolumes back: resetting them makes it report
-# 100 % to Spotify. Setting softVolumes (what audioconvert actually multiplies by) to 1.0
-# leaves channelVolumes, so Soloist sees nothing, and the samples pass untouched. Each new
-# channelVolumes from Soloist re-applies them, so softVolumes is set again after every change.
-# (Verified 2026-11-10: Spotify 50 %, channelVolumes 0.125, softVolumes 1.0 -> bit-perfect 0.0 dB,
-# no echo.) volbridge.py drives this; the slider drives the amplifier instead.
-_spotify_nodes: dict[int, list | None] = {}   # node id -> last channelVolumes seen
-
-
 async def spawn_as_user(cmd: list[str]):
     """A long-running process as the soloist user (PipeWire session), stdout piped."""
-    uid = await soloist_uid()
+    uid = await audio_uid()
     return await asyncio.create_subprocess_exec(
         "setpriv", f"--reuid={uid}", f"--regid={uid}", "--init-groups", "--",
-        "env", f"HOME={SOLOIST_HOME}", f"XDG_RUNTIME_DIR=/run/user/{uid}", *cmd,
+        "env", f"HOME={AUDIO_HOME}", f"XDG_RUNTIME_DIR=/run/user/{uid}", *cmd,
         stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.DEVNULL)
-
-
-def spotify_stream_changed(o: dict) -> int | None:
-    """A pw-dump object: Soloist's output stream with new channelVolumes? Returns its id."""
-    if o.get("type") != "PipeWire:Interface:Node":
-        return None
-    oid, info = o.get("id"), o.get("info")
-    if info is None:  # removed
-        _spotify_nodes.pop(oid, None)
-        return None
-    props = info.get("props") or {}
-    if props:
-        if props.get("media.class") == "Stream/Output/Audio" and (
-                props.get("application.process.binary") == "soloist"
-                or str(props.get("node.name", "")).lower() == "spotify"
-                or props.get("application.name") == "Spotify"):
-            _spotify_nodes.setdefault(oid, None)
-        else:
-            _spotify_nodes.pop(oid, None)
-    if oid not in _spotify_nodes:
-        return None
-    for p in (info.get("params") or {}).get("Props") or []:
-        vols = p.get("channelVolumes")
-        if vols is not None and vols != _spotify_nodes[oid]:
-            _spotify_nodes[oid] = vols
-            return oid
-    return None
-
-
-async def spotify_stream_unity(oid: int | None = None):
-    """softVolumes to 1.0 on the Spotify stream(s): what reaches the DAC is untouched."""
-    for n in ([oid] if oid is not None else list(_spotify_nodes)):
-        ch = len(_spotify_nodes.get(n) or [0, 0]) or 2
-        vols = ", ".join(["1.0"] * ch)
-        await run(["pw-cli", "set-param", str(n), "Props", f"{{ softVolumes: [ {vols} ] }}"], as_user=True, timeout=5)
 
 
 async def local_network() -> tuple[str | None, set[str]]:

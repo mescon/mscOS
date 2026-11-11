@@ -266,7 +266,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "14662cc34c8515dc921144b226bce8870817c4b01cd2cb545bec947979051848",
+     "sha256": "8c16483524806f1116a8c566eef126550110b1c6385bce02a7adcef2d8ee365c",
      "exec": false
     },
     {
@@ -302,6 +302,11 @@
     {
      "path": "soloist-update.timer",
      "sha256": "5627b5de2f7401c3c1f7e663b108b902b003923061da302aee2c618cf127fe58",
+     "exec": false
+    },
+    {
+     "path": "soloist.py",
+     "sha256": "476affe712b8e9395753c962e63e7a389afe4cede89d64f4d69ae60264f18668",
      "exec": false
     },
     {

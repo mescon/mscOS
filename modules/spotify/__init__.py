@@ -28,6 +28,7 @@ import bitcheck
 import collect
 from i18n import T
 from plugins import SourcePlugin
+from . import soloist as so
 
 log = logging.getLogger("spotify")
 BIN = "/usr/local/bin/soloist"
@@ -53,6 +54,7 @@ class Spotify(SourcePlugin):
     updates = "self"  # soloist-update.timer, nightly: Spotify's builds expire
     transport = ("toggle", "play", "pause", "next", "prev", "seek", "shuffle", "repeat")
     pushes_playing = True  # Soloist's events say when playback starts and stops here
+    rt_proc = "soloist"   # its rendering threads run with realtime priority (soloist-rt)
     defaults = {"auto_verify": True, "soloist_normalization": False}
 
     def __init__(self, hub):
@@ -77,7 +79,18 @@ class Spotify(SourcePlugin):
 
     # ---- what the core asks of a module
     def tasks(self) -> list:
-        return [self.soloist_loop()]
+        return [self.soloist_loop(), self.stream_loop()]
+
+    async def status_fields(self) -> dict:
+        return {"soloist": await so.soloist_info()}
+
+    def optimization_rows(self) -> list[dict]:
+        norm = (self.hub.status.get("soloist") or {}).get("normalization")
+        return [{"id": "norm", "title": T("Volymnormalisering av"), "why": T("Spotify sänker annars vissa låtar med flera dB."),
+                 "ok": norm is False, "value": T("Av") if norm is False else (T("På") if norm else T("Okänt"))}]
+
+    def current_name(self) -> str:
+        return so.soloist_device_name()
 
     def hello(self) -> dict:
         return {"playback": self.playback, "auth": self.auth, "queue": self.queue, "last_test": self.last_test,
@@ -104,7 +117,7 @@ class Spotify(SourcePlugin):
 
     async def check_health(self) -> None:
         hub, solo = self.hub, self.hub.status.get("soloist") or {}
-        if hub._held("soloist", hub.soloist and collect.api_key_info()["set"]
+        if hub._held("soloist", hub.soloist and so.api_key_info()["set"]
                      and solo.get("service") not in (None, "active"), 120):
             await hub.alert("soloist", T("Soloist har stannat"),
                             T("Spotify-tjänsten är {state}. Starta om den under Moduler i panelen.", state=solo.get("service")))
@@ -120,15 +133,15 @@ class Spotify(SourcePlugin):
 
     # ---- source
     async def installed(self) -> bool:
-        return os.path.exists(BIN) and os.path.exists(collect.SOLOIST_UNIT)
+        return os.path.exists(BIN) and os.path.exists(so.SOLOIST_UNIT)
 
     async def start(self) -> str:
-        if not collect.api_key_info()["set"]:
+        if not so.api_key_info()["set"]:
             return ""  # installed but no key yet: nothing to start, the panel asks for the key
         return await super().start()
 
     async def state(self) -> dict:
-        return {"key_set": collect.api_key_info()["set"]}
+        return {"key_set": so.api_key_info()["set"]}
 
     async def version(self) -> str | None:
         v = ((self.hub.status.get("soloist") or {}).get("version") or "").replace("soloist ", "")
@@ -254,13 +267,13 @@ class Spotify(SourcePlugin):
         reads them at start, and a restart would cut off someone listening."""
         if not self.hub.soloist:
             return
-        accounts = set(collect.account_dirs())
+        accounts = set(so.account_dirs())
         if self._accounts is None:  # first look: what is there now is not "new"
             self._accounts = accounts
         new = accounts - self._accounts
         self._accounts |= accounts
         want = bool(self.hub.settings.get("soloist_normalization", False))
-        wrong = collect.normalization_mismatch(want)
+        wrong = so.normalization_mismatch(want)
         if not wrong:
             self._norm_failed = None
             return
@@ -277,7 +290,7 @@ class Spotify(SourcePlugin):
             async with self.hub.source_lock:
                 ok_ = await self.apply_normalization(want)
             if not ok_:
-                self._norm_failed = (want, tuple(collect.normalization_mismatch(want)))
+                self._norm_failed = (want, tuple(so.normalization_mismatch(want)))
                 log.warning("normalization could not be written for %s", self._norm_failed[1])
             asyncio.ensure_future(self._resume_after_restart(active, playing))
             return
@@ -287,7 +300,7 @@ class Spotify(SourcePlugin):
         async with self.hub.source_lock:
             ok_ = await self.apply_normalization(want)
         if not ok_:
-            self._norm_failed = (want, tuple(collect.normalization_mismatch(want)))
+            self._norm_failed = (want, tuple(so.normalization_mismatch(want)))
             log.warning("normalization could not be written for %s", self._norm_failed[1])
 
     async def _resume_after_restart(self, active: bool, playing: bool):
@@ -330,7 +343,7 @@ class Spotify(SourcePlugin):
             sink = (self.hub.status.get("pipewire") or {}).get("sink") or {}
             if not sink.get("name"):
                 return
-            uid = await collect.soloist_uid()
+            uid = await collect.audio_uid()
             fd, wav = tempfile.mkstemp(suffix=".wav", dir="/tmp")
             os.close(fd)
             os.chown(wav, uid, -1)
@@ -388,7 +401,7 @@ class Spotify(SourcePlugin):
         await self.hub.broadcast({"type": "job", "name": "audio-test", "started": True, "auto": auto, "seconds": secs})
 
         async def go():
-            uid = await collect.soloist_uid()
+            uid = await collect.audio_uid()
             fd, wav = tempfile.mkstemp(suffix=".wav", dir="/tmp")
             os.close(fd)
             os.chown(wav, uid, -1)
@@ -473,7 +486,7 @@ class Spotify(SourcePlugin):
         Soloist is restarted then. Read and written as the audio user: the unit lives in its
         home, and root follows nothing there."""
         name = re.sub(r"[^\w .\-]", "", name)[:40].strip() or "mscOS"  # what Soloist takes
-        p = collect.SOLOIST_UNIT
+        p = so.SOLOIST_UNIT
         rc, text, _ = await collect.run(["cat", p], as_user=True, timeout=5)
         if rc or "--device-name" not in text:
             raise RuntimeError(T("Soloist är inte installerat"))
@@ -489,6 +502,47 @@ class Spotify(SourcePlugin):
         if self.hub.soloist:
             await self.hub.user_systemctl("restart", "soloist.service")
         return True
+
+    # ---- the Spotify stream is kept at unity while the slider drives the amplifier
+    async def stream_loop(self):
+        """Keep the Spotify stream at unity: watch PipeWire (pw-dump -m) and set softVolumes
+        to 1.0 after every new channelVolumes from Soloist, also on a newly created stream.
+        Only Soloist needs this; other sources leave the samples alone themselves."""
+        while True:
+            if not (self.hub.vol.enabled() and self.hub.soloist):
+                await asyncio.sleep(10)
+                continue
+            proc = None
+            try:
+                proc = await collect.spawn_as_user(["pw-dump", "-m", "-N"])
+                dec, buf = json.JSONDecoder(), ""
+                while True:
+                    chunk = await proc.stdout.read(65536)
+                    if not chunk:
+                        break
+                    buf += chunk.decode(errors="replace")
+                    while True:
+                        buf = buf.lstrip()
+                        if not buf:
+                            break
+                        try:
+                            objs, end = dec.raw_decode(buf)
+                        except ValueError:
+                            break  # incomplete
+                        buf = buf[end:]
+                        for o in objs:
+                            oid = so.spotify_stream_changed(o) if isinstance(o, dict) else None
+                            if oid is not None:
+                                await so.spotify_stream_unity(oid)
+                    if not (self.hub.vol.enabled() and self.hub.soloist):
+                        break
+            except Exception:
+                log.exception("stream watch")
+            finally:
+                if proc and proc.returncode is None:
+                    proc.kill()
+                    await proc.wait()
+            await asyncio.sleep(3)
 
     # ---- state for automations, and the normalization writer
     def _ha_soloist(self) -> dict:
@@ -542,11 +596,11 @@ class Spotify(SourcePlugin):
         """Write the setting into every account's prefs (Soloist reads them at start).
         Returns whether every account now has it."""
         await self.hub.user_systemctl("stop", "soloist.service")
-        for d in collect.account_dirs():
-            if await collect.set_normalization_file(d + "prefs", enabled):
+        for d in so.account_dirs():
+            if await so.set_normalization_file(d + "prefs", enabled):
                 self.hub.persist(d + "prefs")
         await self.hub.user_systemctl("start", "soloist.service")
-        return not collect.normalization_mismatch(enabled)
+        return not so.normalization_mismatch(enabled)
 
     # ---- HTTP API
     def routes(self, routes) -> None:
@@ -608,7 +662,7 @@ class Spotify(SourcePlugin):
         @routes.post("/api/soloist/normalization")
         async def soloist_normalization(request):
             enabled = bool((await hub.body(request)).get("enabled"))
-            if not collect.prefs_paths():
+            if not so.prefs_paths():
                 raise web.HTTPConflict(text=T("Soloist har inte loggat in än. Anslut från Spotify-appen först."))
             hub.settings["soloist_normalization"] = enabled  # kept for every account, guests too
             await asyncio.get_running_loop().run_in_executor(None, hub.save_settings)
@@ -622,7 +676,7 @@ class Spotify(SourcePlugin):
             key = str((await hub.body(request)).get("key", "")).strip()
             if not re.fullmatch(r"[A-Za-z0-9_\-.:+/=]{16,512}", key):
                 raise web.HTTPBadRequest(text=T("Nyckeln ser inte giltig ut: 16–512 tecken, bokstäver, siffror och _-.:+/=."))
-            path = collect.SOLOIST_ENV
+            path = so.SOLOIST_ENV
             old = collect.read(path)
             if f"SOLOIST_API_KEY={key}" in old:
                 return hub.ok(changed=False)

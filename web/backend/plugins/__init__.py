@@ -50,6 +50,10 @@ class Plugin:
 
     def __init__(self, hub):
         self.hub = hub
+        rt = getattr(self, "rt_proc", "")
+        if rt:
+            import collect
+            collect.RT_PROCS.add(rt)
 
     # ---- lifecycle
     def routes(self, routes) -> None:
@@ -89,6 +93,10 @@ class Plugin:
 
     def summary(self) -> dict:
         """Fields for the compact state API (/api/ha and the like)."""
+        return {}
+
+    async def status_fields(self) -> dict:
+        """Fields for the status the panel shows, read with it (every 5 s with a panel open)."""
         return {}
 
     async def tick(self) -> None:
@@ -196,6 +204,8 @@ class SourcePlugin(Plugin):
     terms: dict[str, str] = {}         # shown before installing (licence, account needed)
     terms_url = ""
     has_slider = False                 # its app has a volume slider the bridge can use: slider()
+    rt_proc = ""                       # the player's process name, if its threads should have realtime
+                                       # priority (checked in the optimization list)
     pushes_playing = False             # it tells the core itself when playback starts and stops
                                        # (hub._set_playing); otherwise the core asks playing()
     # What the panel's buttons may ask of the player, through command():
@@ -247,6 +257,11 @@ class SourcePlugin(Plugin):
     async def state(self) -> dict:
         """Extra facts for the panel's status (version, ...)."""
         return {}
+
+    def optimization_rows(self) -> list[dict]:
+        """The source's own measures for the optimization list:
+        [{"id", "title", "why", "ok": bool, "value"}] (texts through i18n.T)."""
+        return []
 
     def lost_dac(self) -> None:
         """Another source was chosen: forget what was playing."""
