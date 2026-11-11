@@ -10,16 +10,16 @@ mscOS ("music OS", eller "mescon OS") är operativsystemet för **SOtM sMS-200Ul
 |---|---|---|
 | Kärna | `kernel/` | Armbian-bygge med PREEMPT och HZ=1000, plus `kernel/mscos-dsd/` (rå DSD för CM6632A) |
 | System | `device/` | Trimning (CPU-delning, IRQ, DT-overlay, watchdog), Soloist, PipeWire och Roon Bridge |
-| Panel | `web/` | PWA:n http://mscos.local: uppspelning, signalväg, DAC, förstärkare, källväxel, API för HA |
+| Panel | `web/` | PWA:n på `http://<enhetens namn>.local`: uppspelning, signalväg, DAC, förstärkare, källväxel, API för HA |
 | Verktyg | `tools/` | Testverktyg, bland annat `dsf2u32le.py` (DSF till rå DSD_U32_LE) |
 | Dokumentation | `docs/` | [Optimeringar](docs/OPTIMIZATIONS.md), [DSD](docs/DSD.md), [jämförelse med ROCK](docs/ROCK.md) |
 
-Drift, felsökning och historik finns i KB-artikeln `the operations notes`.
+Inställningar för den egna installationen (adresser, omvänd proxy) ligger i `/etc/mscos/site.env` på enheten, aldrig i repot.
 
 ## Vanliga kommandon
 
 ```sh
-web/deploy.sh                          # panelen till enheten (192.168.1.200)
+MSCOS_HOST=root@<enhet> web/deploy.sh # panelen till enheten (standard root@mscos.local)
 kernel/mscos-dsd/build-module.sh       # snd-usb-audio med DSD-patchen, för den byggda kärnan
 kernel/mscos-dsd/install-module.sh     # installera den (updates/), --remove för originalet
 device/tune-system.sh                  # körs på enheten: systemtrimning

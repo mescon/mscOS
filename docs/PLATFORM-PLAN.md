@@ -12,7 +12,7 @@ Det mesta i mscOS är redan generellt Linux. Det som är bundet till just den h�
 
 | Bundet till oss | Var | Vad som behövs |
 |---|---|---|
-| Adresser och värdnamn: `mscos.local`, `192.168.1.x`, Arcam-IP, betrodd proxy | `app.py`, `sotm-web.service`, `deploy.sh`, verktygen | inställningar som sätts vid första start, inga standardvärden från vårt nät |
+| Adresser och värdnamn: panelens publika adress, IP-adresser, Arcam-IP, betrodd proxy | `app.py`, `sotm-web.service`, `deploy.sh`, verktygen | inställningar som sätts vid första start, inga standardvärden från vårt nät |
 | Panelen kräver omvänd proxy (`only_via_proxy`) | `app.py` | lokalt läge som standard (`http://mscos.local`, mDNS), proxyläget som tillval |
 | Mark Levinson 585.5 och Arcam AVR10 är inbyggda | `levinson.py`, `arcam.py`, `volbridge.py`, vyerna | förstärkardrivrutiner som tillägg; utan förstärkare styr reglaget DAC:ns egen volym eller inget alls |
 | Kortspecifik trimning: A20, AXP209, IRQ-namn, lysdioder | `tune-system.sh`, `sotm-tuning`, `sotm-lean.dts`, `collect.py` | en kortprofil per enhet |

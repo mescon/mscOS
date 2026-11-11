@@ -876,7 +876,7 @@ async def soloist_command(request):
     if not (c == "play" and uri) and c not in ("add_to_queue", "deactivate", "activate"):
         await hub.soloist_cmd(msg)  # the panel's own buttons: fire and forget, as before
         return ok()
-    # From HA/the voice assistant: say what actually happened.
+    # From Home Assistant (voice assistants): say what actually happened.
     if hub.settings.get("source") == "roon":
         raise web.HTTPConflict(text="Stereon är inställd på Roon")
     if not hub.soloist_ws:
