@@ -22,6 +22,13 @@ class Roon(SourcePlugin):
              "en": "Roon Bridge is downloaded from Roon Labs to this device."}
     terms_url = "https://help.roonlabs.com/portal/en/kb/articles/linux-install"
 
+    updates = "self"  # Roon Bridge updates itself from the Roon server
+
+    async def version(self) -> str | None:
+        import collect
+        lines = collect.read("/opt/RoonBridge/VERSION").splitlines()
+        return (lines[1].split(" production")[0].strip() if len(lines) > 1 else "") or None
+
     async def installed(self) -> bool:
         return os.path.exists("/opt/RoonBridge/start.sh") and os.path.exists("/etc/systemd/system/roonbridge.service")
 

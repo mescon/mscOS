@@ -51,24 +51,28 @@ const fv = (id, text, warn = false) => { const el = $(`#fv-${id}`); if (el) { el
 let optT = 0, testSecs = 30, dacT = 0;
 
 // ------------------------------------------------------------------ views
-const LEGACY = { "v-dac": "v-signal", "v-arcam": "v-play" };
+const LEGACY = { "v-dac": "v-signal", "v-arcam": "v-play", "system": "v-sys" };
 function showView(id) {
   id = LEGACY[id] || id;
+  if (!$(`#${id}.view`)) id = "v-play";
   $$(".view").forEach((v) => v.classList.toggle("active", v.id === id));
-  $$(".tabs a").forEach((a) => a.classList.toggle("on", a.getAttribute("href") === `#${id}`));
-  if (id === "v-signal") { loadOpts(); loadDac(); requestAnimationFrame(renderSpark); }
+  $$(".tabs a").forEach((a) => { const on = a.getAttribute("href") === `#${id}`; a.classList.toggle("on", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+  document.body.dataset.view = id;
+  if (id === "v-signal") { loadOpts(); loadDac(); requestAnimationFrame(() => { renderSpark(); if (S.dacd?.clock_avg) renderClockChart(S.dacd.clock_avg.series || []); }); }
+  if (id === "v-mods") loadMods();
 }
-$$(".tabs a").forEach((a) => a.addEventListener("click", (e) => {
+document.addEventListener("click", (e) => {
+  const a = e.target.closest('a[href^="#v-"]'); if (!a) return;
   e.preventDefault(); const id = a.getAttribute("href").slice(1); showView(id); history.replaceState(null, "", `#${id}`); window.scrollTo(0, 0);
-}));
-const initial = LEGACY[(location.hash || "#v-play").slice(1)] || (location.hash || "#v-play").slice(1);
-showView($(`#${initial}.view`) ? initial : "v-play");
+});
+showView(LEGACY[(location.hash || "#v-play").slice(1)] || (location.hash || "#v-play").slice(1));
 // remember which rows are open; a chart drawn while its row was closed is redrawn at full width
 const foldKey = (d) => `fold:${d.dataset.k}`;
 $$("details.fold").forEach((d) => {
   try { if (localStorage.getItem(foldKey(d)) === "1") d.open = true; } catch {}
   d.addEventListener("toggle", () => {
-    try { localStorage.setItem(foldKey(d), d.open ? "1" : "0"); } catch {}
+    if (d.dataset.auto) delete d.dataset.auto;  // opened by the wide layout, not by the listener
+    else try { localStorage.setItem(foldKey(d), d.open ? "1" : "0"); } catch {}
     if (!d.open) return;
     if (d.id === "f-drop") renderSpark();
     if (d.id === "f-clock" && S.dacd?.clock_avg) renderClockChart(S.dacd.clock_avg.series || []);
@@ -76,6 +80,13 @@ $$("details.fold").forEach((d) => {
     if (d.id === "f-arcam") arcam({});  // read on demand: HA holds the Arcam's only connection
   });
 });
+
+// On a wide screen the panels of a view lie open side by side; raw data and logs stay folded.
+function widePanels() {
+  if (!desktop.matches) return;
+  $$(".panels > details.fold").forEach((d) => { if (!d.open && !["f-raw", "f-logs"].includes(d.id)) { d.dataset.auto = "1"; d.open = true; } });
+}
+widePanels(); desktop.addEventListener("change", widePanels);
 
 // ------------------------------------------------------------------ socket
 let ws, retry = 1000;
@@ -110,7 +121,8 @@ function renderFeatures() {
   $("#f-spotify").hidden = !(f.plugins || []).includes("spotify");  // Soloist: key, name, updates
   const led = $("#leds").closest("label"); led.hidden = f.leds === false; led.nextElementSibling.hidden = f.leds === false;
 }
-function handle(m) {
+function handle(m) { handleMsg(m); renderDock(); }
+function handleMsg(m) {
   switch (m.type) {
     case "hello":
       Object.assign(S, { status: m.status || {}, playback: m.playback || {}, auth: m.auth || {}, queue: m.queue || {}, xruns: m.xruns || [], lastTest: m.last_test, arcam: m.arcam || {}, sources: m.arcam_sources || [], tests: m.tests || [], settings: m.settings || {}, quality: m.quality || {}, features: m.features || { amp: "levinson", arcam: true }, names: m.names || {}, now: m.now || null });
@@ -127,6 +139,21 @@ function handle(m) {
     case "settings": S.settings = { ...S.settings, ...m.settings }; if (m.features) { S.features = m.features; renderFeatures(); } if (m.names) { S.names = m.names; renderNames(); } renderSettings(); renderPlay(); renderSignal(); break;
     case "history_cleared": S.xruns = []; S.tests = []; renderSpark(); renderVlog(); renderSignal(); break;
   }
+}
+const DK = { play: "M9 6.5v11l9-5.5z", pause: "M8.5 6.5h2.2v11H8.5zM13.3 6.5h2.2v11h-2.2z" };
+function renderDock() {
+  const img = $("#np-cover"), has = !img.hidden && !!img.src, dk = $("#dk-cover");
+  dk.hidden = !has; if (has && dk.src !== img.src) dk.src = img.src;
+  $("#ambient").style.backgroundImage = has ? `url("${img.src}")` : "";
+  $("#dk-title").textContent = $("#np-title").textContent;
+  $("#dk-artist").textContent = $("#np-artist").textContent;
+  const playing = !$("#i-pause").hidden;
+  $("#dk-i").setAttribute("d", playing ? DK.pause : DK.play);
+  $("#dk-play").setAttribute("aria-label", playing ? tr("Pausa") : tr("Spela"));
+  const m = ML.state || {};
+  $("#dk-volbox").hidden = $("#amp").hidden || !m.reachable || m.power === false;
+  $("#dk-vol").textContent = $("#ml-vol-v").textContent;
+  const v = S.status.system?.mscos; $("#rail-ver").textContent = v ? `mscOS ${v}` : "";
 }
 function soloistEvent(ev) {
   const p = S.playback;
@@ -184,13 +211,13 @@ function renderPlay() {
     $("#vol-warn").hidden = true;
     if (!s) {  // no source module is on
       $("#np-title").textContent = tr("Ingen källa");
-      $("#np-artist").textContent = tr("Slå på en källa under System, Moduler.");
+      $("#np-artist").textContent = tr("Slå på en källa under Moduler.");
       $("#np-album").textContent = ""; fe.hidden = true; cover.hidden = true; $("#cover-empty").hidden = false;
       return;
     }
     if (stt.installed === false) {
       $("#np-title").textContent = s.label;
-      $("#np-artist").textContent = tr`${loc(s.name)} är inte installerat. Installera det under System, Moduler.`;
+      $("#np-artist").textContent = tr`${loc(s.name)} är inte installerat. Installera det under Moduler.`;
       $("#np-album").textContent = ""; fe.hidden = true; cover.hidden = true; $("#cover-empty").hidden = false;
       return;
     }
@@ -217,8 +244,8 @@ function renderPlay() {
   if (sp.installed === false || sp.key_set === false) {  // Soloist chosen but not ready yet
     $("#np-title").textContent = "Spotify Lossless";
     $("#np-artist").textContent = sp.installed === false
-      ? tr("Soloist är inte installerat. Installera det under System, Moduler.")
-      : tr("Ange din Spotify-nyckel under System, Spotify.");
+      ? tr("Soloist är inte installerat. Installera det under Moduler.")
+      : tr("Ange din Spotify-nyckel under Moduler, Spotify Lossless.");
     $("#np-album").textContent = ""; $("#np-format").hidden = true; $("#vol-warn").hidden = true;
     $("#np-cover").hidden = true; $("#cover-empty").hidden = false;
     return;
@@ -367,11 +394,9 @@ function chain() {
 function renderSignal() {
   const c = chain();
   // strip in the display
-  $$("#strip li").forEach((li) => {
-    const s = c.stages.find((x) => x.k === li.dataset.k);
-    li.hidden = !s;
-    if (s) li.className = s.state === "ok" ? "ok" : s.state === "bad" ? "bad" : "";
-  });
+  const strip = $("#strip");
+  strip.innerHTML = c.stages.map((s) => `<li class="${s.state === "ok" ? "ok" : s.state === "bad" ? "bad" : ""}"><i></i><b>${esc(s.name)}</b>${s.tag ? `<small>${esc(s.tag)}</small>` : ""}</li>`).join("");
+  strip.classList.toggle("flow", !!c.running);
   // readout
   $(".display").classList.toggle("idle", !c.running);
   // idle: the display keeps showing the locked format, dimmed, like hardware in standby
@@ -466,6 +491,7 @@ function renderSysHead() {
   const t = $("#sys-title");
   t.textContent = issues.length ? tr("Behöver uppmärksamhet") : tr("Allt i ordning");
   t.classList.toggle("warn", issues.length > 0);
+  $("#nav-sys").hidden = !issues.length;
   $("#sys-sum").textContent = issues.length
     ? issues.join(", ").replace(/^./, (c) => c.toUpperCase()) + "."
     : tr`${sname} igång${m.reachable ? tr(", förstärkaren ansluten") : ""}${S.settings?.alerts ? tr(", larm till telefonen på") : ""}. Drifttid ${fmtUptime(sys.uptime_s || 0)}.`;
@@ -581,12 +607,13 @@ function jobEvent(m) {
     }
     return;
   }
-  jobOut.hidden = false;
+  $("#job").hidden = false;
   if (m.line) { jobOut.textContent += m.line; jobOut.scrollTop = jobOut.scrollHeight; }
   if (m.done && m.name.startsWith("install-")) loadMods();
   if (m.done) { jobOut.textContent += m.rc === 0 ? tr("\nKlart.\n") : tr`\nAvslutades med fel (${m.rc}).\n`; toast(m.rc === 0 ? tr("Klart") : tr("Misslyckades, se utskriften")); }
 }
-function startJob(url, title, data) { jobOut.hidden = false; jobOut.textContent = `${title}\n`; return post(url, data).catch(() => {}); }
+function startJob(url, title, data) { $("#job").hidden = false; $("#job-title").textContent = title; jobOut.textContent = ""; return post(url, data).catch(() => {}); }
+$("#job-close").addEventListener("click", () => { $("#job").hidden = true; });
 
 // ------------------------------------------------------------------ system actions
 $("#solo-restart").addEventListener("click", async () => { await post("/api/soloist/restart"); toast(tr("Soloist startades om")); });
@@ -919,6 +946,8 @@ function renderLevinson() {
     if (m.volume_db != null) vol.value = Math.min(m.volume_db, max);
     $("#ml-vol-v").textContent = m.volume_db != null ? dec(m.volume_db) : "–";
   }
+  $("#dial-arc").setAttribute("stroke-dasharray", `${m.volume_db != null ? Math.min(m.volume_db, max) / max * 100 : 0} 100`);
+  $("#amp").classList.toggle("over", over);
   $("#ml-limit").textContent = over
     ? tr`Volymen är ställd med fjärrkontrollen över panelens gräns på ${dec(max)} dB. Panelen kan bara sänka den.`
     : tr`Panelen går högst till ${dec(max)} dB. Högre volym ställer du med fjärrkontrollen.`;
@@ -940,6 +969,7 @@ function renderLevinson() {
   const h = $("#ml-host"); if (document.activeElement !== h) h.value = st.ml_host || "";
   $("#ml-log").textContent = (m.log || []).length
     ? m.log.map(([t, dir, txt]) => `${clock(t)}  ${dir === "tx" ? "→" : "←"} ${txt}`).join("\n") : tr("Ingen trafik än.");
+  renderDock();
 }
 const ml = (data) => post("/api/levinson", data).then((r) => { ML.state = r.levinson; renderLevinson(); }).catch(() => {});
 async function mlSetting(data, msg) {
@@ -955,14 +985,20 @@ $("#ml-power").addEventListener("click", () => {
   ml({ power: on });
 });
 $("#ml-mute").addEventListener("click", () => ml({ mute: !ML.state.muted }));
-$("#ml-vol").addEventListener("input", (e) => { $("#ml-vol-v").textContent = dec(+e.target.value); });
+$("#ml-vol").addEventListener("input", (e) => {
+  $("#ml-vol-v").textContent = dec(+e.target.value);
+  $("#dial-arc").setAttribute("stroke-dasharray", `${+e.target.value / +e.target.max * 100} 100`);
+});
+$("#dk-down").addEventListener("click", () => mlStep(-1));
+$("#dk-up").addEventListener("click", () => mlStep(1));
+$("#dk-play").addEventListener("click", () => $("#b-play").click());
 // ± one dB per press; never above the panel ceiling, and never "raising" a remote-set level down to it
 function mlStep(d) {
   const m = ML.state || {}, max = +(S.settings?.ml_max_db || 40);
   if (m.volume_db == null) return;
   if (d > 0 && m.volume_db >= max) { toast(tr`Panelen går högst till ${dec(max)} dB. Högre volym ställer du med fjärrkontrollen.`); return; }
   const v = Math.max(0, Math.min(max, Math.round((m.volume_db + d) * 2) / 2));
-  $("#ml-vol-v").textContent = dec(v);
+  $("#ml-vol-v").textContent = $("#dk-vol").textContent = dec(v);
   ml({ volume_db: v });
 }
 $("#ml-down").addEventListener("click", () => mlStep(-1));
@@ -1004,7 +1040,7 @@ refreshAuth().then(() => maybeSetup({ access: S.access || {}, post, toast })).ca
 connect();
 try {  // after the first-start guide: straight to the modules, where the chosen players are installed
   const f = localStorage.getItem("open-fold");
-  if (f) { localStorage.removeItem("open-fold"); const d = document.getElementById(f); if (d) { showView("system"); d.open = true; d.scrollIntoView(); } }
+  if (f) { localStorage.removeItem("open-fold"); const d = document.getElementById(f); if (f === "f-mods") showView("v-mods"); else if (d) { showView(d.closest(".view").id); d.open = true; d.scrollIntoView(); } }
 } catch (e) {}
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 document.addEventListener("visibilitychange", () => { if (!document.hidden && ws && ws.readyState > 1) connect(); });
@@ -1030,23 +1066,57 @@ $("#theme").addEventListener("click", (e) => {
   applyTheme(theme);
 });
 
-// ---- modules: what is installed, on/off (applies when the panel restarts)
-const KINDS = { source: tr("Källa"), amp: tr("Förstärkare"), integration: "Integration", device: tr("Enhet") };
+// ---- modules: grouped by kind, each with its state, version and settings in one card
+const KINDS = { source: tr("Källor"), amp: tr("Förstärkare"), device: tr("Utrustning"), integration: tr("Integrationer") };
+const KIND_HELP = { source: tr("En källa i taget äger DAC:en. Du byter överst i panelen."), amp: tr("Volym och ingångar över nätverket. En förstärkare åt gången."),
+  device: "", integration: "" };
 const lang = () => (document.documentElement.lang || "sv").slice(0, 2);
 const loc = (o) => (o && (o[lang()] || o.en || o.sv)) || "";
 let MODS = { plugins: [], restart_needed: false };
+const modUpdate = (p) => p.kind === "source" && !!p.installed && p.updates === "manual" && !!p.latest && p.latest !== p.version;
+function modVersion(p) {
+  if (p.kind !== "source") return MODS.mscos ? tr`Följer med mscOS ${MODS.mscos}` : tr("Följer med mscOS");
+  if (p.installed === false) return tr("Inte installerad");
+  if (p.installed == null) return "";
+  const v = p.version ? tr`Version ${p.version}` : tr("Installerad, okänd version");
+  if (p.updates === "self") return tr`${v}, uppdaterar sig själv`;
+  if (modUpdate(p)) return tr`${v}, ${p.latest} finns`;
+  return p.latest ? tr`${v}, den senaste` : v;
+}
+function modCard(p, open) {
+  const wait = p.enabled !== p.running, st = p.status;
+  const state = wait ? "wait" : !p.enabled ? "off" : (p.installed === false || st?.state === "warn") ? "warn" : "on";
+  const panel = document.querySelector(`.mod-panel[data-for="${p.id}"]`);
+  const more = p.running && (p.options || (panel && !panel.hidden));
+  const meta = [st ? loc(st.text) : "", modVersion(p), wait ? (p.enabled ? tr("Slås på när panelen startas om") : tr("Stängs av när panelen startas om")) : ""].filter(Boolean);
+  return `<li class="mod ${state}" data-id="${esc(p.id)}">
+    <div class="mod-head"><i class="mod-led" aria-hidden="true"></i>
+      <div class="mod-t"><b>${esc(loc(p.name))}</b><span>${esc(loc(p.description))}</span></div>
+      <label class="toggle"><input type="checkbox" data-mod="${esc(p.id)}" ${p.enabled ? "checked" : ""}><span class="toggle-ui" aria-hidden="true"></span><span class="vh">${esc(loc(p.name))}</span></label>
+    </div>
+    <p class="mod-meta">${meta.map((t) => `<span>${esc(t)}</span>`).join("")}</p>
+    ${modUpdate(p) ? `<div class="mod-install admin"><button class="btn primary" data-install="${esc(p.id)}" data-update="1">${tr`Uppdatera till ${p.latest}`}</button></div>` : ""}${modInstall(p)}
+    ${more ? `<details class="mod-more"${open ? " open" : ""}><summary>${tr("Inställningar")}</summary><div class="mod-body">${modOptions(p)}</div></details>` : ""}
+  </li>`;
+}
 function renderMods() {
-  const on = MODS.plugins.filter((p) => p.enabled);
-  fv("mods", on.length ? tr`${on.length} på` : tr("Inga"));
-  $("#mods").innerHTML = MODS.plugins.map((p) => `
-    <li><label class="toggle"><input type="checkbox" data-mod="${esc(p.id)}" ${p.enabled ? "checked" : ""}>
-      <span class="toggle-ui" aria-hidden="true"></span>
-      <span class="mod-t"><b>${esc(loc(p.name))}</b><small>${esc(KINDS[p.kind] || p.kind)}${p.enabled !== p.running ? tr(", efter omstart") : p.installed === false ? tr(", inte installerad") : ""}</small>
-      <span>${esc(loc(p.description))}</span>${p.status ? `<span class="mod-st ${esc(p.status.state)}">${esc(loc(p.status.text))}</span>` : ""}</span></label>${modInstall(p)}${modOptions(p)}</li>`).join("");
+  const box = $("#mods"), stash = $("#mod-panels");
+  const open = new Set([...box.querySelectorAll("details[open]")].map((d) => d.closest("li").dataset.id));
+  $$(".mod-panel").forEach((el) => stash.append(el));  // back to the shelf while the cards are rebuilt
+  box.innerHTML = Object.keys(KINDS).map((k) => {
+    const list = MODS.plugins.filter((p) => p.kind === k);
+    return list.length ? `<section class="mod-group"><h3>${KINDS[k]}</h3>${KIND_HELP[k] ? `<p class="fine">${KIND_HELP[k]}</p>` : ""}
+      <ul class="modlist">${list.map((p) => modCard(p, open.has(p.id))).join("")}</ul></section>` : "";
+  }).join("");
+  $$(".mod-panel").forEach((el) => { const b = box.querySelector(`li[data-id="${el.dataset.for}"] .mod-body`); if (b) b.append(el); });
   const locked = document.body.classList.contains("locked");
   $$("#mods input").forEach((i) => { i.disabled = locked; });
   $("#mods-locked").hidden = !locked;
   $("#mods-restart").hidden = !MODS.restart_needed;
+  const on = MODS.plugins.filter((p) => p.enabled).length, ups = MODS.plugins.filter(modUpdate).length;
+  $("#mods-sum").textContent = tr`${on} av ${MODS.plugins.length} moduler är på.` + " "
+    + (ups ? (ups === 1 ? tr("En uppdatering finns.") : tr`${ups} uppdateringar finns.`) : MODS.checked ? tr`Inga uppdateringar, kontrollerat ${clock(MODS.checked)}.` : "");
+  const badge = $("#nav-mods"); badge.hidden = !ups && !MODS.restart_needed;
 }
 // A module's own settings (declared by the module), saved one at a time as they change.
 function modOptions(p) {
@@ -1069,17 +1139,25 @@ $("#mods").addEventListener("change", async (e) => {
 function modInstall(p) {
   if (p.kind !== "source" || !p.running || p.installed !== false) return "";
   return `<div class="mod-install admin"><p class="fine">${esc(loc(p.terms))}${p.terms_url ? ` <a href="${esc(p.terms_url)}" target="_blank" rel="noopener noreferrer">${tr("Läs mer")}</a>` : ""}</p>
-    <button class="btn" data-install="${esc(p.id)}">${tr("Installera")}</button></div>`;
+    <button class="btn primary" data-install="${esc(p.id)}">${tr("Installera")}</button></div>`;
 }
 $("#mods").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-install]"); if (!b) return;
   b.disabled = true;
   const p = MODS.plugins.find((x) => x.id === b.dataset.install);
-  startJob("/api/sources/install", tr`Installerar ${loc(p?.name)}…`, { id: b.dataset.install });
-  $("#f-update").open = true; jobOut.scrollIntoView({ block: "nearest" });
+  startJob("/api/sources/install", b.dataset.update ? tr`Uppdaterar ${loc(p?.name)}…` : tr`Installerar ${loc(p?.name)}…`, { id: b.dataset.install });
 });
 async function loadMods() { try { MODS = await (await fetch("/api/plugins")).json(); renderMods(); } catch {} }
-$("#f-mods").addEventListener("toggle", (e) => { if (e.target.open) loadMods(); });
+// Asks each player's publisher for its newest version. Only when asked: the device does not call out by itself.
+$("#mods-check").addEventListener("click", async (e) => {
+  const b = e.currentTarget; b.disabled = true; b.textContent = tr("Söker…");
+  try {
+    MODS = await post("/api/plugins/check"); renderMods();
+    const n = MODS.plugins.filter(modUpdate).length;
+    toast(n ? (n === 1 ? tr("En uppdatering finns.") : tr`${n} uppdateringar finns.`) : (MODS.failed || []).length ? tr("Kunde inte nå alla utgivare. Försök igen senare.") : tr("Alla moduler är aktuella."));
+  } catch {}
+  b.disabled = false; b.textContent = tr("Sök uppdateringar");
+});
 $("#mods").addEventListener("change", async (e) => {
   const i = e.target.closest("input[data-mod]"); if (!i) return;
   try { await post("/api/plugins/set", { id: i.dataset.mod, enabled: i.checked }); } catch {}

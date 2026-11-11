@@ -20,6 +20,16 @@
 </script>
 </head>
 <body>
+<nav class="tabs" aria-label="Områden">
+  <p class="rail-mark" aria-hidden="true">mscOS</p>
+  <a href="#v-play" class="on"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.2"/><path d="M12 6.2a5.8 5.8 0 0 1 5.8 5.8"/></svg><span>Lyssna</span></a>
+  <a href="#v-signal"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12h4l2.2-6.5 4.6 13 2.2-6.5h6"/></svg><span>Signal</span></a>
+  <a href="#v-mods"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><rect x="3.5" y="13.5" width="7" height="7" rx="1"/><rect x="13.5" y="13.5" width="7" height="7" rx="1"/><path d="M17 3.5v7M13.5 7h7"/></svg><span>Moduler</span><i class="badge" id="nav-mods" hidden></i></a>
+  <a href="#v-sys"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="1.5"/><circle cx="8" cy="12" r="2.6"/><path d="M8 9.4v1.4M14 10h4.5M14 14h3"/></svg><span>System</span><i class="badge" id="nav-sys" hidden></i></a>
+  <a href="#v-me"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.5" r="3.6"/><path d="M4.5 20c.8-3.8 3.7-5.6 7.5-5.6s6.7 1.8 7.5 5.6"/></svg><span>Profil</span></a>
+  <p class="rail-foot" id="rail-ver"></p>
+</nav>
+
 <div class="shell">
 
 <header class="masthead">
@@ -47,187 +57,144 @@
 
 <main id="views">
 
-  <!-- ===================================================== Lyssna -->
+  <!-- ===================================================== Lyssna: what plays, and the volume -->
   <section class="view" id="v-play" aria-labelledby="h-play">
     <h2 id="h-play" class="vh">Lyssna</h2>
-    <figure class="sleeve">
-      <div class="cover"><img id="np-cover" alt="" hidden><span class="cover-empty" id="cover-empty" aria-hidden="true"></span></div>
-      <figcaption>
-        <p class="np-title" id="np-title">Inget spelas</p>
-        <p class="np-artist" id="np-artist">Välj enheten i Spotify-appen</p>
-        <p class="np-album" id="np-album"></p>
-        <p class="np-format" id="np-format" hidden></p>
-      </figcaption>
-    </figure>
-    <div class="scrub spotify-only" id="scrub" role="slider" aria-label="Position i låten" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
-      <div class="scrub-track"><div class="scrub-fill" id="np-bar"></div></div>
-      <div class="times"><span id="np-pos">0:00</span><span id="np-dur">0:00</span></div>
-    </div>
-    <div class="transport spotify-only">
-      <button class="t-aux" data-cmd="shuffle" id="b-shuffle" aria-pressed="false" aria-label="Blanda">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h3.5c2 0 3 1 4.2 2.8l2.6 4.4C14.5 16 15.5 17 17.5 17H21M18 4.5 21 7l-3 2.5M3 17h3.5c1.4 0 2.3-.5 3.1-1.4M14 8.4c.8-.9 1.7-1.4 3.5-1.4M18 14.5l3 2.5-3 2.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <button class="t-skip" data-cmd="skip_prev" aria-label="Föregående">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 5.5v13M18 6 9 12l9 6z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/></svg>
-      </button>
-      <button class="t-main" id="b-play" data-cmd="toggle" aria-label="Spela">
-        <svg id="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6.5v11l9-5.5z" fill="currentColor"/></svg>
-        <svg id="i-pause" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M8.5 6.5h2.2v11H8.5zM13.3 6.5h2.2v11h-2.2z" fill="currentColor"/></svg>
-      </button>
-      <button class="t-skip" data-cmd="skip_next" aria-label="Nästa">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 5.5v13M6 6l9 6-9 6z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/></svg>
-      </button>
-      <button class="t-aux" data-cmd="repeat" id="b-repeat" aria-pressed="false" aria-label="Upprepa">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5V10a3 3 0 0 1 3-3h12.5M17 4.5 19.5 7 17 9.5M20 12.5V14a3 3 0 0 1-3 3H4.5M7 19.5 4.5 17 7 14.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <b id="b-repeat-1" hidden>1</b>
-      </button>
-    </div>
-
-    <!-- the amplifier: its level is the one number on this screen that glows -->
-    <section class="amp" id="amp" aria-label="Förstärkaren">
-      <div class="amp-main">
-        <div class="amp-read">
-          <p class="amp-vol"><b id="ml-vol-v">–</b><small>dB</small></p>
-          <p class="amp-state" id="ml-state">Söker förstärkaren i nätverket…</p>
-        </div>
-        <div class="amp-step" id="ml-step" hidden>
-          <button class="step" id="ml-down" aria-label="Sänk volymen">−</button>
-          <button class="step" id="ml-up" aria-label="Höj volymen">+</button>
-        </div>
-      </div>
-      <div id="ml-ctl" hidden>
-        <input class="line" type="range" id="ml-vol" min="0" max="40" step="0.5" value="30" aria-label="Förstärkarens volym">
-        <p class="fine" id="ml-limit"></p>
-      </div>
-    </section>
-    <div class="notice" id="vol-warn" hidden>
-      <p>Spotify-volymen står på <b id="vol-val"></b> %. Under 100 % räknas varje sampel om. Styr volymen med förstärkaren ovan.</p>
-      <button class="btn" id="vol-reset">Återställ till 100 %</button>
-    </div>
-
-    <div class="folds">
-      <details class="fold" id="f-amp" data-k="amp">
-        <summary><span>Ingång och ström</span><span class="fv" id="fv-amp"></span></summary>
-        <div class="fold-body">
-          <div class="row">
-            <button class="btn" id="ml-power" aria-pressed="false">Slå på</button>
-            <button class="btn" id="ml-mute" aria-pressed="false">Ljud av</button>
+    <div class="ambient" id="ambient" aria-hidden="true"></div>
+    <div class="stage">
+      <div class="deck">
+        <figure class="sleeve">
+          <div class="cover"><img id="np-cover" alt="" hidden><span class="cover-empty" id="cover-empty" aria-hidden="true"></span></div>
+        </figure>
+        <div class="now">
+          <p class="np-title" id="np-title">Inget spelas</p>
+          <p class="np-artist" id="np-artist">Välj enheten i Spotify-appen</p>
+          <p class="np-album" id="np-album"></p>
+          <p class="np-format" id="np-format" hidden></p>
+      <div class="scrub spotify-only" id="scrub" role="slider" aria-label="Position i låten" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
+            <div class="scrub-track"><div class="scrub-fill" id="np-bar"></div></div>
+            <div class="times"><span id="np-pos">0:00</span><span id="np-dur">0:00</span></div>
           </div>
-          <div class="sources" id="ml-src" role="radiogroup" aria-label="Ingång"></div>
+          <div class="transport spotify-only">
+            <button class="t-aux" data-cmd="shuffle" id="b-shuffle" aria-pressed="false" aria-label="Blanda">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h3.5c2 0 3 1 4.2 2.8l2.6 4.4C14.5 16 15.5 17 17.5 17H21M18 4.5 21 7l-3 2.5M3 17h3.5c1.4 0 2.3-.5 3.1-1.4M14 8.4c.8-.9 1.7-1.4 3.5-1.4M18 14.5l3 2.5-3 2.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <button class="t-skip" data-cmd="skip_prev" aria-label="Föregående">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 5.5v13M18 6 9 12l9 6z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/></svg>
+            </button>
+            <button class="t-main" id="b-play" data-cmd="toggle" aria-label="Spela">
+              <svg id="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6.5v11l9-5.5z" fill="currentColor"/></svg>
+              <svg id="i-pause" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M8.5 6.5h2.2v11H8.5zM13.3 6.5h2.2v11h-2.2z" fill="currentColor"/></svg>
+            </button>
+            <button class="t-skip" data-cmd="skip_next" aria-label="Nästa">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 5.5v13M6 6l9 6-9 6z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/></svg>
+            </button>
+            <button class="t-aux" data-cmd="repeat" id="b-repeat" aria-pressed="false" aria-label="Upprepa">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5V10a3 3 0 0 1 3-3h12.5M17 4.5 19.5 7 17 9.5M20 12.5V14a3 3 0 0 1-3 3H4.5M7 19.5 4.5 17 7 14.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <b id="b-repeat-1" hidden>1</b>
+            </button>
+          </div>
         </div>
-      </details>
-      <details class="fold spotify-only" id="f-queue" data-k="queue">
-        <summary><span>Härnäst</span><span class="fv" id="fv-queue"></span></summary>
-        <div class="fold-body">
-          <ol class="queue" id="queue"><li class="empty">Kön visas när något spelas.</li></ol>
-        </div>
-      </details>
-      <details class="fold" id="f-arcam" data-k="arcam">
-        <summary><span>Arcam</span><span class="fv" id="fv-arcam"></span></summary>
-        <div class="fold-body">
-          <p class="lead" id="arcam-state">Söker receivern…</p>
-          <div class="arcam" id="arcam-ctl" hidden>
-            <div class="row">
-              <button class="btn" id="arcam-power" aria-pressed="false">Slå på</button>
-              <button class="btn" id="arcam-mute" aria-pressed="false">Ljud av</button>
+      </div>
+
+      <div class="console-col">
+        <!-- the amplifier: its level is the one number on this screen that glows -->
+        <section class="amp" id="amp" aria-label="Förstärkaren">
+          <div class="dial">
+            <svg viewBox="0 0 200 200" aria-hidden="true">
+              <path class="dial-ticks" d="M33.500 166.500A94 94 0 1 1 166.500 166.500" pathLength="100"/>
+              <path class="dial-track" d="M40.600 159.400A84 84 0 1 1 159.400 159.400" pathLength="100"/>
+              <path class="dial-arc" id="dial-arc" d="M40.600 159.400A84 84 0 1 1 159.400 159.400" pathLength="100" stroke-dasharray="0 100"/>
+            </svg>
+            <div class="amp-read">
+              <p class="amp-vol"><b id="ml-vol-v">–</b><small>dB</small></p>
+              <p class="amp-state" id="ml-state">Söker förstärkaren i nätverket…</p>
             </div>
-            <label class="fader">
-              <span class="fader-head"><span>Volym</span><b id="arcam-vol-v">–</b></span>
-              <input type="range" id="arcam-vol" min="0" max="50" step="1" value="30">
-            </label>
-            <div class="sources" id="arcam-src" role="radiogroup" aria-label="Källa"></div>
+            <div class="amp-step" id="ml-step" hidden>
+              <button class="step" id="ml-down" aria-label="Sänk volymen">−</button>
+              <button class="step" id="ml-up" aria-label="Höj volymen">+</button>
+            </div>
           </div>
+          <div id="ml-ctl" hidden>
+            <input class="line" type="range" id="ml-vol" min="0" max="40" step="0.5" value="30" aria-label="Förstärkarens volym">
+            <p class="fine" id="ml-limit"></p>
+          </div>
+        </section>
+        <div class="notice" id="vol-warn" hidden>
+          <p>Spotify-volymen står på <b id="vol-val"></b> %. Under 100 % räknas varje sampel om. Styr volymen med förstärkaren ovan.</p>
+          <button class="btn" id="vol-reset">Återställ till 100 %</button>
         </div>
-      </details>
+        <div class="folds">
+    <details class="fold" id="f-amp" data-k="amp">
+            <summary><span>Ingång och ström</span><span class="fv" id="fv-amp"></span></summary>
+            <div class="fold-body">
+              <div class="row">
+                <button class="btn" id="ml-power" aria-pressed="false">Slå på</button>
+                <button class="btn" id="ml-mute" aria-pressed="false">Ljud av</button>
+              </div>
+              <div class="sources" id="ml-src" role="radiogroup" aria-label="Ingång"></div>
+            </div>
+          </details>
+    <details class="fold spotify-only" id="f-queue" data-k="queue">
+            <summary><span>Härnäst</span><span class="fv" id="fv-queue"></span></summary>
+            <div class="fold-body">
+              <ol class="queue" id="queue"><li class="empty">Kön visas när något spelas.</li></ol>
+            </div>
+          </details>
+    <details class="fold" id="f-arcam" data-k="arcam">
+            <summary><span>Arcam</span><span class="fv" id="fv-arcam"></span></summary>
+            <div class="fold-body">
+              <p class="lead" id="arcam-state">Söker receivern…</p>
+              <div class="arcam" id="arcam-ctl" hidden>
+                <div class="row">
+                  <button class="btn" id="arcam-power" aria-pressed="false">Slå på</button>
+                  <button class="btn" id="arcam-mute" aria-pressed="false">Ljud av</button>
+                </div>
+                <label class="fader">
+                  <span class="fader-head"><span>Volym</span><b id="arcam-vol-v">–</b></span>
+                  <input type="range" id="arcam-vol" min="0" max="50" step="1" value="30">
+                </label>
+                <div class="sources" id="arcam-src" role="radiogroup" aria-label="Källa"></div>
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
     </div>
   </section>
 
-  <!-- ===================================================== Signal -->
+  <!-- ===================================================== Signal: the chain to the DAC, measured -->
   <section class="view" id="v-signal" aria-labelledby="h-signal">
     <h2 id="h-signal" class="vh">Signal</h2>
 
     <section class="display" aria-label="Signal till DAC:en">
-      <div class="readout" aria-live="polite">
-        <span class="rd"><b id="r-rate">––,–</b><small>kHz</small></span>
-        <span class="rd"><b id="r-bits">––</b><small>bit</small></span>
-        <span class="rd"><b id="r-gain">–,–</b><small>dB</small></span>
-      </div>
-      <div class="seal" id="seal">
-        <svg class="seal-mark" viewBox="0 0 40 40" aria-hidden="true">
-          <circle cx="20" cy="20" r="18.5" fill="none" stroke="currentColor" stroke-width="1"/>
-          <circle cx="20" cy="20" r="15" fill="none" stroke="currentColor" stroke-width=".6" stroke-dasharray="1.2 1.6"/>
-          <path id="seal-path" d="M13 20.5l4.6 4.5L27.5 15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <div>
-          <p class="seal-head" id="seal-head">Väntar på status</p>
-          <p class="seal-sub" id="seal-sub"></p>
+      <div class="display-top">
+        <div class="readout" aria-live="polite">
+          <span class="rd"><b id="r-rate">––,–</b><small>kHz</small></span>
+          <span class="rd"><b id="r-bits">––</b><small>bit</small></span>
+          <span class="rd"><b id="r-gain">–,–</b><small>dB</small></span>
+        </div>
+        <div class="seal" id="seal">
+          <svg class="seal-mark" viewBox="0 0 40 40" aria-hidden="true">
+            <circle cx="20" cy="20" r="18.5" fill="none" stroke="currentColor" stroke-width="1"/>
+            <circle cx="20" cy="20" r="15" fill="none" stroke="currentColor" stroke-width=".6" stroke-dasharray="1.2 1.6"/>
+            <path id="seal-path" d="M13 20.5l4.6 4.5L27.5 15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <div>
+            <p class="seal-head" id="seal-head">Väntar på status</p>
+            <p class="seal-sub" id="seal-sub"></p>
+          </div>
         </div>
       </div>
-      <ol class="strip" id="strip" aria-label="Signalväg">
-        <li data-k="roon" hidden><i></i>Roon</li>
-        <li data-k="spotify"><i></i>Spotify</li>
-        <li data-k="soloist"><i></i>Soloist</li>
-        <li data-k="pipewire"><i></i>PipeWire</li>
-        <li data-k="usb"><i></i>USB</li>
-        <li data-k="dac"><i></i>DAC</li>
-      </ol>
+      <ol class="strip" id="strip" aria-label="Signalväg"></ol>
     </section>
 
-    <div class="folds">
-      <details class="fold" id="f-path" data-k="path">
+    <div class="panels">
+<details class="fold" id="f-path" data-k="path">
         <summary><span>Signalvägen</span><span class="fv" id="fv-path"></span></summary>
         <div class="fold-body"><ol class="path" id="path"></ol></div>
       </details>
-
-      <details class="fold" id="f-clock" data-k="clock">
-        <summary><span>Klockan</span><span class="fv" id="fv-clock"></span></summary>
-        <div class="fold-body">
-          <div class="glass clockface">
-            <p class="ck-read"><b id="ck-hz">–</b><small>Hz</small></p>
-            <p class="ck-ppm" id="ck-ppm">&nbsp;</p>
-            <canvas id="ck-chart" aria-label="Klockans avvikelse senaste 24 timmarna"></canvas>
-            <div class="chart-axis"><span>−24 h</span><span>−12 h</span><span>nu</span></div>
-          </div>
-          <p class="fine" id="ck-sum">Mäts när strömmen till DAC:en är öppen.</p>
-        </div>
-      </details>
-
-      <details class="fold" id="f-usb" data-k="usb">
-        <summary><span>USB-länken</span><span class="fv" id="fv-usb"></span></summary>
-        <div class="fold-body">
-          <dl class="spec" id="usb-kv"></dl>
-          <div class="notice" id="usb-note" hidden></div>
-          <h4 class="sub">Anslutningar sedan start</h4>
-          <ol class="vlog" id="usb-ev"><li class="empty">Läser kärnans logg…</li></ol>
-          <div class="admin">
-            <button class="btn" id="usb-reconnect">Anslut DAC:n på nytt</button>
-            <p class="fine">Gör om USB-förhandlingen, till exempel efter byte av kabel eller port. Ljudet bryts i cirka 10 sekunder.</p>
-          </div>
-        </div>
-      </details>
-
-      <details class="fold" id="f-dac" data-k="dac">
-        <summary><span>DAC:n och format</span><span class="fv" id="fv-dac"></span></summary>
-        <div class="fold-body">
-          <h4 class="sub first" id="dac-title">DAC:n</h4>
-          <dl class="spec" id="dac-kv"></dl>
-          <h4 class="sub">Format</h4>
-          <table class="fmt" id="dac-fmt"></table>
-          <p class="fine" id="dac-cur"></p>
-        </div>
-      </details>
-
-      <details class="fold" id="f-drop" data-k="drop">
-        <summary><span>Avbrott, senaste dygnet</span><span class="fv" id="fv-drop"></span></summary>
-        <div class="fold-body">
-          <div class="glass chart"><canvas id="spark" aria-label="Avbrott per halvminut senaste 24 timmarna"></canvas>
-            <div class="chart-axis"><span>−24 h</span><span>−12 h</span><span>nu</span></div></div>
-          <p class="fine" id="spark-sum"></p>
-          <button class="btn admin" id="hist-clear">Nollställ historiken</button>
-        </div>
-      </details>
-
-      <details class="fold" id="f-opt" data-k="opt">
+<details class="fold" id="f-opt" data-k="opt">
         <summary><span>Optimeringar</span><span class="fv" id="fv-opt"></span></summary>
         <div class="fold-body">
           <div class="opt-head">
@@ -237,8 +204,7 @@
           <div id="opt-list"></div>
         </div>
       </details>
-
-      <details class="fold" id="f-ver" data-k="ver">
+<details class="fold" id="f-ver" data-k="ver">
         <summary><span>Verifiering och logg</span><span class="fv" id="fv-ver"></span></summary>
         <div class="fold-body">
           <p class="lead">Spelar in exakt det som går till DAC:en och kontrollerar varje sampel mot Spotifys FLAC-raster, och att inga avbrott finns.</p>
@@ -259,54 +225,75 @@
           <ol class="vlog" id="vlog"><li class="empty">Inga verifieringar än.</li></ol>
         </div>
       </details>
-
-      <details class="fold" id="f-raw" data-k="raw">
+<details class="fold" id="f-clock" data-k="clock">
+        <summary><span>Klockan</span><span class="fv" id="fv-clock"></span></summary>
+        <div class="fold-body">
+          <div class="glass clockface">
+            <p class="ck-read"><b id="ck-hz">–</b><small>Hz</small></p>
+            <p class="ck-ppm" id="ck-ppm">&nbsp;</p>
+            <canvas id="ck-chart" aria-label="Klockans avvikelse senaste 24 timmarna"></canvas>
+            <div class="chart-axis"><span>−24 h</span><span>−12 h</span><span>nu</span></div>
+          </div>
+          <p class="fine" id="ck-sum">Mäts när strömmen till DAC:en är öppen.</p>
+        </div>
+      </details>
+<details class="fold" id="f-drop" data-k="drop">
+        <summary><span>Avbrott, senaste dygnet</span><span class="fv" id="fv-drop"></span></summary>
+        <div class="fold-body">
+          <div class="glass chart"><canvas id="spark" aria-label="Avbrott per halvminut senaste 24 timmarna"></canvas>
+            <div class="chart-axis"><span>−24 h</span><span>−12 h</span><span>nu</span></div></div>
+          <p class="fine" id="spark-sum"></p>
+          <button class="btn admin" id="hist-clear">Nollställ historiken</button>
+        </div>
+      </details>
+<details class="fold" id="f-usb" data-k="usb">
+        <summary><span>USB-länken</span><span class="fv" id="fv-usb"></span></summary>
+        <div class="fold-body">
+          <dl class="spec" id="usb-kv"></dl>
+          <div class="notice" id="usb-note" hidden></div>
+          <h4 class="sub">Anslutningar sedan start</h4>
+          <ol class="vlog" id="usb-ev"><li class="empty">Läser kärnans logg…</li></ol>
+          <div class="admin">
+            <button class="btn" id="usb-reconnect">Anslut DAC:n på nytt</button>
+            <p class="fine">Gör om USB-förhandlingen, till exempel efter byte av kabel eller port. Ljudet bryts i cirka 10 sekunder.</p>
+          </div>
+        </div>
+      </details>
+<details class="fold" id="f-dac" data-k="dac">
+        <summary><span>DAC:n och format</span><span class="fv" id="fv-dac"></span></summary>
+        <div class="fold-body">
+          <h4 class="sub first" id="dac-title">DAC:n</h4>
+          <dl class="spec" id="dac-kv"></dl>
+          <h4 class="sub">Format</h4>
+          <table class="fmt" id="dac-fmt"></table>
+          <p class="fine" id="dac-cur"></p>
+        </div>
+      </details>
+<details class="fold" id="f-raw" data-k="raw">
         <summary><span>Rådata</span><span class="fv"></span></summary>
         <div class="fold-body raw"><div id="dac-raw"></div></div>
       </details>
     </div>
   </section>
 
-  <!-- ===================================================== System -->
-  <section class="view" id="v-sys" aria-labelledby="h-sys">
-    <h2 id="h-sys" class="vh">System</h2>
-
-    <div class="sys-head">
-      <p class="sys-title" id="sys-title">Kontrollerar…</p>
-      <p class="fine" id="sys-sum"></p>
+  <!-- ===================================================== Moduler: sources, equipment, integrations and their settings -->
+  <section class="view" id="v-mods" aria-labelledby="h-mods">
+    <div class="view-head">
+      <div>
+        <h2 id="h-mods" class="view-title">Moduler</h2>
+        <p class="fine" id="mods-sum">Stöd för dina källor, din utrustning och dina system. Kärnan klarar sig utan alla.</p>
+      </div>
+      <button class="btn admin" id="mods-check">Sök uppdateringar</button>
     </div>
-
-    <div class="folds">
-      <details class="fold" id="access" data-k="access">
-        <summary><span>Åtkomst</span><span class="fv" id="fv-access"></span></summary>
-        <div class="fold-body">
-          <p class="lead" id="access-state">Kontrollerar…</p>
-          <form id="login-form" class="key-form" hidden>
-            <input id="pw-in" type="password" autocomplete="current-password" aria-label="Lösenord" placeholder="Lösenord">
-            <button class="btn primary">Logga in</button>
-          </form>
-          <form id="setup-form" class="pw-grid" hidden>
-            <input id="pw-new" type="password" autocomplete="new-password" aria-label="Nytt lösenord" placeholder="Nytt lösenord, minst 8 tecken">
-            <input id="pw-new2" type="password" autocomplete="new-password" aria-label="Upprepa lösenordet" placeholder="Upprepa lösenordet">
-            <button class="btn primary">Skapa lösenord</button>
-          </form>
-          <div id="session" hidden>
-            <div class="row wrap">
-              <button class="btn" id="logout">Logga ut</button>
-              <button class="btn" id="pw-change-open" aria-expanded="false" aria-controls="pw-change-form">Byt lösenord</button>
-            </div>
-            <form id="pw-change-form" class="pw-grid" hidden>
-              <input id="pw-cur" type="password" autocomplete="current-password" aria-label="Nuvarande lösenord" placeholder="Nuvarande lösenord">
-              <input id="pw-next" type="password" autocomplete="new-password" aria-label="Nytt lösenord" placeholder="Nytt lösenord, minst 8 tecken">
-              <button class="btn primary">Spara nytt lösenord</button>
-            </form>
-          </div>
-        </div>
-      </details>
-
-      <details class="fold admin" id="f-ml" data-k="ml">
-        <summary><span>Förstärkaren</span><span class="fv" id="fv-ml"></span></summary>
-        <div class="fold-body">
+    <div class="notice admin" id="mods-restart" hidden>
+      <p>Ändringen börjar gälla när panelen startas om. Musiken påverkas inte.</p>
+      <button class="btn" id="mods-apply">Starta om panelen</button>
+    </div>
+    <p class="notice" id="mods-locked">Logga in under <a href="#v-me">Profil</a> för att ändra.</p>
+    <div id="mods"></div>
+    <!-- settings that belong to one module; app.js moves each into its module's card -->
+    <div id="mod-panels" hidden>
+      <div class="mod-panel admin" id="f-ml" data-for="levinson">
           <p class="lead" id="ml-conn">–</p>
           <label class="toggle"><input type="checkbox" id="ml-auto-on"><span class="toggle-ui" aria-hidden="true"></span><span>Slå på och välj den här enhetens ingång när musik börjar spela</span></label>
           <label class="toggle"><input type="checkbox" id="spotify-vol-amp"><span class="toggle-ui" aria-hidden="true"></span><span>Spotify-reglaget styr förstärkarens volym (signalen förblir bitperfekt)</span></label>
@@ -333,12 +320,9 @@
             <summary>Kommunikation</summary>
             <pre class="console" id="ml-log">Ingen trafik än.</pre>
           </details>
-        </div>
-      </details>
-
-      <details class="fold" id="f-spotify" data-k="spotify">
-        <summary><span>Spotify</span><span class="fv" id="fv-spotify"></span></summary>
-        <div class="fold-body">
+        
+      </div>
+      <div class="mod-panel" id="f-spotify" data-for="spotify">
           <dl class="spec" id="solo-kv"></dl>
           <div class="validity" id="validity" hidden><div class="validity-bar"><i id="validity-fill"></i></div><p class="fine" id="validity-txt"></p></div>
           <div class="row wrap admin">
@@ -363,33 +347,115 @@
             <p class="fine"><a href="https://developer.spotify.com/documentation/soloist" target="_blank" rel="noopener noreferrer">Skapa en egen nyckel på Spotifys utvecklarsida</a></p>
             <p class="fine">Nyckeln lagras bara på enheten och visas aldrig. Efter bytet startas Soloist om och kontrolleras. Startar den inte, återställs den tidigare nyckeln.</p>
           </div>
-        </div>
-      </details>
+        
+      </div>
+    </div>
+  </section>
 
-      <details class="fold admin" id="f-alerts" data-k="alerts">
-        <summary><span>Larm till telefonen</span><span class="fv" id="fv-alerts"></span></summary>
+  <!-- ===================================================== System: the device itself -->
+  <section class="view" id="v-sys" aria-labelledby="h-sys">
+    <div class="view-head">
+      <div>
+        <h2 id="h-sys" class="vh">System</h2>
+        <p class="view-title" id="sys-title">Kontrollerar…</p>
+        <p class="fine" id="sys-sum"></p>
+      </div>
+    </div>
+    <div class="panels">
+<details class="fold" id="f-device" data-k="device">
+        <summary><span>Enheten</span><span class="fv" id="fv-device"></span></summary>
         <div class="fold-body">
-          <p class="lead" id="alerts-state">–</p>
-          <label class="toggle"><input type="checkbox" id="alerts-on"><span class="toggle-ui" aria-hidden="true"></span><span>Skicka larm</span></label>
-          <p class="fine">Larmet går via Home Assistant till din telefon när DAC:en är borta i mer än en minut, när Soloist stannar, vid avbrott under uppspelning, när en verifiering avviker och när Soloist-bygget har två veckor kvar. Samma larm skickas högst var sjätte timme, avbrott högst en gång i timmen.</p>
-          <button class="btn" id="alerts-test">Skicka testlarm</button>
-        </div>
-      </details>
-
-      <details class="fold" id="f-mods" data-k="mods">
-        <summary><span>Moduler</span><span class="fv" id="fv-mods"></span></summary>
-        <div class="fold-body">
-          <p class="fine">Stöd för din utrustning och dina system. Kärnan klarar sig utan alla.</p>
-          <ul class="mods" id="mods"></ul>
-          <div class="notice admin" id="mods-restart" hidden>
-            <p>Ändringen börjar gälla när panelen startas om. Musiken påverkas inte.</p>
-            <button class="btn" id="mods-apply">Starta om panelen</button>
+          <dl class="spec" id="sys-kv"></dl>
+          <div class="admin dev-ctl">
+            <h4 class="sub">Namn</h4>
+            <form class="names" id="names-form">
+              <label><span>Ansluten till</span><input id="output-name" maxlength="60" autocomplete="off" placeholder=""></label>
+              <label><span>Streamer</span><input id="streamer-name" maxlength="60" autocomplete="off" placeholder=""></label>
+              <button class="btn">Spara namn</button>
+            </form>
+            <p class="fine">Visas överst som "förstärkare via streamer". Lämna tomt för det som identifieras automatiskt. Namnet i Spotify-appen ställs in under Moduler.</p>
+            <label class="toggle"><input type="checkbox" id="leds"><span class="toggle-ui" aria-hidden="true"></span><span>Aktivitetslampa</span></label>
+            <p class="fine">Den gröna lampan blinkar när SD-kortet läses. Av gör enheten helt mörk.</p>
+            <div class="seg net-seg" role="radiogroup" aria-label="Nätverkshastighet" id="net-speed">
+              <button role="radio" data-v="100" aria-checked="false">100 Mbit/s</button>
+              <button role="radio" data-v="1000" aria-checked="false">1000 Mbit/s</button>
+            </div>
+            <p class="fine">100 Mbit/s räcker gott för Lossless och drar 0,12 W mindre. Länken bryts några sekunder vid byte.</p>
           </div>
-          <p class="fine" id="mods-locked">Logga in under Åtkomst för att ändra.</p>
         </div>
       </details>
+<details class="fold admin" id="f-maint" data-k="maint">
+        <summary><span>Uppdateringar och ström</span><span class="fv"></span></summary>
+        <div class="fold-body">
+          <div class="row wrap">
+            <button class="btn" id="apt-check">Sök systemuppdateringar</button>
+            <button class="btn" id="apt-run" hidden>Installera uppdateringar</button>
+          </div>
+          <p class="fine" id="apt-info"></p>
+          <label class="toggle"><input type="checkbox" id="overlay"><span class="toggle-ui" aria-hidden="true"></span><span>Skrivskyddat system</span></label>
+          <p class="fine">Skyddar SD-kortet vid strömavbrott. Ändringar ligger bara i minnet tills skyddet stängs av. Kräver omstart.</p>
+          <h4 class="sub">Ström och omstart</h4>
+          <div class="row wrap">
+            <button class="btn" id="audio-restart">Starta om ljudtjänsterna</button>
+            <button class="btn danger" id="reboot">Starta om enheten</button>
+            <button class="btn danger" id="poweroff">Stäng av enheten</button>
+          </div>
+          <p class="fine">Ljudtjänsterna är PipeWire, WirePlumber och Soloist. Spotify kopplar upp igen inom några sekunder. Avstängd startar enheten inte igen förrän strömmen bryts och slås på, eftersom den saknar strömbrytare.</p>
+        </div>
+      </details>
+<details class="fold admin" id="f-logs" data-k="logs">
+        <summary><span>Loggar</span><span class="fv"></span></summary>
+        <div class="fold-body">
+          <div class="row wrap">
+            <select id="log-src" aria-label="Logg">
+              <option value="soloist">Soloist</option><option value="audio">PipeWire</option>
+              <option value="kernel">Kärna</option><option value="system">System</option><option value="web">Panelen</option>
+            </select>
+            <label class="toggle inline"><input type="checkbox" id="log-err"><span class="toggle-ui" aria-hidden="true"></span><span>Bara fel</span></label>
+            <button class="btn" id="log-load">Visa</button>
+          </div>
+          <pre class="console" id="log-out" hidden></pre>
+        </div>
+      </details>
+    </div>
+  </section>
 
-      <details class="fold" id="f-look" data-k="look">
+  <!-- ===================================================== Profil: you and this browser -->
+  <section class="view" id="v-me" aria-labelledby="h-me">
+    <div class="view-head">
+      <div>
+        <h2 id="h-me" class="view-title">Profil</h2>
+        <p class="fine">Inloggning, utseende, språk och larm.</p>
+      </div>
+    </div>
+    <div class="panels">
+<details class="fold" id="access" data-k="access">
+        <summary><span>Åtkomst</span><span class="fv" id="fv-access"></span></summary>
+        <div class="fold-body">
+          <p class="lead" id="access-state">Kontrollerar…</p>
+          <form id="login-form" class="key-form" hidden>
+            <input id="pw-in" type="password" autocomplete="current-password" aria-label="Lösenord" placeholder="Lösenord">
+            <button class="btn primary">Logga in</button>
+          </form>
+          <form id="setup-form" class="pw-grid" hidden>
+            <input id="pw-new" type="password" autocomplete="new-password" aria-label="Nytt lösenord" placeholder="Nytt lösenord, minst 8 tecken">
+            <input id="pw-new2" type="password" autocomplete="new-password" aria-label="Upprepa lösenordet" placeholder="Upprepa lösenordet">
+            <button class="btn primary">Skapa lösenord</button>
+          </form>
+          <div id="session" hidden>
+            <div class="row wrap">
+              <button class="btn" id="logout">Logga ut</button>
+              <button class="btn" id="pw-change-open" aria-expanded="false" aria-controls="pw-change-form">Byt lösenord</button>
+            </div>
+            <form id="pw-change-form" class="pw-grid" hidden>
+              <input id="pw-cur" type="password" autocomplete="current-password" aria-label="Nuvarande lösenord" placeholder="Nuvarande lösenord">
+              <input id="pw-next" type="password" autocomplete="new-password" aria-label="Nytt lösenord" placeholder="Nytt lösenord, minst 8 tecken">
+              <button class="btn primary">Spara nytt lösenord</button>
+            </form>
+          </div>
+        </div>
+      </details>
+<details class="fold" id="f-look" data-k="look">
         <summary><span>Utseende</span><span class="fv" id="fv-look"></span></summary>
         <div class="fold-body">
           <div class="seg" role="radiogroup" aria-label="Tema" id="theme">
@@ -406,63 +472,13 @@
           <p class="fine">Sparas bara i den här webbläsaren.</p>
         </div>
       </details>
-
-      <details class="fold" id="f-device" data-k="device">
-        <summary><span>Enheten</span><span class="fv" id="fv-device"></span></summary>
+<details class="fold admin" id="f-alerts" data-k="alerts">
+        <summary><span>Larm till telefonen</span><span class="fv" id="fv-alerts"></span></summary>
         <div class="fold-body">
-          <dl class="spec" id="sys-kv"></dl>
-          <div class="admin dev-ctl">
-            <h4 class="sub">Namn</h4>
-            <form class="names" id="names-form">
-              <label><span>Ansluten till</span><input id="output-name" maxlength="60" autocomplete="off" placeholder=""></label>
-              <label><span>Streamer</span><input id="streamer-name" maxlength="60" autocomplete="off" placeholder=""></label>
-              <button class="btn">Spara namn</button>
-            </form>
-            <p class="fine">Visas överst som "förstärkare via streamer". Lämna tomt för det som identifieras automatiskt. Namnet i Spotify-appen ställs in under Spotify.</p>
-            <label class="toggle"><input type="checkbox" id="leds"><span class="toggle-ui" aria-hidden="true"></span><span>Aktivitetslampa</span></label>
-            <p class="fine">Den gröna lampan blinkar när SD-kortet läses. Av gör enheten helt mörk.</p>
-            <div class="seg net-seg" role="radiogroup" aria-label="Nätverkshastighet" id="net-speed">
-              <button role="radio" data-v="100" aria-checked="false">100 Mbit/s</button>
-              <button role="radio" data-v="1000" aria-checked="false">1000 Mbit/s</button>
-            </div>
-            <p class="fine">100 Mbit/s räcker gott för Lossless och drar 0,12 W mindre. Länken bryts några sekunder vid byte.</p>
-          </div>
-        </div>
-      </details>
-
-      <details class="fold admin" id="f-maint" data-k="maint">
-        <summary><span>Underhåll och ström</span><span class="fv"></span></summary>
-        <div class="fold-body">
-          <div class="row wrap">
-            <button class="btn" id="apt-check">Sök systemuppdateringar</button>
-            <button class="btn" id="apt-run" hidden>Installera uppdateringar</button>
-          </div>
-          <p class="fine" id="apt-info"></p>
-          <label class="toggle"><input type="checkbox" id="overlay"><span class="toggle-ui" aria-hidden="true"></span><span>Skrivskyddat system</span></label>
-          <p class="fine">Skyddar SD-kortet vid strömavbrott. Ändringar ligger bara i minnet tills skyddet stängs av. Kräver omstart.</p>
-          <pre class="console" id="job-out" hidden></pre>
-          <h4 class="sub">Ström och omstart</h4>
-          <div class="row wrap">
-            <button class="btn" id="audio-restart">Starta om ljudtjänsterna</button>
-            <button class="btn danger" id="reboot">Starta om enheten</button>
-            <button class="btn danger" id="poweroff">Stäng av enheten</button>
-          </div>
-          <p class="fine">Ljudtjänsterna är PipeWire, WirePlumber och Soloist. Spotify kopplar upp igen inom några sekunder. Avstängd startar enheten inte igen förrän strömmen bryts och slås på, eftersom den saknar strömbrytare.</p>
-        </div>
-      </details>
-
-      <details class="fold admin" id="f-logs" data-k="logs">
-        <summary><span>Loggar</span><span class="fv"></span></summary>
-        <div class="fold-body">
-          <div class="row wrap">
-            <select id="log-src" aria-label="Logg">
-              <option value="soloist">Soloist</option><option value="audio">PipeWire</option>
-              <option value="kernel">Kärna</option><option value="system">System</option><option value="web">Panelen</option>
-            </select>
-            <label class="toggle inline"><input type="checkbox" id="log-err"><span class="toggle-ui" aria-hidden="true"></span><span>Bara fel</span></label>
-            <button class="btn" id="log-load">Visa</button>
-          </div>
-          <pre class="console" id="log-out" hidden></pre>
+          <p class="lead" id="alerts-state">–</p>
+          <label class="toggle"><input type="checkbox" id="alerts-on"><span class="toggle-ui" aria-hidden="true"></span><span>Skicka larm</span></label>
+          <p class="fine">Larmet går via Home Assistant till din telefon när DAC:en är borta i mer än en minut, när Soloist stannar, vid avbrott under uppspelning, när en verifiering avviker och när Soloist-bygget har två veckor kvar. Samma larm skickas högst var sjätte timme, avbrott högst en gång i timmen.</p>
+          <button class="btn" id="alerts-test">Skicka testlarm</button>
         </div>
       </details>
     </div>
@@ -470,11 +486,27 @@
 </main>
 </div>
 
-<nav class="tabs" aria-label="Vyer">
-  <a href="#v-play" class="on">Lyssna</a>
-  <a href="#v-signal">Signal</a>
-  <a href="#v-sys">System</a>
-</nav>
+<!-- what plays and the volume, at hand from every other view -->
+<aside class="dock" id="dock" aria-label="Spelas nu">
+  <a class="dock-now" href="#v-play">
+    <span class="dock-cover"><img id="dk-cover" alt="" hidden></span>
+    <span class="dock-t"><b id="dk-title"></b><span id="dk-artist"></span></span>
+  </a>
+  <button class="dock-play spotify-only" id="dk-play" aria-label="Spela">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path id="dk-i" d="M9 6.5v11l9-5.5z" fill="currentColor"/></svg>
+  </button>
+  <div class="dock-vol" id="dk-volbox" hidden>
+    <button class="step" id="dk-down" aria-label="Sänk volymen">−</button>
+    <p><b id="dk-vol">–</b><small>dB</small></p>
+    <button class="step" id="dk-up" aria-label="Höj volymen">+</button>
+  </div>
+</aside>
+
+<!-- output of an installation or update, visible from every view -->
+<aside class="job" id="job" aria-label="Utskrift" hidden>
+  <div class="job-head"><b id="job-title">Utskrift</b><button class="btn" id="job-close">Stäng</button></div>
+  <pre class="console" id="job-out"></pre>
+</aside>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="app.js" type="module"></script>

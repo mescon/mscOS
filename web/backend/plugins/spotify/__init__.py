@@ -29,6 +29,11 @@ class Spotify(SourcePlugin):
              "en": "Soloist is downloaded from Spotify to this device. You need Spotify Premium and a key of your own, which you create on Spotify's developer site and enter here afterwards. The key is personal."}
     terms_url = "https://developer.spotify.com/documentation/soloist"
     has_slider = True
+    updates = "self"  # soloist-update.timer, nightly: Spotify's builds expire
+
+    async def version(self) -> str | None:
+        v = ((self.hub.status.get("soloist") or {}).get("version") or "").replace("soloist ", "")
+        return v.split(" ")[0] or None
 
     async def installed(self) -> bool:
         return os.path.exists(BIN) and os.path.exists(collect.SOLOIST_UNIT)

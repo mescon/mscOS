@@ -102,4 +102,4 @@ if __name__ == "__main__" and sys.argv[1:] == ["reset"]:
     a = Auth(path)
     a.data = {"password": None, "sessions": {}}
     a._save()
-    print("Lösenordet är borttaget. Skapa ett nytt i panelen under System.")
+    print("Lösenordet är borttaget. Skapa ett nytt i panelen under Profil.")

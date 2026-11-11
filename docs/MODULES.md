@@ -1,7 +1,7 @@
 # Modules
 
 The core of mscOS knows playback, the signal path, the DAC and the panel. Everything that
-belongs to a particular setup is a module, turned on under **System, Modules**:
+belongs to a particular setup is a module, turned on under **Modules**:
 
 | Kind | What | Shipped |
 |---|---|---|

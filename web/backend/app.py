@@ -646,7 +646,7 @@ class Hub:
         if self._held("soloist", self.soloist and collect.api_key_info()["set"]
                       and solo.get("service") not in (None, "active"), 120):
             await self.alert("soloist", T("Soloist har stannat"),
-                             T("Spotify-tjänsten är {state}. Starta om den under System i panelen.", state=solo.get("service")))
+                             T("Spotify-tjänsten är {state}. Starta om den under Moduler i panelen.", state=solo.get("service")))
         days = solo.get("days_left")
         if days is not None and days <= 14:
             await self.alert("expiry", T("Soloist-bygget går snart ut"),
@@ -1240,15 +1240,46 @@ async def _plugin_list() -> list[dict]:
         if pid in hub.plugins and cls.options:
             d["options"] = [{**o, "value": hub.settings.get(o["key"])} for o in cls.options]
         if cls.kind == "source":  # its player is installed on the device, from its publisher
-            d.update(terms=cls.terms, terms_url=cls.terms_url,
+            d.update(terms=cls.terms, terms_url=cls.terms_url, updates=cls.updates,
                      installed=await hub.plugins[pid].installed() if pid in hub.plugins else None)
+            if d["installed"]:
+                d["version"] = await hub.plugins[pid].version()
+                d["latest"] = _latest.get(pid)  # from the last check, None: not checked
         out.append(d)
     return out
 
 
+_latest: dict[str, str] = {}   # source id -> newest version at its publisher
+_latest_t = 0.0
+
+
+@routes.post("/api/plugins/check")
+async def plugins_check(request):
+    """Ask each installed player's publisher for its newest version. Only on request: the
+    device does not call out by itself. Players that update themselves are not asked."""
+    global _latest_t
+    failed = []
+    for pid, p in hub.sources.items():
+        if p.updates != "manual" or not await p.installed():
+            continue
+        try:
+            v = await p.latest()
+        except Exception as e:  # noqa: BLE001 - no network, or the publisher's site changed
+            log.warning("newest version of %s: %s", pid, e)
+            v = None
+        if v:
+            _latest[pid] = v
+        else:
+            failed.append(pid)
+    _latest_t = time.time()
+    return web.json_response({"plugins": await _plugin_list(), "restart_needed": _plugins_restart_needed(),
+                              "checked": int(_latest_t), "failed": failed, "mscos": hub.status.get("system", {}).get("mscos", "")})
+
+
 @routes.get("/api/plugins")
 async def plugins_list(request):
-    return web.json_response({"plugins": await _plugin_list(), "restart_needed": _plugins_restart_needed()})
+    return web.json_response({"plugins": await _plugin_list(), "restart_needed": _plugins_restart_needed(),
+                              "checked": int(_latest_t) or None, "mscos": hub.status.get("system", {}).get("mscos", "")})
 
 
 def _plugins_restart_needed() -> bool:
@@ -1557,7 +1588,7 @@ async def require_login(request, handler):
     p = request.path
     guarded = any(p.startswith(x) for x in PROTECTED) and not (p == "/api/settings" and request.method == "GET")
     if guarded and not AUTH.valid(_token(request)):
-        raise web.HTTPUnauthorized(text=T("Logga in under System för att göra det här."))
+        raise web.HTTPUnauthorized(text=T("Logga in under Profil för att göra det här."))
     return await handler(request)
 
 

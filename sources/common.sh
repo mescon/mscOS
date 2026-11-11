@@ -28,6 +28,10 @@ install_user_unit() {  # install_user_unit <file> [name] ; "-" reads the unit fr
     else run_user install -m 644 "$1" "$USER_UNITS/${2:-$(basename "$1")}"; fi
     run_user systemctl --user daemon-reload
 }
+note_version() {  # note_version <source id> <version>: for players that cannot tell their own
+    install -d -m 755 "${MSCOS_STATE:-/var/lib/mscos}/versions"
+    printf '%s\n' "$2" > "${MSCOS_STATE:-/var/lib/mscos}/versions/$1"
+}
 fetch() {  # fetch <url> <file>
     curl --fail --location --silent --show-error --retry 3 -o "$2" "$1"
 }

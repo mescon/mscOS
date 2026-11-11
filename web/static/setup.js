@@ -1,6 +1,6 @@
 // First start: a short guide on a new installation (no password yet). Language, password,
 // names, sources, amplifier; then the chosen modules are turned on and the panel restarts.
-// Everything here can be changed later under System.
+// Everything here can be changed later in the panel.
 import { tr, LANG, setLang } from "./i18n.js";
 
 const $ = (s, r = document) => r.querySelector(s);

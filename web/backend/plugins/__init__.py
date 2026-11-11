@@ -129,6 +129,8 @@ class SourcePlugin(Plugin):
     terms: dict[str, str] = {}         # shown before installing (licence, account needed)
     terms_url = ""
     has_slider = False                 # its app has a volume slider the bridge can use: slider()
+    updates = "manual"                 # "self": the player keeps itself up to date; "manual":
+                                       # the panel looks for a newer one and runs the install script again
 
     async def installed(self) -> bool:
         return False
@@ -171,6 +173,21 @@ class SourcePlugin(Plugin):
     async def state(self) -> dict:
         """Extra facts for the panel's status (version, ...)."""
         return {}
+
+    async def version(self) -> str | None:
+        """The installed player's version, None if not known."""
+        return None
+
+    async def latest(self) -> str | None:
+        """The newest version at the publisher (asks the publisher's site). None: not known."""
+        return None
+
+    def recorded_version(self) -> str | None:
+        """What the install script noted in <state>/versions/<id>, for players that cannot
+        tell their own version."""
+        import collect
+        v = collect.read(f"{collect.STATE_DIR}/versions/{self.id}").strip()
+        return v or None
 
     def slider(self) -> dict | None:
         """The volume slider in the source's own app (Spotify), for the volume bridge:

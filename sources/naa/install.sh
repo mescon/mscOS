@@ -16,6 +16,9 @@ DEB=$(grep -o "networkaudiod_${SERIES}[0-9.]*-[0-9]*_${ARCH}\.deb" "$tmp/index.h
 [ -n "$DEB" ] || { echo "No networkaudiod package for $ARCH found at $BASE" >&2; exit 1; }
 echo "Downloading $DEB from Signalyst…"
 fetch "$BASE/$DEB" "$tmp/$DEB"
+WAS=$(systemctl is-active networkaudiod.service 2>/dev/null || true)  # an update while it is the source
 apt-get install -y -q --no-install-recommends "$tmp/$DEB"
-systemctl disable --now networkaudiod.service 2>/dev/null || true
+systemctl disable networkaudiod.service 2>/dev/null || true
+if [ "$WAS" = active ]; then systemctl restart networkaudiod.service
+else systemctl stop networkaudiod.service 2>/dev/null || true; fi
 echo "HQPlayer NAA installed ($DEB). Choose HQPlayer as the source in the panel."

@@ -185,6 +185,18 @@ class Librespot(SourcePlugin):
     async def installed(self) -> bool:
         return os.path.exists(BIN) and os.path.exists(UNIT)
 
+    async def version(self) -> str | None:
+        return self.recorded_version()  # go-librespot cannot tell its own
+
+    async def latest(self) -> str | None:
+        """The tag GitHub's "latest release" link leads to."""
+        if self.http is None:
+            self.http = ClientSession(timeout=ClientTimeout(total=4))
+        async with self.http.get("https://github.com/devgianlu/go-librespot/releases/latest", allow_redirects=False,
+                                 timeout=ClientTimeout(total=15)) as r:
+            m = re.search(r"/releases/tag/([\w.+-]+)$", r.headers.get("Location", ""))
+        return m.group(1) if m else None
+
     async def start(self) -> str:
         if await self.write_config() and await self.active():
             await self._restart()  # already running with an older configuration

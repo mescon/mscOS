@@ -31,9 +31,9 @@ What you need:
 4. Open **`http://mscos.local`** in a browser on the same network. If the name does not
    resolve, use the device's IP address (your router lists it as `mscos`).
 5. Follow the guide: language, a password for the panel, names, sources, amplifier.
-6. Under **System, Modules**, press **Install** for each source you chose. The player is
+6. Under **Modules**, press **Install** for each source you chose. The player is
    downloaded from its publisher (Spotify, Roon Labs, Signalyst, GitHub).
-   - Spotify Lossless: afterwards, enter your developer key under **System, Spotify**.
+   - Spotify Lossless: afterwards, enter your developer key in the module's settings.
 7. Choose the source at the top of the panel and play: pick the device in the Spotify app,
    in Roon (Settings, Audio) or in HQPlayer.
 
@@ -90,6 +90,8 @@ to the HTTPS name. Do not expose the panel to the internet.
 
 - The system: **System, Update** in the panel (apt).
 - Soloist updates itself nightly (its builds expire after 90 days).
+- The other players: **Modules, Check for updates** asks each publisher for its newest
+  version and offers **Update** where there is one. Roon Bridge updates itself.
 - mscOS itself: install newer packages the same way as in B.
 
 ## If something does not work

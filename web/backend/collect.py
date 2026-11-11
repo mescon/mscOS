@@ -84,6 +84,9 @@ async def soloist_uid() -> int:
     return _uid
 
 
+STATE_DIR = os.environ.get("MSCOS_STATE") or os.environ.get("SOTM_STATE") or "/var/lib/mscos"
+
+
 def read(path: str, default: str = "") -> str:
     try:
         with open(path) as f:
