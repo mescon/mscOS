@@ -1473,17 +1473,24 @@ async def on_cleanup(app):
     hub.save()
 
 
-def main():
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+def make_app(background: bool = True) -> web.Application:
+    """The panel as an aiohttp application. background=False leaves out the sampling loops and
+    the modules' tasks (for tests of the HTTP API)."""
     i18n.setup(STATIC, lambda: hub.settings.get("language", "en"))
     app = web.Application(middlewares=[request_language, only_via_proxy, same_origin_json, require_login, cache_headers])
     for p in hub.plugins.values():
         p.routes(routes)
     app.add_routes(routes)
     app.router.add_static("/", STATIC, show_index=False)
-    app.on_startup.append(on_startup)
-    app.on_cleanup.append(on_cleanup)
-    web.run_app(app, host="0.0.0.0", port=int(os.environ.get("PORT", 80)), access_log=None)
+    if background:
+        app.on_startup.append(on_startup)
+        app.on_cleanup.append(on_cleanup)
+    return app
+
+
+def main():
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    web.run_app(make_app(), host="0.0.0.0", port=int(os.environ.get("PORT", 80)), access_log=None)
 
 
 if __name__ == "__main__":

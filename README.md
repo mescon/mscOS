@@ -70,6 +70,8 @@ packaging/build.sh                       # the .deb packages -> packaging/out/
 image/build.sh sotm                      # an image (sotm | rpi | pc | arm64)
 MSCOS_HOST=root@<device> web/deploy.sh   # this checkout onto a device, at the packages' paths
 tools/i18n-keys.py web/static web/static/i18n/en.json   # texts missing from a translation
+tools/test.sh                            # the tests, in a container with the panel's dependencies
+tools/module-index.py                    # rebuild the module catalogue after changing a module
 ```
 
 Swedish is the source language of the panel: texts are written in Swedish in the code and

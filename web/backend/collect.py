@@ -58,9 +58,12 @@ async def run(cmd: str | list, timeout: float = 15, as_user: bool = False, input
         cmd = ["setpriv", f"--reuid={uid}", f"--regid={uid}", "--init-groups", "--",
                "env", f"HOME={AUDIO_HOME}", f"XDG_RUNTIME_DIR=/run/user/{uid}",
                f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus"] + cmd
-    p = await asyncio.create_subprocess_exec(
-        *cmd, stdin=asyncio.subprocess.PIPE if input_ else asyncio.subprocess.DEVNULL,
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    try:
+        p = await asyncio.create_subprocess_exec(
+            *cmd, stdin=asyncio.subprocess.PIPE if input_ else asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    except OSError as e:  # the program is not installed (a minimal system): a failed command, not a crash
+        return 127, "", str(e)
     try:
         out, err = await asyncio.wait_for(p.communicate(input_), timeout)
     except asyncio.TimeoutError:
@@ -120,7 +123,7 @@ def system_info() -> dict:
         "governor": read(f"{pol}/scaling_governor").strip(),
         "mem_total": mem.get("MemTotal", 0),
         "mem_available": mem.get("MemAvailable", 0),
-        "root_overlay": root_fs == "overlay",
+        "root_overlay": root_fs == "overlay" and os.path.isdir("/media/root-ro"),
         "net": net_info(),
     }
 
