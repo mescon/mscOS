@@ -1,4 +1,4 @@
-"""Spotify's volume slider drives the Mark Levinson 585.5; the signal stays bit-perfect.
+"""Spotify's volume slider drives the amplifier module (e.g. Mark Levinson 585.5); the signal stays bit-perfect.
 
 Soloist applies the Spotify volume as PipeWire stream volume (channelVolumes on its
 "spotify" stream node = (v/100)^3), not in its own samples. It reads channelVolumes back
@@ -24,7 +24,6 @@ import logging
 import time
 
 import collect
-from levinson import USB_INPUT, LevinsonError
 
 log = logging.getLogger("volbridge")
 
@@ -45,24 +44,27 @@ class VolumeBridge:
     # ---- conditions
     def enabled(self) -> bool:
         h = self.hub
-        return bool(h.settings.get("spotify_vol_to_amp", True)) and h.settings.get("source") == "spotify"
+        return (h.amp is not None and bool(h.settings.get("spotify_vol_to_amp", True))
+                and h.settings.get("source") == "spotify")
 
     def _amp_ok(self) -> bool:
-        m = self.hub.ml_state or {}
-        return bool(self.hub.ml.host and m.get("reachable") and m.get("power") is not False
-                    and m.get("input") == USB_INPUT)
+        a = self.hub.amp
+        return bool(a and a.ready())
 
     def _max(self) -> float:
-        return float(self.hub.settings.get("ml_max_db", 40.0))
+        a = self.hub.amp
+        return a.max_db if a else 40.0
 
     def to_db(self, v: int) -> float:
-        """The 585.5 has whole-dB steps up to 24 dB and 0.1 dB above (it rounds what it is
-        sent), so ask for what it will take: whole dB below 24, half dB above."""
+        """Slider percent -> dB under the ceiling, as the amplifier will take it (its steps)."""
         db = max(0.0, min(self._max(), v / 100 * self._max()))
-        return float(round(db)) if db < 24 else round(db * 2) / 2
+        return self.hub.amp.quantize(db) if self.hub.amp else db
 
     def to_pct(self, db: float) -> int:
         return max(0, min(100, round(min(db, self._max()) / self._max() * 100)))
+
+    def _errors(self) -> tuple:
+        return getattr(self.hub.amp, "errors", (OSError,))
 
     # ---- events from app.py
     def on_active(self):
@@ -87,21 +89,21 @@ class VolumeBridge:
             if not self._amp_ok():
                 return
             db = self.to_db(v)
-            cur = self.hub.ml.volume_db
+            cur = self.hub.amp.volume_db
             if cur is not None and abs(cur - db) < 0.25:
                 return
             capped = cur is not None and db > cur + MAX_UP_DB
             if capped:
                 db = cur + MAX_UP_DB
             try:
-                await self.hub.ml.set_volume(db, self._max())
-                actual = await self.hub.ml.read_volume()  # what it actually took
+                await self.hub.amp.set_volume(db, self._max())
+                actual = await self.hub.amp.read_volume()  # what it actually took
                 self._amp_db = actual if actual is not None else db
-                log.info("Spotify %d %% -> 585.5 %.1f dB%s", v, db, " (capped)" if capped else "")
-            except LevinsonError as e:
+                log.info("Spotify %d %% -> amplifier %.1f dB%s", v, db, " (capped)" if capped else "")
+            except self._errors() as e:
                 log.warning("volume bridge: %s", e)
                 return
-        await self.hub.ml_refresh()
+        await self.hub.amp.refresh()
         if capped:
             await self._set_spotify(self.to_pct(db))  # the slider shows where the amplifier is
 
@@ -123,8 +125,8 @@ class VolumeBridge:
         if not self.enabled() or not self._amp_ok() or not self.hub.auth.get("is_active"):
             return
         try:
-            db = await self.hub.ml.read_volume()
-        except LevinsonError:
+            db = await self.hub.amp.read_volume()
+        except self._errors():
             return
         if db is None:
             return
@@ -133,7 +135,7 @@ class VolumeBridge:
         self._amp_db = db
         pct = self.to_pct(db)
         if force or pct != self.hub.playback.get("volume"):
-            log.info("585.5 %.1f dB -> Spotify %d %%", db, pct)
+            log.info("amplifier %.1f dB -> Spotify %d %%", db, pct)
             await self._set_spotify(pct)
 
 

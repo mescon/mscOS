@@ -91,6 +91,7 @@ function renderFeatures() {
   const f = S.features || {}, amp = f.amp && f.amp !== "none";
   $("#amp").hidden = !amp; $("#f-amp").hidden = !amp;
   $("#f-arcam").hidden = !f.arcam;
+  $("#f-ml").hidden = !amp;
 }
 function handle(m) {
   switch (m.type) {
