@@ -73,3 +73,40 @@ amplifier while the stream stays at full scale, so the samples are never recalcu
 A module carries its own names and descriptions as `{"sv": ..., "en": ...}`. Error
 messages go through `T("svensk text {värde}", värde=...)` from `i18n`, which looks the
 Swedish text up in `web/static/i18n/<language>.json`.
+
+## What a module gives the panel
+
+A module needs no page of its own. The panel draws these from what the module returns:
+
+| Method | Shown as |
+|---|---|
+| `options` / `option_list()` | its settings in its card under Modules: `text`, `number`, `select`, `toggle`, `secret` |
+| `status()` | one line in its card: connected, not set up, ... |
+| `log()` | recent communication, folded, for troubleshooting |
+| `panel()` and `panel_action()` | a card of buttons, sliders and choices in the Listen view |
+| `amp_state()` and `amp_action()` (an `AmpPlugin`) | the volume dial, inputs, power and mute |
+| `now_playing()`, `transport` and `command()` (a `SourcePlugin`) | what plays, and the transport buttons |
+| `notify()` and `can_notify()` | a way to deliver the core's alerts to a phone |
+
+A `secret` option (an address with a token, a key) is stored in a root-only file on the
+device, never in the settings and never sent back to the panel; read it with
+`self.hub.secret(key)`.
+
+## Modules of your own
+
+A module does not have to come with mscOS. Put its package in
+`/var/lib/mscos/plugins/<id>/` on the device (owned by root, writable by root only), restart
+the panel and turn it on under Modules. [`examples/module-hello`](../examples/module-hello)
+is a complete small one.
+
+To let others install it from the panel (Modules, Add a module), publish two files over
+HTTPS: the package as a tar archive, and a `module.json` that names it:
+
+```json
+{"id": "mymodule", "version": "1.2.0",
+ "archive": "https://example.org/mymodule-1.2.0.tar.gz", "sha256": "<of the archive>"}
+```
+
+The user pastes the address of that `module.json`. The panel remembers it, and "Check for
+updates" looks there for a newer version. A module runs inside the panel as root: there is
+no sandbox, and the panel says so before installing one.

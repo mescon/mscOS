@@ -149,6 +149,9 @@ function renderFeatures() {
   $("#amp").hidden = !amp; $("#f-amp").hidden = !amp;
   $("#f-spotify").hidden = !(f.plugins || []).includes("spotify");  // Soloist: key, name, updates
   const led = $("#leds").closest("label"); led.hidden = f.leds === false; led.nextElementSibling.hidden = f.leds === false;
+  const b = f.board || {};
+  $("#power-note").hidden = b.power_button !== false;
+  $("#net-speed").hidden = $("#net-note").hidden = !b.link_mbps;
 }
 function handle(m) { handleMsg(m); renderDock(); }
 function handleMsg(m) {
@@ -232,8 +235,21 @@ function renderSource() {
   const s = SRC();
   $("#source-note").textContent = !list.length ? tr("Ingen källa är påslagen.") : s ? tr`${loc(s.name)} äger DAC:en.` : "";
 }
+// The transport buttons show what the source says, and only what it can do.
+function transportState(playing, shuffle, repeat) {
+  $("#i-play").hidden = playing; $("#i-pause").hidden = !playing;
+  $("#b-play").setAttribute("aria-label", playing ? tr("Pausa") : tr("Spela"));
+  $("#b-shuffle").setAttribute("aria-pressed", shuffle);
+  $("#b-repeat").setAttribute("aria-pressed", repeat !== "off");
+  $("#b-repeat-1").hidden = repeat !== "track";
+  $("#b-repeat").dataset.mode = repeat;
+}
 function renderPlay() {
   renderSource();
+  const can = SRC()?.transport || [];
+  document.body.classList.toggle("has-transport", can.includes("toggle") && (!roonMode() || !!S.now));
+  document.body.classList.toggle("has-seek", can.includes("seek") && (!roonMode() || !!S.now));
+  if (roonMode() && !S.now) transportState(false, false, "off");
   if (roonMode()) {
     const s = SRC(), stt = srcState(), d = S.status.dac || {}, now = S.now;
     const fe = $("#np-format"), cover = $("#np-cover");
@@ -259,6 +275,8 @@ function renderPlay() {
       fe.classList.remove("warn");
       if (now.image) { if (cover.src !== now.image) cover.src = now.image; cover.hidden = false; $("#cover-empty").hidden = true; }
       else { cover.hidden = true; $("#cover-empty").hidden = false; }
+      transportState(!!now.playing, !!now.shuffle, now.repeat || "off");
+      tickProgress();
       return;
     }
     // a source that opens the DAC itself (Roon, HQPlayer): the DAC shows what arrives
@@ -291,22 +309,19 @@ function renderPlay() {
   const img = $("#np-cover"), url = it && coverOf(it);
   if (url) { if (img.src !== url) img.src = url; img.hidden = false; } else img.hidden = true;
   $("#cover-empty").hidden = !!url;
-  $("#i-play").hidden = playing; $("#i-pause").hidden = !playing;
-  $("#b-play").setAttribute("aria-label", playing ? tr("Pausa") : tr("Spela"));
   const o = p.options || {};
-  $("#b-shuffle").setAttribute("aria-pressed", !!o.shuffle);
-  $("#b-repeat").setAttribute("aria-pressed", !!(o.repeat && o.repeat !== "off"));
-  $("#b-repeat-1").hidden = o.repeat !== "track";
+  transportState(playing, !!o.shuffle, o.repeat || "off");
   const vol = p.volume;
   $("#vol-warn").hidden = !!S.settings?.spotify_vol_to_amp || !(typeof vol === "number" && vol < 100);
   $("#vol-val").textContent = vol;
   tickProgress();
 }
-const durOf = () => deco(S.playback.item).playback?.duration_ms || 0;
+const durOf = () => (roonMode() ? S.now?.duration_ms : deco(S.playback.item).playback?.duration_ms) || 0;
 function posNow() {
   const p = S.playback, pos = p.position, dur = durOf();
   let ms = 0;
-  if (pos) ms = pos.position_ms + (p.status === "playing" ? (Date.now() - pos.timestamp_ms) * (pos.speed || 1) : 0);
+  if (roonMode()) { const n = S.now || {}; ms = (n.position_ms || 0) + (n.playing && n.position_ts ? Date.now() - n.position_ts * 1000 : 0); }
+  else if (pos) ms = pos.position_ms + (p.status === "playing" ? (Date.now() - pos.timestamp_ms) * (pos.speed || 1) : 0);
   return Math.max(0, Math.min(ms, dur || ms));
 }
 function tickProgress() {
@@ -325,27 +340,23 @@ function renderQueue() {
     : `<li class="empty">${tr("Kön visas när något spelas.")}</li>`;
   fv("queue", up.length ? nameOf(up[0].item) : "");
 }
+const player = (command, extra = {}) => post("/api/player", { command, ...extra }).catch(() => {});
 $$(".transport button").forEach((b) => b.addEventListener("click", () => {
-  const c = b.dataset.cmd, p = S.playback, o = p.options || {};
-  if (c === "toggle") cmd(p.status === "playing" ? "pause" : "play");
-  else if (c === "shuffle") cmd("set_shuffle", { enabled: !o.shuffle });
-  else if (c === "repeat") {
-    const next = { off: "context", context: "track", track: "off" }[o.repeat || "off"];
-    (async () => {
-      await cmd("set_repeat_track", { enabled: next === "track" });
-      await cmd("set_repeat_context", { enabled: next === "context" });
-    })();
-  } else cmd(c);
+  const c = b.dataset.cmd;
+  if (c === "toggle") player("toggle");
+  else if (c === "shuffle") player("shuffle", { enabled: b.getAttribute("aria-pressed") !== "true" });
+  else if (c === "repeat") player("repeat", { mode: { off: "context", context: "track", track: "off" }[b.dataset.mode || "off"] });
+  else player(c === "skip_next" ? "next" : "prev");
 }));
 const scrub = $("#scrub");
 scrub.addEventListener("click", (e) => {
   const dur = durOf(); if (!dur) return;
   const r = scrub.querySelector(".scrub-track").getBoundingClientRect();
-  cmd("seek", { position_ms: Math.round(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * dur) });
+  player("seek", { position_ms: Math.round(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * dur) });
 });
 scrub.addEventListener("keydown", (e) => {
   const step = { ArrowRight: 10000, ArrowLeft: -10000 }[e.key]; const dur = durOf();
-  if (!step || !dur) return; e.preventDefault(); cmd("seek", { position_ms: Math.round(Math.max(0, Math.min(dur, posNow() + step))) });
+  if (!step || !dur) return; e.preventDefault(); player("seek", { position_ms: Math.round(Math.max(0, Math.min(dur, posNow() + step))) });
 });
 $("#vol-reset").addEventListener("click", () => cmd("set_volume", { volume: 100 }));
 
@@ -686,6 +697,20 @@ $("#apt-check").addEventListener("click", async () => {
     $("#apt-run").hidden = !r.packages.length;
   } finally { b.disabled = false; }
 });
+// mscOS itself: newer packages from the project's releases
+$("#os-check").addEventListener("click", async () => {
+  const b = $("#os-check"), info = $("#os-info"); b.disabled = true; info.textContent = tr("Söker…");
+  try {
+    const r = await (await fetch("/api/system/mscos-update")).json();
+    if (r.ok === false || r.current == null) throw new Error();
+    info.textContent = r.available ? tr`mscOS ${r.latest} finns. Du har ${r.current}.` : r.latest ? tr`mscOS ${r.current} är den senaste.` : tr`Ingen utgåva är publicerad än. Du har ${r.current}.`;
+    $("#os-run").hidden = !r.available;
+  } catch { info.textContent = tr("Kunde inte söka efter en ny version av mscOS."); }
+  b.disabled = false;
+});
+$("#os-run").addEventListener("click", async () => {
+  try { await post("/api/system/mscos-update"); $("#os-run").hidden = true; $("#os-info").textContent = tr("Uppdateringen körs. Panelen startar om när den är klar, ladda sedan om sidan."); } catch {}
+});
 $("#apt-run").addEventListener("click", () => startJob("/api/system/upgrade", tr("Installerar uppdateringar…")));
 $("#overlay").addEventListener("change", (e) => {
   const on = e.target.checked;
@@ -727,7 +752,7 @@ function renderSettings() {
   $$("#alert-kinds input").forEach((i) => { i.checked = !off.includes(i.dataset.kind); i.disabled = !st.alerts_configured || !st.alerts; });
   $("#alerts-on").disabled = !st.alerts_configured; $("#alerts-test").disabled = !st.alerts_configured || !st.alerts;
   fv("alerts", !st.alerts_configured ? tr("Inte inställt") : st.alerts ? tr("På") : tr("Av"), !st.alerts_configured || !st.alerts);
-  $$("#net-speed button").forEach((b) => b.setAttribute("aria-checked", +b.dataset.v === (st.net_speed || 100)));
+  $$("#net-speed button").forEach((b) => b.setAttribute("aria-checked", +b.dataset.v === (S.features?.board?.link_mbps === 1000 ? 1000 : S.features?.board?.link_mbps ? 100 : st.net_speed || 100)));
 }
 async function setSetting(key, on, el) {
   try { const r = await post("/api/settings", { [key]: on }); S.settings = { ...S.settings, ...r.settings }; renderSettings(); }
@@ -952,7 +977,7 @@ function armed(b, label, armedLabel) {
 }
 $("#poweroff").addEventListener("click", async (e) => {
   if (!armed(e.currentTarget, tr("Stäng av enheten"), tr("Tryck igen för att stänga av"))) return;
-  try { await post("/api/system/poweroff"); toast(tr("Stänger av. Bryt och slå på strömmen för att starta igen.")); } catch {}
+  try { await post("/api/system/poweroff"); toast(S.features?.board?.power_button === false ? tr("Stänger av. Bryt och slå på strömmen för att starta igen.") : tr("Stänger av.")); } catch {}
 });
 $("#audio-restart").addEventListener("click", async (e) => {
   const b = e.currentTarget; b.disabled = true; toast(tr("Startar om PipeWire, WirePlumber och Soloist…"));
@@ -1095,8 +1120,12 @@ const KIND_HELP = { source: tr("En källa i taget äger DAC:en. Du byter överst
 const lang = () => (document.documentElement.lang || "sv").slice(0, 2);
 const loc = (o) => (o && (o[lang()] || o.en || o.sv)) || "";
 let MODS = { plugins: [], restart_needed: false };
-const modUpdate = (p) => p.kind === "source" && !!p.installed && p.updates === "manual" && !!p.latest && p.latest !== p.version;
+const modUpdate = (p) => !p.external && p.kind === "source" && !!p.installed && p.updates === "manual" && !!p.latest && p.latest !== p.version;
 function modVersion(p) {
+  if (p.external) {
+    const v = p.external.version ? tr`Egen modul, version ${p.external.version}` : tr("Egen modul");
+    return p.latest && p.latest !== p.external.version ? tr`${v}, ${p.latest} finns` : v;
+  }
   if (p.kind !== "source") return MODS.mscos ? tr`Följer med mscOS ${MODS.mscos}` : tr("Följer med mscOS");
   if (p.installed === false) return tr("Inte installerad");
   if (p.installed == null) return "";
@@ -1118,6 +1147,7 @@ function modCard(p, open) {
       <label class="toggle"><input type="checkbox" data-mod="${esc(p.id)}" ${p.enabled ? "checked" : ""}><span class="toggle-ui" aria-hidden="true"></span><span class="vh">${esc(loc(p.name))}</span></label>
     </div>
     <p class="mod-meta">${meta.map((t) => `<span>${esc(t)}</span>`).join("")}</p>
+    ${p.external ? `<div class="mod-install admin row wrap">${p.external.source && p.latest && p.latest !== p.external.version ? `<button class="btn primary" data-ext-update="${esc(p.external.source)}">${tr`Uppdatera till ${p.latest}`}</button>` : ""}<button class="btn" data-ext-remove="${esc(p.id)}">${tr("Ta bort modulen")}</button></div>` : ""}
     ${modUpdate(p) ? `<div class="mod-install admin"><button class="btn primary" data-install="${esc(p.id)}" data-update="1">${tr`Uppdatera till ${p.latest}`}</button></div>` : ""}${modInstall(p)}
     ${more ? `<details class="mod-more"${open ? " open" : ""}><summary>${tr("Inställningar")}</summary><div class="mod-body">${modOptions(p)}${logbox}</div></details>` : ""}
   </li>`;
@@ -1137,7 +1167,8 @@ function renderMods() {
   $$("#mods input").forEach((i) => { i.disabled = locked; });
   $("#mods-locked").hidden = !locked;
   $("#mods-restart").hidden = !MODS.restart_needed;
-  const on = MODS.plugins.filter((p) => p.enabled).length, ups = MODS.plugins.filter(modUpdate).length;
+  const on = MODS.plugins.filter((p) => p.enabled).length;
+  const ups = MODS.plugins.filter((p) => modUpdate(p) || (p.external && p.latest && p.latest !== p.external.version)).length;
   $("#mods-sum").textContent = tr`${on} av ${MODS.plugins.length} moduler är på.` + " "
     + (ups ? (ups === 1 ? tr("En uppdatering finns.") : tr`${ups} uppdateringar finns.`) : MODS.checked ? tr`Inga uppdateringar, kontrollerat ${clock(MODS.checked)}.` : "");
   const badge = $("#nav-mods"); badge.hidden = !ups && !MODS.restart_needed;
@@ -1173,6 +1204,21 @@ $("#mods").addEventListener("click", (e) => {
   b.disabled = true;
   const p = MODS.plugins.find((x) => x.id === b.dataset.install);
   startJob("/api/sources/install", b.dataset.update ? tr`Uppdaterar ${loc(p?.name)}…` : tr`Installerar ${loc(p?.name)}…`, { id: b.dataset.install });
+});
+// modules that do not come with mscOS: install from the publisher's module.json, update, remove
+async function extInstall(url) {
+  try { const r = await post("/api/plugins/install", { url }); toast(tr`${r.id} ${r.version} är installerad. Starta om panelen för att ladda den.`); $("#mod-add-url").value = ""; } catch {}
+  loadMods();
+}
+$("#mod-add-form").addEventListener("submit", (e) => { e.preventDefault(); const u = $("#mod-add-url").value.trim(); if (u) extInstall(u); });
+$("#mods").addEventListener("click", async (e) => {
+  const up = e.target.closest("button[data-ext-update]"), rm = e.target.closest("button[data-ext-remove]");
+  if (up) { up.disabled = true; extInstall(up.dataset.extUpdate); }
+  if (rm) {
+    if (rm.dataset.armed !== "1") { rm.dataset.armed = "1"; rm.textContent = tr("Tryck igen för att ta bort"); setTimeout(() => { rm.dataset.armed = ""; rm.textContent = tr("Ta bort modulen"); }, 4000); return; }
+    try { await post("/api/plugins/remove", { id: rm.dataset.extRemove }); toast(tr("Modulen är borttagen. Starta om panelen.")); } catch {}
+    loadMods();
+  }
 });
 async function loadMods() { try { MODS = await (await fetch("/api/plugins")).json(); renderMods(); } catch {} }
 // Asks each player's publisher for its newest version. Only when asked: the device does not call out by itself.

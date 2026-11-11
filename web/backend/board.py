@@ -9,7 +9,7 @@ import re
 
 DEFAULTS = {"BOARD_NAME": "", "BOARD_MATCH": "", "AUDIO_CPU": "", "USB_IRQ_MATCH": "[exo]hci[-_]hcd",
             "CPU_FIXED_KHZ": "", "THERMAL_OFF": "", "NET_SPEED": "", "LEDS": "", "DT_OVERLAY": "",
-            "DT_OFF_NODE": "", "WATCHDOG": "", "USB_PORTS": ""}
+            "DT_OFF_NODE": "", "WATCHDOG": "", "USB_PORTS": "", "POWER_BUTTON": "", "STORAGE": ""}
 FILES = ("/etc/mscos/board.conf", "/etc/mscos/board.local.conf")
 _cache: tuple[tuple, dict] | None = None
 

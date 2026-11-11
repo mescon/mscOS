@@ -71,11 +71,11 @@
           <p class="np-artist" id="np-artist">Välj enheten i Spotify-appen</p>
           <p class="np-album" id="np-album"></p>
           <p class="np-format" id="np-format" hidden></p>
-      <div class="scrub spotify-only" id="scrub" role="slider" aria-label="Position i låten" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
+      <div class="scrub needs-seek" id="scrub" role="slider" aria-label="Position i låten" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
             <div class="scrub-track"><div class="scrub-fill" id="np-bar"></div></div>
             <div class="times"><span id="np-pos">0:00</span><span id="np-dur">0:00</span></div>
           </div>
-          <div class="transport spotify-only">
+          <div class="transport needs-transport">
             <button class="t-aux" data-cmd="shuffle" id="b-shuffle" aria-pressed="false" aria-label="Blanda">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h3.5c2 0 3 1 4.2 2.8l2.6 4.4C14.5 16 15.5 17 17.5 17H21M18 4.5 21 7l-3 2.5M3 17h3.5c1.4 0 2.3-.5 3.1-1.4M14 8.4c.8-.9 1.7-1.4 3.5-1.4M18 14.5l3 2.5-3 2.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
@@ -275,6 +275,14 @@
     </div>
     <p class="notice" id="mods-locked">Logga in under <a href="#v-me">Profil</a> för att ändra.</p>
     <div id="mods"></div>
+    <section class="mod-group admin" id="mod-add">
+      <h3>Lägg till en modul</h3>
+      <p class="fine">Moduler som inte följer med mscOS installeras från sin utgivare: klistra in adressen till modulens module.json. En modul körs inuti panelen med full åtkomst till enheten. Installera bara moduler från någon du litar på.</p>
+      <form class="row" id="mod-add-form">
+        <input id="mod-add-url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://…/module.json" aria-label="Adress till modulens module.json">
+        <button class="btn">Installera</button>
+      </form>
+    </section>
     <!-- settings that belong to one module; app.js moves each into its module's card -->
     <div id="mod-panels" hidden>
       <div class="mod-panel" id="f-spotify" data-for="spotify">
@@ -333,12 +341,12 @@
               <button class="btn">Spara namn</button>
             </form>
             <label class="toggle"><input type="checkbox" id="leds"><span class="toggle-ui" aria-hidden="true"></span><span>Aktivitetslampa</span></label>
-            <p class="fine">Den gröna lampan blinkar när SD-kortet läses. Av gör enheten helt mörk.</p>
+            <p class="fine" id="leds-note">Av släcker enhetens lampor.</p>
             <div class="seg net-seg" role="radiogroup" aria-label="Nätverkshastighet" id="net-speed">
               <button role="radio" data-v="100" aria-checked="false">100 Mbit/s</button>
               <button role="radio" data-v="1000" aria-checked="false">1000 Mbit/s</button>
             </div>
-            <p class="fine">100 Mbit/s räcker gott för Lossless och drar 0,12 W mindre. Länken bryts några sekunder vid byte.</p>
+            <p class="fine" id="net-note">100 Mbit/s räcker gott för musik och drar något mindre ström. Länken bryts några sekunder vid byte.</p>
           </div>
         </div>
       </details>
@@ -350,15 +358,21 @@
             <button class="btn" id="apt-run" hidden>Installera uppdateringar</button>
           </div>
           <p class="fine" id="apt-info"></p>
+          <div class="row wrap">
+            <button class="btn" id="os-check">Sök ny version av mscOS</button>
+            <button class="btn primary" id="os-run" hidden>Uppdatera mscOS</button>
+          </div>
+          <p class="fine" id="os-info"></p>
           <label class="toggle"><input type="checkbox" id="overlay"><span class="toggle-ui" aria-hidden="true"></span><span>Skrivskyddat system</span></label>
-          <p class="fine">Skyddar SD-kortet vid strömavbrott. Ändringar ligger bara i minnet tills skyddet stängs av. Kräver omstart.</p>
+          <p class="fine" id="overlay-note">Skyddar systemet vid strömavbrott. Ändringar ligger bara i minnet tills skyddet stängs av. Kräver omstart.</p>
           <h4 class="sub">Ström och omstart</h4>
           <div class="row wrap">
             <button class="btn" id="audio-restart">Starta om ljudtjänsterna</button>
             <button class="btn danger" id="reboot">Starta om enheten</button>
             <button class="btn danger" id="poweroff">Stäng av enheten</button>
           </div>
-          <p class="fine">Ljudtjänsterna är PipeWire, WirePlumber och Soloist. Spotify kopplar upp igen inom några sekunder. Avstängd startar enheten inte igen förrän strömmen bryts och slås på, eftersom den saknar strömbrytare.</p>
+          <p class="fine">Ljudtjänsterna är PipeWire och den källa som spelar. Källan kopplar upp igen inom några sekunder.</p>
+          <p class="fine" id="power-note" hidden>Avstängd startar enheten inte igen förrän strömmen bryts och slås på, eftersom den saknar strömbrytare.</p>
         </div>
       </details>
 <details class="fold admin" id="f-logs" data-k="logs">
@@ -458,7 +472,7 @@
     <span class="dock-cover"><img id="dk-cover" alt="" hidden></span>
     <span class="dock-t"><b id="dk-title"></b><span id="dk-artist"></span></span>
   </a>
-  <button class="dock-play spotify-only" id="dk-play" aria-label="Spela">
+  <button class="dock-play needs-transport" id="dk-play" aria-label="Spela">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path id="dk-i" d="M9 6.5v11l9-5.5z" fill="currentColor"/></svg>
   </button>
   <div class="dock-vol" id="dk-volbox" hidden>

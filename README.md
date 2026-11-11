@@ -12,8 +12,9 @@ in Swedish or English.
   - Roon Bridge,
   - HQPlayer NAA.
 - **Your equipment as modules.** Amplifier volume and inputs over the network (Mark
-  Levinson Nº585/585.5, Arcam), Home Assistant, native DSD for C-Media CM6632A DACs. The
-  core needs none of them: any USB DAC works.
+  Levinson Nº585/585.5), an Arcam AV receiver, alerts to your phone (ntfy, Home Assistant),
+  native DSD for C-Media CM6632A DACs, and modules of your own. The core needs none of
+  them: any USB DAC works.
 - **A quiet machine.** One CPU core for audio and the USB interrupts, no frequency
   scaling, nothing unscheduled while music plays; the panel lists each measure and checks
   it live.
@@ -41,6 +42,7 @@ Debian 13 or Armbian system, install the packages instead.
 | Spotify Connect (go-librespot), HQPlayer NAA | install, start and source switching verified on the SOtM; **playback not yet tested** |
 | Native DSD for CM6632A | in use as a kernel patch; the DKMS package is **untested** |
 | Panel in Swedish and English | complete |
+| Alerts through ntfy, modules of your own, updating mscOS from the panel | written; **not yet tested against a real ntfy topic, a published module or a release** |
 
 Planned: UPnP/OpenHome (Qobuz and Tidal through a control app), Squeezelite, AirPlay.
 Tidal Connect and Qobuz Connect are only offered to certified manufacturers and are not

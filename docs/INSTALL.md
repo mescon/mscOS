@@ -88,11 +88,12 @@ to the HTTPS name. Do not expose the panel to the internet.
 
 ## Updating
 
-- The system: **System, Update** in the panel (apt).
+- The system: **System, Check for system updates** in the panel (apt).
 - Soloist updates itself nightly (its builds expire after 90 days).
 - The other players: **Modules, Check for updates** asks each publisher for its newest
   version and offers **Update** where there is one. Roon Bridge updates itself.
-- mscOS itself: install newer packages the same way as in B.
+- mscOS itself: **System, Look for a new version of mscOS** installs newer packages from
+  the project's releases, or install them the same way as in B.
 
 ## If something does not work
 

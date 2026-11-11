@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Update mscOS itself from its releases: newer mscos-*.deb packages are downloaded from the
+# project's release page (HOME_URL in /etc/mscos-release, a GitHub repository) and installed
+# with apt, which also restarts the panel.
+#   mscos-update --check    print {"current", "latest", "available"} as JSON, change nothing
+#   mscos-update            install the latest release if it is newer
+# MSCOS_RELEASES overrides the address of the release information (the GitHub API's
+# releases/latest of another repository, for a fork).
+set -euo pipefail
+. /etc/mscos-release 2>/dev/null || true
+CUR=${VERSION:-0}
+REPO=$(printf '%s' "${HOME_URL:-}" | sed -n 's|^https://github.com/\([^/]*/[^/]*\)/*$|\1|p')
+API=${MSCOS_RELEASES:-${REPO:+https://api.github.com/repos/$REPO/releases/latest}}
+[ -n "$API" ] || { echo "No release address (HOME_URL in /etc/mscos-release)" >&2; exit 1; }
+
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+code=$(curl --silent --show-error --location --retry 2 --max-time 30 -o "$tmp/rel.json" -w '%{http_code}' \
+    -H 'Accept: application/vnd.github+json' "$API") || { echo "The release page could not be reached" >&2; exit 1; }
+if [ "$code" = 404 ]; then
+    [ "${1:-}" = --check ] && { printf '{"current": "%s", "latest": null, "available": false}\n' "$CUR"; exit 0; }
+    echo "No release has been published yet."; exit 0
+fi
+[ "$code" = 200 ] || { echo "The release page answered $code" >&2; exit 1; }
+TAG=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("tag_name",""))' "$tmp/rel.json")
+LATEST=${TAG#v}
+[ -n "$LATEST" ] || { echo "The release has no version" >&2; exit 1; }
+NEWER=false
+dpkg --compare-versions "$LATEST" gt "$CUR" && NEWER=true
+
+if [ "${1:-}" = --check ]; then
+    printf '{"current": "%s", "latest": "%s", "available": %s}\n' "$CUR" "$LATEST" "$NEWER"
+    exit 0
+fi
+$NEWER || { echo "mscOS $CUR is the latest."; exit 0; }
+
+# only the packages this device has, from the release's own files
+python3 - "$tmp/rel.json" > "$tmp/assets" <<'PY'
+import json, re, sys
+for a in json.load(open(sys.argv[1])).get("assets", []):
+    n, u = a.get("name", ""), a.get("browser_download_url", "")
+    if re.fullmatch(r"mscos[a-z-]*_[0-9A-Za-z.+~-]+_all\.deb", n) and u.startswith("https://"):
+        print(n, u)
+PY
+debs=()
+while read -r name url; do
+    pkg=${name%%_*}
+    dpkg -s "$pkg" >/dev/null 2>&1 || continue
+    echo "Downloading $name…"
+    curl --fail --silent --show-error --location --retry 3 -o "$tmp/$name" "$url"
+    debs+=("$tmp/$name")
+done < "$tmp/assets"
+[ ${#debs[@]} -gt 0 ] || { echo "The release $TAG has no packages for this device." >&2; exit 1; }
+export DEBIAN_FRONTEND=noninteractive
+echo "Installing mscOS $LATEST…"
+apt-get install -y -q -o Dpkg::Options::=--force-confold "${debs[@]}"
+echo "mscOS $LATEST is installed."

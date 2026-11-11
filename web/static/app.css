@@ -679,3 +679,4 @@ body[data-view="v-play"] .dock, body.in-setup .dock { display: none; }
 .mo-num small { color: var(--engraved); font-size: .8125rem; }
 .mod-body .raw { margin-top: 10px; border-top: 1px solid var(--hair); }
 #panels .fold-body > .row:first-child { margin-top: 0; }
+body:not(.has-transport) .needs-transport, body:not(.has-seek) .needs-seek { display: none !important; }

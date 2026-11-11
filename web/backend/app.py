@@ -23,12 +23,14 @@ import sys
 import tempfile
 import time
 
-from aiohttp import WSMsgType, web
+from aiohttp import ClientSession, ClientTimeout, WSMsgType, web
 import websockets
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bitcheck  # noqa: E402
 from auth import Auth  # noqa: E402
+import board  # noqa: E402
+import extmods  # noqa: E402
 import collect  # noqa: E402
 import i18n  # noqa: E402
 from i18n import T  # noqa: E402
@@ -363,7 +365,13 @@ class Hub:
         """What this installation has, so the panel shows only that."""
         f = {"amp": "none", "arcam": False, "plugins": list(self.plugins), "leds": bool(collect._leds()),
              "sources": [{"id": i, "label": p.label, "name": p.name, "protocol": p.protocol, "pipewire": p.pipewire,
+                          "transport": list(p.transport),
                           "hint": p.hint, "terms": p.terms, "terms_url": p.terms_url} for i, p in self.sources.items()]}
+        bp = board.profile()
+        speed = collect.read(f"/sys/class/net/{collect.net_if()}/speed").strip() if collect.net_if() else ""
+        f["board"] = {"power_button": bp["POWER_BUTTON"] != "no", "sd": bp["STORAGE"] == "sd",
+                      # a wired link whose speed can be chosen (the control is hidden otherwise)
+                      "link_mbps": int(speed) if speed.lstrip("-").isdigit() and int(speed) > 0 else None}
         for p in self.plugins.values():
             f.update(p.features())
         return f
@@ -1029,6 +1037,30 @@ async def soloist_command(request):
     return ok(result=r)
 
 
+@routes.post("/api/player")
+async def player_command(request):
+    """The panel's transport buttons, for whichever source plays: toggle, play, pause, next,
+    prev, seek (position_ms), shuffle (enabled), repeat (mode)."""
+    b = await body(request)
+    src, c = hub.source, b.get("command")
+    if src is None or c not in src.transport:
+        raise web.HTTPConflict(text=T("Källan tar inte det kommandot."))
+    kw: dict = {}
+    if c == "seek":
+        kw["position_ms"] = int(num(b.get("position_ms"), 0, 24 * 3600 * 1000, "position"))
+    if c == "shuffle":
+        kw["enabled"] = bool(b.get("enabled"))
+    if c == "repeat":
+        if b.get("mode") not in ("off", "context", "track"):
+            raise web.HTTPBadRequest(text=T("Okänt val"))
+        kw["mode"] = b["mode"]
+    try:
+        await src.command(c, **kw)
+    except RuntimeError as e:
+        raise web.HTTPBadGateway(text=str(e))
+    return ok()
+
+
 def _ha_soloist() -> dict:
     connected = hub.soloist_ws is not None
     a, p = hub.auth, hub.playback
@@ -1340,7 +1372,8 @@ KIND_ORDER = {"source": 0, "amp": 1, "device": 2, "notify": 3, "integration": 4}
 async def _plugin_list() -> list[dict]:
     out = []
     for pid, cls in sorted(hub.available_plugins.items(), key=lambda kv: (KIND_ORDER.get(kv[1].kind, 9), kv[0])):
-        d = {"id": pid, "kind": cls.kind, "name": cls.name, "description": cls.description,
+        d = {"id": pid, "kind": cls.kind, "name": cls.name, "description": cls.description, "external": cls.external,
+             "latest": _latest.get(pid),
              "requires": list(cls.requires), "enabled": pid in hub.settings.get("plugins", []),
              "running": pid in hub.plugins}
         if pid in hub.plugins:
@@ -1383,6 +1416,17 @@ async def plugins_check(request):
             _latest[pid] = v
         else:
             failed.append(pid)
+    async with ClientSession(timeout=ClientTimeout(total=15)) as http:  # modules installed beside mscOS
+        for pid, cls in hub.available_plugins.items():
+            src = (cls.external or {}).get("source")
+            if not src:
+                continue
+            try:
+                async with http.get(src) as r:
+                    _latest[pid] = extmods.check_manifest(json.loads(await r.text()), remote=True)["version"]
+            except Exception as e:  # noqa: BLE001
+                log.warning("newest version of %s: %s", pid, type(e).__name__)
+                failed.append(pid)
     _latest_t = time.time()
     return web.json_response({"plugins": await _plugin_list(), "restart_needed": _plugins_restart_needed(),
                               "checked": int(_latest_t), "failed": failed, "mscos": hub.status.get("system", {}).get("mscos", "")})
@@ -1394,8 +1438,11 @@ async def plugins_list(request):
                               "checked": int(_latest_t) or None, "mscos": hub.status.get("system", {}).get("mscos", "")})
 
 
+_ext_changed = False  # a module was installed, updated or removed: the panel must start again to load it
+
+
 def _plugins_restart_needed() -> bool:
-    return set(hub.settings.get("plugins", [])) != set(hub.plugins)
+    return _ext_changed or set(hub.settings.get("plugins", [])) != set(hub.plugins)
 
 
 @routes.post("/api/plugins/set")
@@ -1428,6 +1475,73 @@ async def plugins_set(request):
         log.info("modules now %s; restarting the panel", en)
         asyncio.get_running_loop().call_later(0.5, lambda: os._exit(0))  # systemd starts it again
     return ok(plugins=await _plugin_list(), restart_needed=_plugins_restart_needed())
+
+
+@routes.post("/api/plugins/install")
+async def plugins_install(request):
+    """Install or update a module that does not come with mscOS, from the address of its
+    module.json. A module runs inside the panel as root: the page says so before this."""
+    url = str((await body(request)).get("url", "")).strip()
+    if not url.startswith("https://") or len(url) > 500:
+        raise web.HTTPBadRequest(text=T("Ange adressen till modulens module.json (https)."))
+    if overlay_active():
+        raise web.HTTPConflict(text=T("Stäng av skrivskyddet först. Med skrivskyddat system försvinner installationen vid omstart."))
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=60)) as http:
+            async with http.get(url) as r:
+                m = extmods.check_manifest(json.loads(await r.text()), remote=True)
+            if m["id"] in pluginlib.SHIPPED:
+                raise ValueError("id")
+            async with http.get(m["archive"]) as r:
+                data = await r.content.read(extmods.MAX_BYTES + 1)
+        await asyncio.to_thread(extmods.unpack, data, m["sha256"], m["id"], url, m["version"])
+    except ValueError as e:
+        raise web.HTTPBadRequest(text=T("Modulen kunde inte installeras: {why}", why=e))
+    except (OSError, asyncio.TimeoutError) as e:
+        raise web.HTTPBadGateway(text=T("Modulen kunde inte hämtas: {why}", why=type(e).__name__))
+    log.info("module %s %s installed from its publisher", m["id"], m["version"])
+    global _ext_changed
+    _ext_changed = True
+    return ok(id=m["id"], version=m["version"])
+
+
+@routes.post("/api/plugins/remove")
+async def plugins_remove(request):
+    pid = str((await body(request)).get("id", ""))
+    cls = hub.available_plugins.get(pid)
+    if cls is None or cls.external is None:
+        raise web.HTTPNotFound(text=T("Okänd modul"))
+    hub.settings["plugins"] = [p for p in hub.settings.get("plugins", []) if p != pid]
+    await asyncio.get_running_loop().run_in_executor(None, hub.save_settings)
+    await asyncio.to_thread(extmods.remove, pid)
+    global _ext_changed
+    _ext_changed = True
+    return ok()
+
+
+# ---- mscOS itself: newer packages from its releases
+MSCOS_UPDATE = os.path.join(collect.LIB, "bin", "mscos-update")
+
+
+@routes.get("/api/system/mscos-update")
+async def mscos_update_check(request):
+    rc, out, err = await collect.run([MSCOS_UPDATE, "--check"], timeout=40)
+    try:
+        d = json.loads(out)
+    except ValueError:
+        raise web.HTTPBadGateway(text=T("Kunde inte söka efter en ny version av mscOS: {why}", why=(err or out).strip()[-200:] or rc))
+    return ok(**d)
+
+
+@routes.post("/api/system/mscos-update")
+async def mscos_update_run(request):
+    if overlay_active():
+        raise web.HTTPConflict(text=T("Stäng av skrivskyddet först. Med skrivskyddat system försvinner uppdateringar vid omstart."))
+    # in a unit of its own: the update restarts the panel, which must not take the update with it
+    rc, _, err = await collect.run(["systemd-run", "--collect", "--unit", "mscos-self-update", MSCOS_UPDATE], timeout=20)
+    if rc:
+        raise web.HTTPConflict(text=T("Uppdateringen kunde inte startas: {why}", why=err.strip()[-200:]))
+    return ok()
 
 
 @routes.post("/api/alerts/test")

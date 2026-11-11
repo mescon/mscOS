@@ -33,6 +33,7 @@ class Plugin:
     description: dict[str, str] = {}
     defaults: dict[str, Any] = {}  # its settings, merged into hub.settings (keys owned by the module)
     requires: tuple[str, ...] = ()  # other module kinds/ids it needs, e.g. ("amp",)
+    external: dict | None = None    # set for a module installed beside mscOS: its module.json
     # Settings the panel shows under the module (Modules view) and saves through /api/settings:
     #   {"key": ..., "type": "text" | "number" | "select" | "toggle" | "secret",
     #    "label": {sv, en}, "help": {sv, en}, "options": [[value, {sv, en}], ...] (select),
@@ -178,6 +179,9 @@ class SourcePlugin(Plugin):
     terms: dict[str, str] = {}         # shown before installing (licence, account needed)
     terms_url = ""
     has_slider = False                 # its app has a volume slider the bridge can use: slider()
+    # What the panel's buttons may ask of the player, through command():
+    #   toggle, play, pause, next, prev, seek (position_ms), shuffle (enabled), repeat (mode: off | context | track)
+    transport: tuple[str, ...] = ()
     updates = "manual"                 # "self": the player keeps itself up to date; "manual":
                                        # the panel looks for a newer one and runs the install script again
 
@@ -216,12 +220,18 @@ class SourcePlugin(Plugin):
         return None
 
     def now_playing(self) -> dict | None:
-        """What plays, for the panel: title, artist, album, image, format. None: not known."""
+        """What plays, for the panel: title, artist, album, image, playing, duration_ms,
+        position_ms with position_ts (when it was read, epoch seconds), codec, bitrate,
+        shuffle, repeat (off | context | track). None: not known."""
         return None
 
     async def state(self) -> dict:
         """Extra facts for the panel's status (version, ...)."""
         return {}
+
+    async def command(self, cmd: str, **kw) -> None:
+        """One of its transport commands. Raise RuntimeError with a text for the user."""
+        raise RuntimeError("no transport")
 
     async def names_changed(self) -> None:
         """The device's names changed (hub.names()): take the new name on the network."""
@@ -251,8 +261,44 @@ class SourcePlugin(Plugin):
         """Move that slider (the amplifier was changed elsewhere)."""
 
 
+SHIPPED: set[str] = set()  # ids of the modules that come with mscOS (filled by discover)
+
+
+def _discover_external(found: dict) -> None:
+    """Modules installed beside mscOS (<state>/plugins/<id>): see extmods.py. A shipped
+    module is never replaced by one of these."""
+    import importlib.util
+    import os
+    import sys
+    import extmods
+    if not os.path.isdir(extmods.DIR):
+        return
+    for name in sorted(os.listdir(extmods.DIR)):
+        path = os.path.join(extmods.DIR, name)
+        if name.startswith(".") or not os.path.isfile(os.path.join(path, "__init__.py")) or name in found:
+            continue
+        if not extmods.safe_dir(path):
+            log.warning("module %s is not loaded: its files must belong to root and be writable by root only", name)
+            continue
+        try:
+            spec = importlib.util.spec_from_file_location(f"mscos_ext_{name}", os.path.join(path, "__init__.py"),
+                                                          submodule_search_locations=[path])
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = mod
+            spec.loader.exec_module(mod)
+        except Exception:  # a broken module must not take the panel down
+            log.exception("module %s failed to load", name)
+            continue
+        cls = getattr(mod, "PLUGIN", None)
+        if isinstance(cls, type) and issubclass(cls, Plugin) and cls.id == name:
+            cls.external = extmods.manifest_of(path) or {"id": name, "version": ""}
+            found[cls.id] = cls
+        else:
+            log.warning("module %s: PLUGIN must be a Plugin class whose id is the directory's name", name)
+
+
 def discover() -> dict[str, type[Plugin]]:
-    """All modules shipped in this package."""
+    """All modules: those shipped in this package, then the ones installed beside mscOS."""
     found: dict[str, type[Plugin]] = {}
     for m in pkgutil.iter_modules(__path__):
         if not m.ispkg:
@@ -265,4 +311,9 @@ def discover() -> dict[str, type[Plugin]]:
         cls = getattr(mod, "PLUGIN", None)
         if isinstance(cls, type) and issubclass(cls, Plugin) and cls.id:
             found[cls.id] = cls
+    SHIPPED.update(found)
+    try:
+        _discover_external(found)
+    except Exception:  # noqa: BLE001
+        log.exception("modules beside mscOS")
     return found

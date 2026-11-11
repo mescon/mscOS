@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import os
 
+from aiohttp import web
+
 import collect
 from plugins import SourcePlugin
 
@@ -30,6 +32,27 @@ class Spotify(SourcePlugin):
     terms_url = "https://developer.spotify.com/documentation/soloist"
     has_slider = True
     updates = "self"  # soloist-update.timer, nightly: Spotify's builds expire
+    transport = ("toggle", "play", "pause", "next", "prev", "seek", "shuffle", "repeat")
+
+    async def command(self, cmd: str, **kw) -> None:
+        h = self.hub
+        send = lambda c, **a: h.soloist_cmd({"command": c, **a})  # noqa: E731
+        try:
+            if cmd == "toggle":
+                await send("pause" if h.playback.get("status") == "playing" else "play")
+            elif cmd in ("play", "pause"):
+                await send(cmd)
+            elif cmd in ("next", "prev"):
+                await send(f"skip_{cmd}")
+            elif cmd == "seek":
+                await send("seek", position_ms=int(kw["position_ms"]))
+            elif cmd == "shuffle":
+                await send("set_shuffle", enabled=bool(kw.get("enabled")))
+            elif cmd == "repeat":
+                await send("set_repeat_track", enabled=kw.get("mode") == "track")
+                await send("set_repeat_context", enabled=kw.get("mode") == "context")
+        except web.HTTPException as e:
+            raise RuntimeError(e.text)
 
     async def version(self) -> str | None:
         v = ((self.hub.status.get("soloist") or {}).get("version") or "").replace("soloist ", "")

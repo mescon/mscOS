@@ -56,6 +56,7 @@ class Librespot(SourcePlugin):
              "en": "go-librespot is downloaded from GitHub to this device. It is an independent open-source program, not made or approved by Spotify, and plays 320 kbit/s at most."}
     terms_url = "https://github.com/devgianlu/go-librespot"
     has_slider = True
+    transport = ("toggle", "play", "pause", "next", "prev", "seek", "shuffle", "repeat")
     defaults = {"librespot_name": "", "librespot_bitrate": 320, "librespot_volume": "software"}
     options = (
         {"key": "librespot_name", "type": "text", "label": {"sv": "Namn i Spotify-appen", "en": "Name in the Spotify app"},
@@ -223,10 +224,39 @@ class Librespot(SourcePlugin):
                 "playing": not st.get("paused") and not st.get("stopped"),
                 "duration_ms": t.get("duration"), "position_ms": t.get("position"), "position_ts": getattr(self, "_at", None),
                 "codec": t.get("codec") or "vorbis", "bitrate": t.get("bitrate") or self.hub.settings.get("librespot_bitrate"),
-                "user": st.get("username")}
+                "user": st.get("username"), "shuffle": bool(st.get("shuffle_context")),
+                "repeat": "track" if st.get("repeat_track") else "context" if st.get("repeat_context") else "off"}
 
     async def state(self) -> dict:
         return {"device_name": self.device_name(), "session": self.playstate is not None}
+
+    async def _post(self, path: str, data: dict | None = None) -> None:
+        if self.http is None:
+            self.http = ClientSession(timeout=ClientTimeout(total=4))
+        try:
+            async with self.http.post(f"http://{API}/player/{path}", json=data or {}) as r:
+                await r.read()
+                if r.status >= 400:
+                    raise RuntimeError(T("Spelaren tog inte emot kommandot ({status}).", status=r.status))
+        except OSError:
+            raise RuntimeError(T("Spelaren svarar inte."))
+
+    async def command(self, cmd: str, **kw) -> None:
+        if self.playstate is None:
+            raise RuntimeError(T("Välj enheten i Spotify-appen först."))
+        if cmd == "toggle":
+            await self._post("playpause")
+        elif cmd == "play":
+            await self._post("resume")
+        elif cmd in ("pause", "next", "prev"):
+            await self._post(cmd)
+        elif cmd == "seek":
+            await self._post("seek", {"position": int(kw["position_ms"])})
+        elif cmd == "shuffle":
+            await self._post("shuffle_context", {"shuffle_context": bool(kw.get("enabled"))})
+        elif cmd == "repeat":
+            await self._post("repeat_track", {"repeat_track": kw.get("mode") == "track"})
+            await self._post("repeat_context", {"repeat_context": kw.get("mode") == "context"})
 
     # ---- follow go-librespot while it is the source
     async def _fetch(self) -> None:
