@@ -127,9 +127,76 @@ class Spotify(SourcePlugin):
                             T("{days} dagar kvar. Nattens uppdatering har inte hittat en nyare version; prova Sök ny version i panelen.", days=days),
                             cooldown=24 * 3600)
 
+    options = (
+        {"key": "soloist_normalization", "type": "toggle", "label": {"sv": "Normalisera volymen", "en": "Normalize the volume"},
+         "help": {"sv": "Av ger bitperfekt ljud. Spotify-appens reglage når inte Soloist, så det styrs här. Soloist startas om när du ändrar.",
+                  "en": "Off gives bit-perfect audio. The Spotify app's own switch does not reach Soloist, so it is set here. Soloist restarts when you change it."}},
+        {"key": "soloist_key", "type": "secret", "label": {"sv": "Utvecklarnyckel", "en": "Developer key"},
+         "placeholder": {"sv": "Klistra in en ny nyckel", "en": "Paste a new key"},
+         "help": {"sv": "Nyckeln lagras bara på enheten och visas aldrig. Efter bytet startas Soloist om och kontrolleras, vilket tar ungefär 15 sekunder. Startar den inte, återställs den tidigare nyckeln.",
+                  "en": "The key is stored on the device only and never shown. After the change Soloist is restarted and checked, which takes about 15 seconds. If it does not start, the previous key is put back."},
+         "link": {"url": "https://developer.spotify.com/documentation/soloist",
+                  "label": {"sv": "Skapa en egen nyckel på Spotifys utvecklarsida", "en": "Create a key of your own on Spotify's developer site"}}},
+    )
+    actions = (
+        {"name": "restart", "label": {"sv": "Starta om Soloist", "en": "Restart Soloist"}},
+        {"name": "update", "label": {"sv": "Sök ny version", "en": "Look for a new version"}},
+    )
+
     def update_settings(self, b: dict, upd: dict) -> None:
         if "auto_verify" in b:
             upd["auto_verify"] = bool(b["auto_verify"])
+        if "soloist_normalization" in b:
+            if not so.prefs_paths():
+                raise web.HTTPConflict(text=T("Soloist har inte loggat in än. Anslut från Spotify-appen först."))
+            upd["soloist_normalization"] = bool(b["soloist_normalization"])
+
+    async def settings_applied(self, upd: dict) -> None:
+        if "soloist_normalization" in upd:
+            await self.apply_normalization(upd["soloist_normalization"])
+
+    async def set_secret(self, key: str, value: str) -> None:
+        if key == "soloist_key" and value:
+            await self.set_key(value)
+
+    def secret_set(self, key: str) -> bool:
+        return so.api_key_info()["set"]
+
+    async def action(self, name: str) -> dict | None:
+        if name == "restart":
+            rc, _, err = await self.hub.user_systemctl("restart", "soloist.service")
+            if rc:
+                raise RuntimeError(err.strip()[-200:])
+            return {"toast": {"sv": "Soloist startades om", "en": "Soloist was restarted"}}
+        await self.hub.run_job("soloist-update", ["/usr/local/sbin/soloist-update"])
+        return None
+
+    def status(self) -> dict | None:
+        solo = self.hub.status.get("soloist") or {}
+        days = solo.get("days_left")
+        if not so.api_key_info()["set"]:
+            return {"state": "warn", "text": {"sv": "Ingen nyckel är inställd", "en": "No key is entered"}}
+        if solo.get("service") not in (None, "active"):
+            return {"state": "warn", "text": {"sv": "Soloist kör inte", "en": "Soloist is not running"}}
+        if days is not None:
+            return {"state": "warn" if days < 14 else "ok",
+                    "text": {"sv": f"Bygget gäller {days} dagar till", "en": f"The build is valid for {days} more days"}}
+        return None
+
+    def facts(self) -> list[dict]:
+        solo, k = self.hub.status.get("soloist") or {}, so.api_key_info()
+        if not solo:
+            return []
+        yes = lambda ok, sv, en, sv2, en2: {"value": {"sv": sv if ok else sv2, "en": en if ok else en2}, "state": "good" if ok else "warn"}  # noqa: E731
+        nxt = re.search(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", str(solo.get("update_next") or ""))
+        changed = time.strftime("%Y-%m-%d %H:%M", time.localtime(k["changed"])) if k.get("changed") else ""
+        return [
+            {"label": {"sv": "Tjänst", "en": "Service"}, **yes(solo.get("service") == "active", "Igång", "Running", str(solo.get("service") or "Okänd"), str(solo.get("service") or "Unknown"))},
+            {"label": {"sv": "Spotify", "en": "Spotify"}, **yes(bool(self.auth.get("logged_in")), "Inloggad", "Signed in", "Inte inloggad: välj enheten i Spotify-appen", "Not signed in: choose the device in the Spotify app")},
+            {"label": {"sv": "Realtidsprioritet", "en": "Realtime priority"}, **yes(solo.get("rt_watcher") == "active", "Aktiv", "On", "Av", "Off")},
+            {"label": {"sv": "Nyckel", "en": "Key"}, **yes(k["set"], f"Inställd{', ändrad ' + changed if changed else ''}", f"Entered{', changed ' + changed if changed else ''}", "Saknas: Soloist kan inte starta", "Missing: Soloist cannot start")},
+            {"label": {"sv": "Nästa versionskoll", "en": "Next version check"}, "value": nxt.group(0) if nxt else "–", "state": ""},
+        ]
 
     # ---- source
     async def installed(self) -> bool:
@@ -602,6 +669,45 @@ class Spotify(SourcePlugin):
         await self.hub.user_systemctl("start", "soloist.service")
         return not so.normalization_mismatch(enabled)
 
+    async def set_key(self, key: str) -> dict:
+        """Replace the Spotify developer key. Never echoed or logged. Rolled back if Soloist
+        does not stay up with the new key."""
+        if not re.fullmatch(r"[A-Za-z0-9_\-.:+/=]{16,512}", key):
+            raise web.HTTPBadRequest(text=T("Nyckeln ser inte giltig ut: 16–512 tecken, bokstäver, siffror och _-.:+/=."))
+        path = so.SOLOIST_ENV
+        old = collect.read(path)
+        if f"SOLOIST_API_KEY={key}" in old:
+            return {"changed": False}
+        st = os.stat(path) if os.path.exists(path) else None
+
+        def write(text: str):
+            tmp = path + ".tmp"
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o640)
+            with os.fdopen(fd, "w") as f:
+                f.write(text)
+            if st:
+                os.chown(tmp, st.st_uid, st.st_gid)
+            os.replace(tmp, path)
+            self.hub.persist(path)
+
+        new_text = re.sub(r"^SOLOIST_API_KEY=.*$", f"SOLOIST_API_KEY={key}", old, flags=re.M) \
+            if re.search(r"^SOLOIST_API_KEY=", old, re.M) else old.rstrip("\n") + f"\nSOLOIST_API_KEY={key}\n"
+        write(new_text)
+        if not self.hub.soloist:  # another source owns the DAC: the key is used when Spotify is chosen
+            return {"changed": True, "started": False}
+        await self.hub.user_systemctl("restart", "soloist.service")
+        # Baseline after the manual restart (which resets the automatic-restart counter).
+        _, before, _ = await self.hub.user_systemctl("show", "soloist.service", "-p", "NRestarts", "--value")
+        await asyncio.sleep(12)  # Soloist restarts after 5 s if the key is rejected
+        _, active, _ = await self.hub.user_systemctl("is-active", "soloist.service")
+        _, after, _ = await self.hub.user_systemctl("show", "soloist.service", "-p", "NRestarts", "--value")
+        if active.strip() != "active" or after.strip() != before.strip():
+            write(old)
+            await self.hub.user_systemctl("restart", "soloist.service")
+            raise web.HTTPUnprocessableEntity(text=T("Soloist startade inte med den nya nyckeln. Den tidigare nyckeln är återställd."))
+        await self.hub.refresh_status()
+        return {"changed": True}
+
     # ---- HTTP API
     def routes(self, routes) -> None:
         hub, sp = self.hub, self
@@ -671,44 +777,7 @@ class Spotify(SourcePlugin):
 
         @routes.post("/api/soloist/apikey")
         async def soloist_apikey(request):
-            """Replace the Spotify developer key. Never echoed or logged. Rolled back if Soloist
-            does not stay up with the new key."""
-            key = str((await hub.body(request)).get("key", "")).strip()
-            if not re.fullmatch(r"[A-Za-z0-9_\-.:+/=]{16,512}", key):
-                raise web.HTTPBadRequest(text=T("Nyckeln ser inte giltig ut: 16–512 tecken, bokstäver, siffror och _-.:+/=."))
-            path = so.SOLOIST_ENV
-            old = collect.read(path)
-            if f"SOLOIST_API_KEY={key}" in old:
-                return hub.ok(changed=False)
-            st = os.stat(path) if os.path.exists(path) else None
-
-            def write(text: str):
-                tmp = path + ".tmp"
-                fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o640)
-                with os.fdopen(fd, "w") as f:
-                    f.write(text)
-                if st:
-                    os.chown(tmp, st.st_uid, st.st_gid)
-                os.replace(tmp, path)
-                hub.persist(path)
-
-            new_text = re.sub(r"^SOLOIST_API_KEY=.*$", f"SOLOIST_API_KEY={key}", old, flags=re.M) \
-                if re.search(r"^SOLOIST_API_KEY=", old, re.M) else old.rstrip("\n") + f"\nSOLOIST_API_KEY={key}\n"
-            write(new_text)
-            if not hub.soloist:  # another source owns the DAC: the key is used when Spotify is chosen
-                return hub.ok(changed=True, started=False)
-            await hub.user_systemctl("restart", "soloist.service")
-            # Baseline after the manual restart (which resets the automatic-restart counter).
-            _, before, _ = await hub.user_systemctl("show", "soloist.service", "-p", "NRestarts", "--value")
-            await asyncio.sleep(12)  # Soloist restarts after 5 s if the key is rejected
-            _, active, _ = await hub.user_systemctl("is-active", "soloist.service")
-            _, after, _ = await hub.user_systemctl("show", "soloist.service", "-p", "NRestarts", "--value")
-            if active.strip() != "active" or after.strip() != before.strip():
-                write(old)
-                await hub.user_systemctl("restart", "soloist.service")
-                raise web.HTTPUnprocessableEntity(text=T("Soloist startade inte med den nya nyckeln. Den tidigare nyckeln är återställd."))
-            await hub.refresh_status()
-            return hub.ok(changed=True)
+            return hub.ok(**await sp.set_key(str((await hub.body(request)).get("key", "")).strip()))
 
         @routes.post("/api/audio/test")
         async def audio_test(request):

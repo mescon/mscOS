@@ -147,7 +147,6 @@ function renderNames() {
 function renderFeatures() {
   const f = S.features || {}, amp = f.amp && f.amp !== "none";
   $("#amp").hidden = !amp; $("#f-amp").hidden = !amp;
-  $("#f-spotify").hidden = !(f.plugins || []).includes("spotify");  // Soloist: key, name, updates
   const led = $("#leds").closest("label"); led.hidden = f.leds === false; led.nextElementSibling.hidden = f.leds === false;
   // what only Spotify Lossless (Soloist) has: the sample-exact verification, and its build's expiry
   const solo = (f.plugins || []).includes("spotify");
@@ -481,28 +480,8 @@ function renderSignal() {
 
 // ------------------------------------------------------------------ status panels
 function renderStatus() {
-  const st = S.status, sys = st.system || {}, solo = st.soloist || {};
+  const st = S.status, sys = st.system || {};
   renderNames();
-  // Soloist
-  const days = solo.days_left;
-  spec($("#solo-kv"), [
-    [tr("Tjänst"), solo.service === "active" ? tr("Igång") : esc(solo.service || tr("Okänd")), solo.service === "active" ? "good" : "warn"],
-    ["Spotify", S.auth.logged_in ? tr("Inloggad") : tr("Inte inloggad"), S.auth.logged_in ? "good" : ""],
-    ["Version", esc((solo.version || "").replace(/^soloist /, "").split(" ")[0] || "–")],
-    [tr("Realtidsprioritet"), solo.rt_watcher === "active" ? tr("Aktiv") : tr("Av"), solo.rt_watcher === "active" ? "good" : "warn"],
-    [tr("Nästa versionskoll"), esc(fmtDate(solo.update_next))],
-  ]);
-  const v = $("#validity");
-  if (days != null) {
-    v.hidden = false; v.classList.toggle("warn", days < 14);
-    $("#validity-fill").style.width = `${Math.max(0, Math.min(100, days / 90 * 100))}%`;
-    $("#validity-txt").textContent = days > 0
-      ? tr`Spotify-bygget gäller ${days} dagar till. En ny version hämtas automatiskt varje natt.`
-      : tr("Spotify-bygget har gått ut. Sök ny version.");
-  }
-  $("#norm").checked = !!solo.normalization;
-  const k = solo.api_key || {};
-  $("#key-state").textContent = k.set ? tr`Inställd${k.changed ? tr`, senast ändrad ${stamp(k.changed)}` : ""}.` : tr("Ingen nyckel är inställd. Soloist kan inte starta.");
   // Device
   const memUsed = sys.mem_total - sys.mem_available;
   spec($("#sys-kv"), [
@@ -519,7 +498,6 @@ function renderStatus() {
   ]);
   $("#leds").checked = !!st.leds;
   $("#overlay").checked = !!sys.root_overlay;
-  fv("spotify", solo.service && solo.service !== "active" ? tr("Kör inte") : days != null ? tr`${days} dagar kvar` : "", (solo.service && solo.service !== "active") || (days != null && days < 14));
   fv("device", [sys.pmic_temp_c != null ? `${dec(sys.pmic_temp_c)} °C` : null, st.supply ? `${dec(st.supply.v, 2)} V` : null].filter(Boolean).join(", "));
   renderSysHead();
 }
@@ -660,8 +638,6 @@ function startJob(url, title, data) { $("#job").hidden = false; $("#job-title").
 $("#job-close").addEventListener("click", () => { $("#job").hidden = true; });
 
 // ------------------------------------------------------------------ system actions
-$("#solo-restart").addEventListener("click", async () => { await post("/api/soloist/restart"); toast(tr("Soloist startades om")); });
-$("#solo-update").addEventListener("click", () => startJob("/api/soloist/update", tr("Söker ny Soloist-version…")));
 $("#names-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   try {
@@ -677,23 +653,6 @@ function netNameMode(v) {
   $("#net-name-custom").hidden = v !== "custom";
 }
 $("#net-name").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { netNameMode(b.dataset.v); if (b.dataset.v === "custom") $("#net-name-custom").focus(); } });
-$("#key-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const inp = $("#key-in"), b = $("#key-save"), key = inp.value.trim();
-  if (!key) { inp.focus(); return; }
-  b.disabled = true; b.textContent = tr("Kontrollerar…");
-  $("#key-state").textContent = tr("Soloist startas om med den nya nyckeln. Det tar ungefär 15 sekunder.");
-  try {
-    const r = await post("/api/soloist/apikey", { key });
-    toast(r.changed ? tr("Nyckeln är bytt och Soloist kör") : tr("Det är redan den nyckeln"));
-  } catch { /* toast shown by post() */ }
-  inp.value = ""; b.disabled = false; b.textContent = tr("Byt nyckel"); renderStatus();
-});
-$("#norm").addEventListener("change", async (e) => {
-  const on = e.target.checked;
-  try { await post("/api/soloist/normalization", { enabled: on }); toast(on ? tr("Normalisering på. Soloist startades om.") : tr("Normalisering av. Soloist startades om.")); }
-  catch { e.target.checked = !on; }
-});
 $("#apt-check").addEventListener("click", async () => {
   const b = $("#apt-check"); b.disabled = true; $("#apt-info").textContent = tr("Söker…");
   try {
@@ -1147,8 +1106,9 @@ function playerVersion(p) {
 function modCard(p, open) {
   const wait = p.enabled !== p.running, st = p.status;
   const state = wait ? "wait" : !p.enabled ? "off" : (p.installed === false || st?.state === "warn") ? "warn" : "on";
-  const panel = document.querySelector(`.mod-panel[data-for="${p.id}"]`);
-  const more = p.running && (p.options || p.log?.length || (panel && !panel.hidden));
+  const more = p.running && (p.options || p.log?.length || p.facts?.length || p.actions?.length);
+  const facts = p.running && p.facts?.length ? `<dl class="spec">${p.facts.map((f) => `<dt>${esc(locs(f.label))}</dt><dd${f.state ? ` class="${esc(f.state)}"` : ""}>${esc(locs(f.value))}</dd>`).join("")}</dl>` : "";
+  const acts = p.running && p.actions?.length ? `<div class="row wrap admin">${p.actions.map((a) => `<button class="btn" data-act="${esc(a.name)}">${esc(locs(a.label))}</button>`).join("")}</div>` : "";
   const logbox = p.running && p.log?.length ? `<details class="raw admin"><summary>${tr("Kommunikation")}</summary><pre class="console">${esc(p.log.join("\n"))}</pre></details>` : "";
   const meta = [st ? loc(st.text) : "", modVersion(p), wait ? (p.enabled ? tr("Slås på när panelen startas om") : tr("Stängs av när panelen startas om")) : ""].filter(Boolean);
   return `<li class="mod ${state}" data-id="${esc(p.id)}">
@@ -1160,20 +1120,18 @@ function modCard(p, open) {
     ${p.module_latest ? `<div class="mod-install admin"><button class="btn primary" data-cat-install="${esc(p.id)}">${tr`Uppdatera modulen till ${p.module_latest}`}</button></div>` : ""}
     ${p.external ? `<div class="mod-install admin row wrap">${p.external.source && p.external.source !== "catalogue" && p.latest && p.latest !== p.external.version ? `<button class="btn primary" data-ext-update="${esc(p.external.source)}">${tr`Uppdatera till ${p.latest}`}</button>` : ""}<button class="btn" data-ext-remove="${esc(p.id)}">${p.external.replaces ? tr("Återgå till den som följde med mscOS") : tr("Ta bort modulen")}</button></div>` : ""}
     ${modUpdate(p) ? `<div class="mod-install admin"><button class="btn primary" data-install="${esc(p.id)}" data-update="1">${tr`Uppdatera till ${p.latest}`}</button></div>` : ""}${modInstall(p)}
-    ${more ? `<details class="mod-more"${open ? " open" : ""}><summary>${tr("Inställningar")}</summary><div class="mod-body">${modOptions(p)}${logbox}</div></details>` : ""}
+    ${more ? `<details class="mod-more"${open ? " open" : ""}><summary>${tr("Inställningar")}</summary><div class="mod-body">${facts}${acts}${modOptions(p)}${logbox}</div></details>` : ""}
   </li>`;
 }
 function renderMods() {
-  const box = $("#mods"), stash = $("#mod-panels");
+  const box = $("#mods");
   if (box.contains(document.activeElement) && /^(text|password|number)$/.test(document.activeElement.type || "")) return;
   const open = new Set([...box.querySelectorAll("details[open]")].map((d) => d.closest("li").dataset.id));
-  $$(".mod-panel").forEach((el) => stash.append(el));  // back to the shelf while the cards are rebuilt
   box.innerHTML = Object.keys(KINDS).map((k) => {
     const list = MODS.plugins.filter((p) => p.kind === k);
     return list.length ? `<section class="mod-group"><h3>${KINDS[k]}</h3>${KIND_HELP[k] ? `<p class="fine">${KIND_HELP[k]}</p>` : ""}
       <ul class="modlist">${list.map((p) => modCard(p, open.has(p.id))).join("")}</ul></section>` : "";
   }).join("");
-  $$(".mod-panel").forEach((el) => { const b = box.querySelector(`li[data-id="${el.dataset.for}"] .mod-body`); if (b) b.append(el); });
   const locked = document.body.classList.contains("locked");
   $$("#mods input").forEach((i) => { i.disabled = locked; });
   $("#mods-locked").hidden = !locked;
@@ -1188,7 +1146,9 @@ function renderMods() {
 function modOptions(p) {
   if (!p.options || !p.running) return "";
   return `<div class="mod-opts admin">${p.options.map((o) => {
-    const id = `mo-${o.key}`, v = o.value ?? "", key = `data-opt="${esc(o.key)}"`, help = o.help ? `<p class="fine">${esc(loc(o.help))}</p>` : "";
+    const id = `mo-${o.key}`, v = o.value ?? "", key = `data-opt="${esc(o.key)}"`;
+    const help = (o.help ? `<p class="fine">${esc(loc(o.help))}</p>` : "")
+      + (o.link ? `<p class="fine"><a href="${esc(o.link.url)}" target="_blank" rel="noopener noreferrer">${esc(loc(o.link.label))}</a></p>` : "");
     const ph = esc(typeof o.placeholder === "object" ? loc(o.placeholder) : o.placeholder || "");
     if (o.type === "toggle") return `<label class="toggle"><input type="checkbox" id="${id}" ${key}${v ? " checked" : ""}><span class="toggle-ui" aria-hidden="true"></span><span>${esc(loc(o.label))}</span></label>${help}`;
     const input = o.type === "select"
@@ -1202,7 +1162,8 @@ function modOptions(p) {
 $("#mods").addEventListener("change", async (e) => {
   const i = e.target.closest("[data-opt]"); if (!i) return;
   const val = i.tagName === "SELECT" ? JSON.parse(i.value) : i.type === "checkbox" ? i.checked : i.type === "number" ? +i.value : i.value;
-  try { await post("/api/settings", { [i.dataset.opt]: val }); toast(tr("Sparat")); if (i.dataset.secret) i.value = ""; loadMods(); } catch { loadMods(); }
+  if (i.dataset.secret) { if (!i.value.trim()) return; toast(tr("Sparar och kontrollerar…")); }
+  try { await post("/api/settings", { [i.dataset.opt]: val }); toast(tr("Sparat")); if (i.dataset.secret) { i.value = ""; i.blur(); } loadMods(); } catch { if (!i.dataset.secret) loadMods(); }
 });
 // A source's player is not part of mscOS: it is downloaded to the device from its publisher.
 function modInstall(p) {
@@ -1215,6 +1176,12 @@ $("#mods").addEventListener("click", (e) => {
   b.disabled = true;
   const p = MODS.plugins.find((x) => x.id === b.dataset.install);
   startJob("/api/sources/install", b.dataset.update ? tr`Uppdaterar ${loc(p?.name)}…` : tr`Installerar ${loc(p?.name)}…`, { id: b.dataset.install });
+});
+$("#mods").addEventListener("click", async (e) => {  // a button the module describes
+  const b = e.target.closest("button[data-act]"); if (!b) return;
+  b.disabled = true;
+  try { const r = await post("/api/plugins/action", { id: b.closest("li").dataset.id, name: b.dataset.act }); if (r.toast) toast(locs(r.toast)); } catch {}
+  b.disabled = false; setTimeout(loadMods, 1500);
 });
 // modules that do not come with mscOS: install from the publisher's module.json, update, remove
 async function extInstall(url) {

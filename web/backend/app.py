@@ -801,7 +801,7 @@ async def set_settings(request):
             raise web.HTTPBadRequest(text=T("Ogiltigt värde"))
     # all valid: apply
     for k, p in secrets.items():
-        hub.set_secret(k, str(b[k]).strip())
+        await p.set_secret(k, str(b[k]).strip())
         await p.settings_applied({k: True})
     if tz is not None:
         await collect.run(["timedatectl", "set-timezone", tz], timeout=10)
@@ -869,9 +869,11 @@ async def _plugin_list() -> list[dict]:
         if pid in hub.plugins:
             opts = hub.plugins[pid].option_list()
             if opts:  # a secret's value never leaves the device: only whether one is set
-                d["options"] = [{**o, "value": None, "set": bool(hub.secret(o["key"]))} if o["type"] == "secret"
+                d["options"] = [{**o, "value": None, "set": hub.plugins[pid].secret_set(o["key"])} if o["type"] == "secret"
                                 else {**o, "value": hub.settings.get(o["key"])} for o in opts]
             d["log"] = hub.plugins[pid].log()
+            d["facts"] = hub.plugins[pid].facts()
+            d["actions"] = list(hub.plugins[pid].actions)
         if cls.kind == "source":  # its player is installed on the device, from its publisher
             d.update(terms=cls.terms, terms_url=cls.terms_url, updates=cls.updates,
                      installed=await hub.plugins[pid].installed() if pid in hub.plugins else None)
@@ -1005,6 +1007,20 @@ async def fetch_catalogue(http) -> list[dict]:
             and extmods.VERSION.fullmatch(str(m.get("version", ""))) and isinstance(m.get("files"), list)]
     _catalogue = (time.time(), mods)
     return mods
+
+
+@routes.post("/api/plugins/action")
+async def plugins_action(request):
+    """A button in a module's card (Plugin.actions)."""
+    b = await body(request)
+    p = hub.plugins.get(str(b.get("id", "")))
+    if p is None or b.get("name") not in {a["name"] for a in p.actions}:
+        raise web.HTTPNotFound(text=T("Okänd modul"))
+    try:
+        r = await p.action(b["name"])
+    except RuntimeError as e:
+        raise web.HTTPBadGateway(text=str(e))
+    return ok(**(r or {}))
 
 
 @routes.post("/api/plugins/catalogue")

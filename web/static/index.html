@@ -289,31 +289,6 @@
         <button class="btn">Installera</button>
       </form>
     </section>
-    <!-- settings that belong to one module; app.js moves each into its module's card -->
-    <div id="mod-panels" hidden>
-      <div class="mod-panel" id="f-spotify" data-for="spotify">
-          <dl class="spec" id="solo-kv"></dl>
-          <div class="validity" id="validity" hidden><div class="validity-bar"><i id="validity-fill"></i></div><p class="fine" id="validity-txt"></p></div>
-          <div class="row wrap admin">
-            <button class="btn" id="solo-restart">Starta om Soloist</button>
-            <button class="btn" id="solo-update">Sök ny version</button>
-          </div>
-          <div class="admin">
-            <h4 class="sub">Volymnormalisering</h4>
-            <label class="toggle"><input type="checkbox" id="norm"><span class="toggle-ui" aria-hidden="true"></span><span>Normalisera volymen</span></label>
-            <p class="fine">Av ger bitperfekt ljud. Spotify-appens reglage når inte Soloist, så det styrs här.</p>
-            <h4 class="sub">Utvecklarnyckel</h4>
-            <p class="fine" id="key-state">–</p>
-            <form id="key-form" class="key-form">
-              <input id="key-in" type="password" autocomplete="off" spellcheck="false" aria-label="Ny Soloist-nyckel" placeholder="Klistra in ny nyckel">
-              <button class="btn" id="key-save">Byt nyckel</button>
-            </form>
-            <p class="fine"><a href="https://developer.spotify.com/documentation/soloist" target="_blank" rel="noopener noreferrer">Skapa en egen nyckel på Spotifys utvecklarsida</a></p>
-            <p class="fine">Nyckeln lagras bara på enheten och visas aldrig. Efter bytet startas Soloist om och kontrolleras. Startar den inte, återställs den tidigare nyckeln.</p>
-          </div>
-        
-      </div>
-    </div>
   </section>
 
   <!-- ===================================================== System: the device itself -->

@@ -39,7 +39,8 @@ class Plugin:
     # Settings the panel shows under the module (Modules view) and saves through /api/settings:
     #   {"key": ..., "type": "text" | "number" | "select" | "toggle" | "secret",
     #    "label": {sv, en}, "help": {sv, en}, "options": [[value, {sv, en}], ...] (select),
-    #    "placeholder": ..., "min"/"max"/"step"/"unit" (number)}
+    #    "placeholder": ..., "min"/"max"/"step"/"unit" (number),
+    #    "link": {"url", "label": {sv, en}} (shown under the help text)}
     # A "secret" (an address with a token, a key) is kept in the root-only secrets file,
     # never in the settings and never sent to the panel: hub.secret(key) reads it.
     options: tuple[dict, ...] = ()
@@ -117,6 +118,28 @@ class Plugin:
     def status(self) -> dict | None:
         """One line for the Modules view: {"state": "ok" | "warn" | "idle", "text": {sv, en}}."""
         return None
+
+    def facts(self) -> list[dict]:
+        """Rows of state for its card under Modules:
+        [{"label": {sv, en}, "value": text or {sv, en}, "state": "good" | "warn" | ""}]."""
+        return []
+
+    # Buttons in its card: ({"name", "label": {sv, en}}, ...); a press calls action(name).
+    actions: tuple[dict, ...] = ()
+
+    async def action(self, name: str) -> dict | None:
+        """Do it. Return {"toast": {sv, en}} to tell the user, or start a job (hub.run_job),
+        whose output the panel shows. Raise RuntimeError with a text when it cannot be done."""
+        return None
+
+    async def set_secret(self, key: str, value: str) -> None:
+        """Store one of its "secret" options. By default in the core's root-only secrets
+        file; a module whose secret lives elsewhere (a player's own key file) overrides this
+        and secret_set()."""
+        self.hub.set_secret(key, value)
+
+    def secret_set(self, key: str) -> bool:
+        return bool(self.hub.secret(key))
 
     def log(self) -> list[str] | None:
         """Recent lines of its communication, for troubleshooting in the Modules view."""
