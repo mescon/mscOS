@@ -89,6 +89,21 @@ class Plugin:
         """Fields for the compact state API (/api/ha and the like)."""
         return {}
 
+    async def tick(self) -> None:
+        """Every five seconds, with the core's sampling: light periodic work."""
+
+    async def check_health(self) -> None:
+        """With the core's health check (every 5 s with a panel open, else once a minute):
+        raise the module's own alerts through hub.alert."""
+
+    def save_state(self) -> dict:
+        """Small state to keep across restarts, merged into the core's stats file (written
+        rarely). Read it back in __init__ from hub.saved_stats."""
+        return {}
+
+    def clear_history(self) -> None:
+        """The user cleared the history (dropouts, verification log)."""
+
     def status(self) -> dict | None:
         """One line for the Modules view: {"state": "ok" | "warn" | "idle", "text": {sv, en}}."""
         return None
@@ -179,6 +194,8 @@ class SourcePlugin(Plugin):
     terms: dict[str, str] = {}         # shown before installing (licence, account needed)
     terms_url = ""
     has_slider = False                 # its app has a volume slider the bridge can use: slider()
+    pushes_playing = False             # it tells the core itself when playback starts and stops
+                                       # (hub._set_playing); otherwise the core asks playing()
     # What the panel's buttons may ask of the player, through command():
     #   toggle, play, pause, next, prev, seek (position_ms), shuffle (enabled), repeat (mode: off | context | track)
     transport: tuple[str, ...] = ()
@@ -228,6 +245,12 @@ class SourcePlugin(Plugin):
     async def state(self) -> dict:
         """Extra facts for the panel's status (version, ...)."""
         return {}
+
+    def lost_dac(self) -> None:
+        """Another source was chosen: forget what was playing."""
+
+    def play_began(self) -> None:
+        """Playback started here after a pause (not a track change)."""
 
     async def command(self, cmd: str, **kw) -> None:
         """One of its transport commands. Raise RuntimeError with a text for the user."""
