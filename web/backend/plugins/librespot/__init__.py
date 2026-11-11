@@ -40,7 +40,7 @@ UNIT = f"{collect.AUDIO_HOME}/.config/systemd/user/librespot.service"
 
 class Librespot(SourcePlugin):
     id = "librespot"
-    label = "Spotify"
+    label = "Spotify Connect"
     protocol = "Spotify Connect"
     name = {"sv": "Spotify Connect (librespot)", "en": "Spotify Connect (librespot)"}
     description = {"sv": "Spotify Connect utan nyckel: välj enheten i Spotify-appen. Ogg Vorbis 320 kbit/s, inte Lossless. Kräver Premium.",

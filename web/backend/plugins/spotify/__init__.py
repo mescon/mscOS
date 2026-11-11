@@ -18,7 +18,7 @@ BIN = "/usr/local/bin/soloist"
 
 class Spotify(SourcePlugin):
     id = "spotify"
-    label = "Spotify"
+    label = "Spotify Lossless"
     protocol = "Spotify Connect"
     name = {"sv": "Spotify Lossless (Soloist)", "en": "Spotify Lossless (Soloist)"}
     description = {"sv": "Spotify Connect i Lossless, bitperfekt. Kräver Premium och en egen utvecklarnyckel från Spotify.",

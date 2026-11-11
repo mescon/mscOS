@@ -76,6 +76,15 @@ button, input, select { font: inherit; color: inherit; letter-spacing: inherit; 
 #dev-name { color: var(--ink); }
 .link-led { width: 6px; height: 6px; border-radius: 50%; background: var(--engraved); opacity: .5; flex: none; }
 .source { display: flex; gap: 2px; }
+/* three or more sources: on a phone the switch gets its own row under the name, and scrolls
+   sideways rather than squeezing the name */
+@media (max-width: 720px) {
+  .masthead:has(.source.many) { flex-wrap: wrap; row-gap: 6px; }
+  .masthead:has(.source.many) .ident { flex-basis: 100%; }
+  .source.many { flex: 0 0 100%; margin: 0 -8px; overflow-x: auto; scrollbar-width: none; }
+  .source.many::-webkit-scrollbar { display: none; }
+  .source.many button { white-space: nowrap; flex: none; padding: 0 7px; font-size: .8125rem; letter-spacing: .01em; gap: 6px; }
+}
 .source button { appearance: none; background: none; border: 0; cursor: pointer; display: flex; align-items: center; gap: 7px;
   min-height: 44px; padding: 0 8px; font-size: .875rem; letter-spacing: .03em; color: var(--engraved); }
 .source button i { width: 5px; height: 5px; border-radius: 50%; background: transparent; transition: background .3s, box-shadow .3s; }

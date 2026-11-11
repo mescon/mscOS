@@ -167,6 +167,7 @@ function renderSource() {
     seg.dataset.sig = sig;
     seg.innerHTML = list.map((s) => `<button role="radio" data-v="${esc(s.id)}" title="${esc(loc(s.name))}"><i aria-hidden="true"></i>${esc(s.label)}</button>`).join("");
     seg.hidden = list.length < 2;
+    seg.classList.toggle("many", list.length > 2);  // a row of its own on a phone
   }
   $$("#source button").forEach((b) => {
     b.setAttribute("aria-checked", b.dataset.v === cur);
