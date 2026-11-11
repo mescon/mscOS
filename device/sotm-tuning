@@ -31,7 +31,7 @@ done
 # 4. Ethernet at 100 Mbit/s (autoneg kept, only 100baseT/Full advertised): the PHY and
 #    RGMII run slower. Measured on the AXP209 ACIN rail: 1.65 W at 1000 vs 1.53 W at 100.
 #    The panel can switch this to 1000 (System → Enheten); its choice is kept in settings.json.
-if ! grep -q '"net_speed": 1000' /var/lib/sotm-web/settings.json 2>/dev/null; then
+if ! grep -q '"net_speed": 1000' /var/lib/mscos/settings.json 2>/dev/null; then
     command -v ethtool >/dev/null && ethtool -s end0 advertise 0x008 2>/dev/null
 fi
 

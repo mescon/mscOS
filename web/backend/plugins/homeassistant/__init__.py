@@ -6,7 +6,7 @@
                 a Home Assistant webhook, which an automation turns into a notification
 
 The webhook address is a secret: it is read from HA_WEBHOOK_URL in the root-only
-/etc/sotm-web.env, never stored in the settings (those are shown to the panel).
+/etc/mscos/panel.env, never stored in the settings (those are shown to the panel).
 Playback control for HA uses the core's own API (/api/soloist/command, with a Spotify URI).
 """
 from __future__ import annotations
@@ -42,7 +42,7 @@ class HomeAssistant(Plugin):
         try:
             if self.http is None:
                 self.http = ClientSession(timeout=ClientTimeout(total=10))
-            async with self.http.post(self.webhook, json={"title": title, "message": message, "tag": f"sotm-{kind}"}) as r:
+            async with self.http.post(self.webhook, json={"title": title, "message": message, "tag": f"mscos-{kind}"}) as r:
                 return r.status < 300
         except Exception as e:  # never let alerting break sampling; never log the address
             log.warning("alert %s failed: %s", kind, type(e).__name__)

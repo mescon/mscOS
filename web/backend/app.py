@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""sMS-200Ultra control panel: Soloist, audio chain, Arcam AVR and system admin.
+"""mscOS control panel: sources, audio chain, modules and system admin.
 
 aiohttp server on :80. Browsers get one WebSocket (/api/ws) that carries status
 snapshots, Soloist playback events and job output; actions are plain POSTs.
@@ -35,21 +35,27 @@ from i18n import T  # noqa: E402
 import plugins as pluginlib  # noqa: E402
 from volbridge import VolumeBridge  # noqa: E402
 
-STATIC = os.environ.get("SOTM_STATIC", os.path.join(os.path.dirname(__file__), "..", "static"))
-STATE_DIR = os.environ.get("SOTM_STATE", "/var/lib/sotm-web")
+def env(name: str, default: str = "") -> str:
+    """MSCOS_<name> from the environment (SOTM_<name>: the name before the panel was mscos-panel)."""
+    return os.environ.get(f"MSCOS_{name}", os.environ.get(f"SOTM_{name}", default))
+
+
+STATIC = env("STATIC", os.path.join(os.path.dirname(__file__), "..", "static"))
+STATE_DIR = env("STATE", "/var/lib/mscos")
 SOLOIST_WS = "ws://127.0.0.1:9090"
 RO_LOWER = "/media/root-ro"
 # Site settings (/etc/mscos/site.env). Default: local mode, the panel answers everyone on the
-# LAN at http://<hostname>.local. With SOTM_PUBLIC_URL set (an HTTPS reverse proxy in front),
-# only the proxy (SOTM_TRUSTED_PEERS) and the device itself may talk to the panel directly;
+# LAN at http://<hostname>.local. With MSCOS_PUBLIC_URL set (an HTTPS reverse proxy in front),
+# only the proxy (MSCOS_TRUSTED_PEERS) and the device itself may talk to the panel directly;
 # everyone else is sent to the HTTPS name, so the password never crosses the LAN in clear text.
-PUBLIC_URL = os.environ.get("SOTM_PUBLIC_URL", "").strip().rstrip("/")
-TRUSTED_PEERS = set(os.environ.get("SOTM_TRUSTED_PEERS", "").split()) | {"127.0.0.1", "::1"}
-SESSION_COOKIE = "sotm_session"
+PUBLIC_URL = env("PUBLIC_URL").strip().rstrip("/")
+TRUSTED_PEERS = set(env("TRUSTED_PEERS").split()) | {"127.0.0.1", "::1"}
+SESSION_COOKIE = "mscos_session"
+OLD_SESSION_COOKIE = "sotm_session"  # still accepted, so nobody is logged out by the rename
 AUTO_VERIFY_EVERY = 3600
 AUTO_VERIFY_SECS = 20
 
-log = logging.getLogger("sotm-web")
+log = logging.getLogger("mscos-panel")
 
 
 # =========================================================================== helpers
@@ -1161,7 +1167,7 @@ async def tests_clear(request):
 
 # ---- Login
 def _token(request):
-    return request.cookies.get(SESSION_COOKIE)
+    return request.cookies.get(SESSION_COOKIE) or request.cookies.get(OLD_SESSION_COOKIE)
 
 
 @routes.get("/api/auth")
@@ -1324,13 +1330,13 @@ def _peer(request) -> str:
     return (request.transport.get_extra_info("peername") or ("",))[0] if request.transport else ""
 
 
-ALLOWED_HOSTS_EXTRA = {h.lower() for h in os.environ.get("SOTM_ALLOWED_HOSTS", "").split()}
+ALLOWED_HOSTS_EXTRA = {h.lower() for h in env("ALLOWED_HOSTS").split()}
 _own_names: tuple[float, set[str]] = (0.0, set())
 
 
 async def own_names() -> set[str]:
     """Names and addresses this device answers to (local mode): hostname, hostname.local,
-    its IPs, localhost, plus SOTM_ALLOWED_HOSTS. Refreshed every 30 s (DHCP)."""
+    its IPs, localhost, plus MSCOS_ALLOWED_HOSTS. Refreshed every 30 s (DHCP)."""
     global _own_names
     if time.time() - _own_names[0] < 30:
         return _own_names[1]

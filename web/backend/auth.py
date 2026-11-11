@@ -4,7 +4,7 @@ One shared household password, stored as an scrypt hash. Sessions are random tok
 only their SHA-256 is kept on disk, so a copy of the state file cannot be replayed.
 
 Reset (forgotten password), as root on the device:
-    python3 /opt/sotm-web/backend/auth.py reset && systemctl restart sotm-web
+    python3 /usr/lib/mscos/panel/backend/auth.py reset && systemctl restart mscos-panel
 The panel then offers to create a new password.
 """
 from __future__ import annotations
@@ -98,7 +98,7 @@ class Auth:
 
 
 if __name__ == "__main__" and sys.argv[1:] == ["reset"]:
-    path = os.path.join(os.environ.get("SOTM_STATE", "/var/lib/sotm-web"), "auth.json")
+    path = os.path.join(os.environ.get("MSCOS_STATE", "/var/lib/mscos"), "auth.json")
     a = Auth(path)
     a.data = {"password": None, "sessions": {}}
     a._save()

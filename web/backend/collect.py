@@ -400,7 +400,7 @@ async def logs(source: str, lines: int = 200, errors_only: bool = False) -> str:
         "soloist": f"journalctl _UID={uid} --user-unit soloist.service",
         "audio": f"journalctl _UID={uid} --user-unit pipewire.service --user-unit wireplumber.service",
         "kernel": "journalctl -k -b",
-        "web": "journalctl -u sotm-web.service",
+        "web": "journalctl -u mscos-panel.service",
         "system": "journalctl -b",
     }.get(source)
     if not q:

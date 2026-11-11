@@ -1,0 +1,22 @@
+[Unit]
+Description=mscOS control panel (web/PWA)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 -I /usr/lib/mscos/panel/backend/app.py
+Environment=MSCOS_STATIC=/usr/lib/mscos/panel/static
+Environment=MSCOS_STATE=/var/lib/mscos
+# Site settings: an HTTPS reverse proxy in front of the panel is set here, with
+# MSCOS_PUBLIC_URL + MSCOS_TRUSTED_PEERS. Without them: local mode on http://<hostname>.local.
+EnvironmentFile=-/etc/mscos/site.env
+# Secrets of modules (root only), e.g. HA_WEBHOOK_URL for the Home Assistant module.
+EnvironmentFile=-/etc/mscos/panel.env
+Restart=always
+RestartSec=3
+# Lowest CPU priority: the panel must never compete with audio.
+Nice=15
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target
