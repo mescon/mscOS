@@ -14,7 +14,7 @@ set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(dirname "$HERE")
 VERSION=${MSCOS_VERSION:-$(date +%Y.%m.%d)+$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 0)}
-COMMIT=$(git -C "$ROOT" describe --always --dirty 2>/dev/null || echo unknown)
+COMMIT=${MSCOS_COMMIT:-$(git -C "$ROOT" describe --always --dirty 2>/dev/null || echo unknown)}
 
 stage_core() {  # <dir>
     install -d "$1/usr/lib/mscos/bin" "$1/usr/share/mscos/boards/dts" "$1/usr/share/mscos/pipewire" \
@@ -49,7 +49,7 @@ if [ "${1:-}" = --stage ]; then
 fi
 
 if ! command -v dpkg-deb >/dev/null; then  # not a Debian machine: build in a container
-    exec docker run --rm -v "$ROOT:/src" -w /src -e MSCOS_VERSION="$VERSION" -u "$(id -u):$(id -g)" \
+    exec docker run --rm -v "$ROOT:/src" -w /src -e MSCOS_VERSION="$VERSION" -e MSCOS_COMMIT="$COMMIT" -u "$(id -u):$(id -g)" \
         -e HOME=/tmp debian:trixie-slim packaging/build.sh
 fi
 

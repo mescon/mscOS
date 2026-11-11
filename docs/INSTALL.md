@@ -13,7 +13,7 @@ What you need:
 
 | Board | Image target | Tested |
 |---|---|---|
-| SOtM sMS-200, sMS-200ultra | `sotm` | mscOS runs on an sMS-200ultra; the image itself is not yet built |
+| SOtM sMS-200, sMS-200ultra | `sotm` | mscOS runs on an sMS-200ultra; the image builds but has not been started on a device yet |
 | Raspberry Pi 4, 5, CM4, CM5 | `rpi` | not yet |
 | x86-64 PC with UEFI (mini PC, NUC) | `pc` | starts in a virtual machine; not yet on hardware |
 | arm64 board with UEFI | `arm64` | not yet |

@@ -35,9 +35,26 @@ asu install -m 644 "$SHARE/pipewire/50-usb-dac.conf" "$C/wireplumber/wireplumber
 asu ln -sfn /usr/lib/systemd/user/pipewire.socket "$C/systemd/user/sockets.target.wants/pipewire.socket"
 asu ln -sfn /usr/lib/systemd/user/wireplumber.service "$C/systemd/user/pipewire.service.wants/wireplumber.service"
 # The players' stream cache in RAM: no writes to the SD card while playing.
+# A mount unit, not a line in /etc/fstab: an image build writes fstab anew after this script.
 CACHE="$H/.cache"
-grep -q " $CACHE tmpfs " /etc/fstab || \
-    echo "tmpfs $CACHE tmpfs rw,nosuid,nodev,noatime,size=400M,mode=0755,uid=$UID_,gid=$GID_ 0 0" >> /etc/fstab
+if ! grep -q " $CACHE tmpfs " /etc/fstab; then   # (installs from before have the fstab line)
+    MU=$(systemd-escape -p --suffix=mount "$CACHE")
+    cat > "/etc/systemd/system/$MU" <<EOT
+[Unit]
+Description=mscOS: the players' stream cache in RAM
+Before=user@$UID_.service
+
+[Mount]
+What=tmpfs
+Where=$CACHE
+Type=tmpfs
+Options=rw,nosuid,nodev,noatime,size=400M,mode=0755,uid=$UID_,gid=$GID_
+
+[Install]
+WantedBy=local-fs.target
+EOT
+    systemctl enable "$MU" >/dev/null 2>&1 || true
+fi
 
 # --- 3. The board ---------------------------------------------------------------------------
 if [ -n "${MSCOS_BOARD:-}" ]; then "$LIB/bin/mscos-board" "$MSCOS_BOARD" >/dev/null

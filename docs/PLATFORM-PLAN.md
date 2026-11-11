@@ -7,7 +7,7 @@
 | 1. Städa, lokalt läge, licens | klart |
 | 2. Översättning, moduler, generisk DAC | klart (panelen och backend på svenska och engelska; källor, förstärkare och integrationer som moduler). Uppdelningen av `app.js` och `app.py` i mindre filer är påbörjad (`setup.js`, `i18n`, `board`, `plugins/`). |
 | 3. Paket och guide vid första start | klart (`packaging/build.sh`, guiden i panelen). Apt-arkivet publiceras av `.github/workflows/packages.yml` när repot är offentligt och en signeringsnyckel finns. |
-| 4. Avbildningar | `image/build.sh` finns för SOtM, Raspberry Pi, PC och arm64. x86-avbildningen är byggd och startad i en virtuell maskin (första start, kortprofil, kärnargument och guiden fungerar). Ingen avbildning är startad på hårdvara än, och ARM-avbildningarna är inte byggda. |
+| 4. Avbildningar | `image/build.sh` finns för SOtM, Raspberry Pi, PC och arm64. x86-avbildningen är byggd och startad i en virtuell maskin (första start, kortprofil, kärnargument och guiden fungerar). SOtM-avbildningen är byggd och innehållet kontrollerat. Ingen avbildning är startad på hårdvara än, och Pi- och arm64-avbildningarna är inte byggda. |
 | 5. Fler källor | Spotify Connect (go-librespot) och HQPlayer NAA finns som moduler, inte provade på en enhet. UPnP, Squeezelite och AirPlay återstår. |
 | 6. CM6632A-patchen till upstream | återstår. DKMS-paketet finns men är obyggt mot en riktig kärna. |
 
