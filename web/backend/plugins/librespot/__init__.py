@@ -65,7 +65,7 @@ class Librespot(SourcePlugin):
 
     def __init__(self, hub):
         super().__init__(hub)
-        self.status: dict | None = None   # GET /status of go-librespot, None: no session
+        self.playstate: dict | None = None   # GET /status of go-librespot, None: no session
         self.http: ClientSession | None = None
 
     # ---- configuration (go-librespot reads config.yml at start)
@@ -142,15 +142,15 @@ class Librespot(SourcePlugin):
         return await super().start()
 
     async def stop(self) -> str:
-        self.status = None
+        self.playstate = None
         return await super().stop()
 
     async def playing(self) -> bool | None:
-        st = self.status
+        st = self.playstate
         return bool(st and st.get("track") and not st.get("paused") and not st.get("stopped"))
 
     def now_playing(self) -> dict | None:
-        st = self.status
+        st = self.playstate
         t = (st or {}).get("track")
         if not t:
             return None
@@ -162,21 +162,21 @@ class Librespot(SourcePlugin):
                 "user": st.get("username")}
 
     async def state(self) -> dict:
-        return {"device_name": self.device_name(), "session": self.status is not None}
+        return {"device_name": self.device_name(), "session": self.playstate is not None}
 
     # ---- follow go-librespot while it is the source
     async def _fetch(self) -> None:
         if self.http is None:
             self.http = ClientSession(timeout=ClientTimeout(total=4))
         async with self.http.get(f"http://{API}/status") as r:
-            self.status = await r.json() if r.status == 200 else None
+            self.playstate = await r.json() if r.status == 200 else None
         self._at = time.time()
         self.hub.source_changed(self)
 
     async def _follow(self):
         while True:
             if self.hub.settings.get("source") != self.id:
-                self.status = None
+                self.playstate = None
                 await asyncio.sleep(5)
                 continue
             try:
@@ -188,8 +188,8 @@ class Librespot(SourcePlugin):
                 pass
             except Exception:  # noqa: BLE001 - never let this loop die
                 log.exception("following go-librespot")
-            if self.status is not None:
-                self.status = None
+            if self.playstate is not None:
+                self.playstate = None
                 self.hub.source_changed(self)
             await asyncio.sleep(4)
 
