@@ -38,7 +38,7 @@ Debian 13 or Armbian system, install the packages instead.
 | x86-64 PCs | the image builds and starts in a virtual machine (first boot, board profile, kernel arguments, the guide); **not yet tested on hardware or with a DAC** |
 | Raspberry Pi 4/5, other boards | profiles and image targets exist, **not yet built or tested** |
 | Spotify Lossless (Soloist), Roon Bridge | in daily use on the SOtM |
-| Spotify Connect (go-librespot), HQPlayer NAA | modules and install scripts written, **not yet tested on a device** |
+| Spotify Connect (go-librespot), HQPlayer NAA | install, start and source switching verified on the SOtM; **playback not yet tested** |
 | Native DSD for CM6632A | in use as a kernel patch; the DKMS package is **untested** |
 | Panel in Swedish and English | complete |
 

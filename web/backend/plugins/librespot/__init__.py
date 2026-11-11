@@ -76,7 +76,7 @@ class Librespot(SourcePlugin):
         s = self.hub.settings
         soft = s.get("librespot_volume") == "software"
         avahi = shutil.which("avahi-daemon") is not None
-        q = json.dumps  # a JSON string is a valid YAML string
+        q = lambda v: json.dumps(v, ensure_ascii=False)  # noqa: E731 - a JSON string is a valid YAML string
         return "\n".join([
             "# Written by the mscOS panel (module Spotify Connect). Changes here are overwritten.",
             f"device_name: {q(self.device_name())}",

@@ -608,7 +608,9 @@ def optimizations(status: dict, playback: dict, vol_bridge: bool = False, output
             T("Pro-audio-profilen: ingen kanalmixning, ingen dither, inbyggt ljud avstängt."),
             "pro-audio" in wp and "dither.method" in wp, "pro-audio, S32LE")
     elif src:
-        free = not pw.get("sink")  # PipeWire is stopped: nothing between the player and the DAC
+        # PipeWire is stopped: nothing between the player and the DAC (looked up now, not in
+        # the status snapshot, which may be from before the source was switched)
+        free = not any(t["proc"] == "pipewire" for t in th)
         add(G, "direct", T("Direkt till DAC:n"),
             T("{name} öppnar DAC:n själv: inget mellanled, alla format DAC:n tar emot.", name=src.get("label", "")),
             free, T("PipeWire är stoppat") if free else T("PipeWire håller DAC:n"))
