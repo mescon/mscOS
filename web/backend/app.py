@@ -16,6 +16,7 @@ import math
 import os
 import re
 import shutil
+import socket
 import stat
 import subprocess
 import sys
@@ -1229,7 +1230,8 @@ async def auth_state(request):
 def _login_response(request, token: str):
     resp = ok(logged_in=True)
     resp.set_cookie(SESSION_COOKIE, token, max_age=90 * 86400, httponly=True, samesite="Strict", path="/",
-                    secure=request.headers.get("X-Forwarded-Proto", request.scheme) == "https")
+                    secure=(request.headers.get("X-Forwarded-Proto") if _peer(request) in TRUSTED_PEERS else None
+                            or request.scheme) == "https")
     return resp
 
 
@@ -1488,9 +1490,44 @@ def _peer(request) -> str:
     return (request.transport.get_extra_info("peername") or ("",))[0] if request.transport else ""
 
 
+ALLOWED_HOSTS_EXTRA = {h.lower() for h in os.environ.get("SOTM_ALLOWED_HOSTS", "").split()}
+_own_names: tuple[float, set[str]] = (0.0, set())
+
+
+async def own_names() -> set[str]:
+    """Names and addresses this device answers to (local mode): hostname, hostname.local,
+    its IPs, localhost, plus SOTM_ALLOWED_HOSTS. Refreshed every 30 s (DHCP)."""
+    global _own_names
+    if time.time() - _own_names[0] < 30:
+        return _own_names[1]
+    host = socket.gethostname().lower()
+    names = {host, f"{host}.local", "localhost", "127.0.0.1", "::1"} | ALLOWED_HOSTS_EXTRA
+    rc, out, _ = await collect.run(["ip", "-j", "addr", "show"], timeout=5)
+    try:
+        names |= {a["local"].lower() for i in json.loads(out) for a in i.get("addr_info", []) if a.get("local")}
+    except (ValueError, KeyError, TypeError):
+        pass
+    _own_names = (time.time(), names)
+    return names
+
+
+def _host_only(host: str) -> str:
+    """'name:80' -> 'name', '[fe80::1]:80' -> 'fe80::1'."""
+    host = host.strip().lower()
+    if host.startswith("["):
+        return host[1:].split("]")[0]
+    return host.rsplit(":", 1)[0] if host.count(":") == 1 else host
+
+
 @web.middleware
 async def only_via_proxy(request, handler):
-    if PUBLIC_URL and _peer(request) not in TRUSTED_PEERS:
+    if not PUBLIC_URL:
+        # Local mode. DNS rebinding defence: a page on another site can point its own name at
+        # this device; then Origin and Host agree, so the Host itself must be one of ours.
+        if _host_only(request.host or "") not in await own_names():
+            raise web.HTTPMisdirectedRequest(text="Okänt värdnamn. Öppna panelen med enhetens namn eller IP-adress.")
+        return await handler(request)
+    if _peer(request) not in TRUSTED_PEERS:
         if request.path.startswith("/api/"):
             raise web.HTTPForbidden(text=f"Använd {PUBLIC_URL}")
         raise web.HTTPPermanentRedirect(PUBLIC_URL + request.path_qs)
@@ -1504,8 +1541,10 @@ async def same_origin_json(request, handler):
     preflight, which cannot be application/json; browsers also send Origin on POST."""
     if request.method not in ("GET", "HEAD", "OPTIONS"):
         origin = request.headers.get("Origin")
-        own = PUBLIC_URL or f"{request.headers.get('X-Forwarded-Proto', request.scheme)}://{request.host}"
-        if origin and origin.rstrip("/") != own:
+        # proxy mode: the public name; local mode: the Host (already checked to be ours) as
+        # plain http, the only scheme the panel serves itself
+        own = PUBLIC_URL or f"http://{request.host}"
+        if origin and origin.rstrip("/").lower() != own.lower():
             raise web.HTTPForbidden(text="Begäran kommer från en annan webbplats.")
         if request.content_type != "application/json":
             raise web.HTTPUnsupportedMediaType(text="Begäran måste vara JSON.")
