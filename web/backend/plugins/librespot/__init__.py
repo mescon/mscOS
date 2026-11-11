@@ -7,9 +7,14 @@ Spotify Lossless module (Soloist) with a key of your own instead.
 
 go-librespot is a reimplementation of Spotify's protocol, not made or approved by Spotify.
 The install script downloads its release from GitHub on the device. It plays through
-PipeWire like Soloist, at 44.1 kHz, and by default leaves the samples alone: the Spotify
-volume slider does nothing and the volume is set on the amplifier ("fixed"); "software"
-lets the slider scale the samples instead.
+PipeWire like Soloist, at 44.1 kHz.
+
+Volume, three ways:
+  amp       with an amplifier module and the bridge setting on: go-librespot runs with
+            external volume (it reports the slider, the samples pass untouched) and the
+            core's volume bridge moves the amplifier, as with Soloist
+  software  no amplifier module: the Spotify slider scales the samples (the default)
+  fixed     the slider does nothing, the samples pass untouched, volume is set elsewhere
 
 Its local API (127.0.0.1:3678) gives the panel what plays: GET /status and a WebSocket
 with events.
@@ -50,23 +55,59 @@ class Librespot(SourcePlugin):
     terms = {"sv": "go-librespot hämtas från GitHub till den här enheten. Det är ett fristående program med öppen källkod, inte gjort eller godkänt av Spotify, och spelar högst 320 kbit/s.",
              "en": "go-librespot is downloaded from GitHub to this device. It is an independent open-source program, not made or approved by Spotify, and plays 320 kbit/s at most."}
     terms_url = "https://github.com/devgianlu/go-librespot"
-    defaults = {"librespot_name": "", "librespot_bitrate": 320, "librespot_volume": "fixed"}
+    has_slider = True
+    defaults = {"librespot_name": "", "librespot_bitrate": 320, "librespot_volume": "software"}
     options = (
         {"key": "librespot_name", "type": "text", "label": {"sv": "Namn i Spotify-appen", "en": "Name in the Spotify app"},
          "help": {"sv": "Tomt: samma namn som det enheten spelar till.", "en": "Empty: the name of what this device plays into."}},
         {"key": "librespot_bitrate", "type": "select", "label": {"sv": "Kvalitet", "en": "Quality"},
          "options": [[320, {"sv": "320 kbit/s", "en": "320 kbit/s"}], [160, {"sv": "160 kbit/s", "en": "160 kbit/s"}],
                      [96, {"sv": "96 kbit/s", "en": "96 kbit/s"}]]},
-        {"key": "librespot_volume", "type": "select", "label": {"sv": "Volym", "en": "Volume"},
-         "options": [["fixed", {"sv": "Fast: ställs på förstärkaren", "en": "Fixed: set on the amplifier"}],
-                     ["software", {"sv": "Spotify-reglaget (digital volym)", "en": "The Spotify slider (digital volume)"}]],
-         "help": {"sv": "Fast volym lämnar samplen orörda.", "en": "Fixed volume leaves the samples untouched."}},
+        {"key": "librespot_volume", "type": "select",
+         "label": {"sv": "Volym utan förstärkarmodul", "en": "Volume without an amplifier module"},
+         "options": [["software", {"sv": "Spotify-reglaget (digital volym)", "en": "The Spotify slider (digital volume)"}],
+                     ["fixed", {"sv": "Fast: reglaget gör inget", "en": "Fixed: the slider does nothing"}]],
+         "help": {"sv": "Med en förstärkarmodul styr Spotify-reglaget förstärkaren och samplen lämnas orörda; det ställs in under Förstärkaren. Det här valet gäller annars.",
+                  "en": "With an amplifier module the Spotify slider drives the amplifier and the samples are left untouched; that is set under Amplifier. This choice applies otherwise."}},
     )
 
     def __init__(self, hub):
         super().__init__(hub)
         self.playstate: dict | None = None   # GET /status of go-librespot, None: no session
         self.http: ClientSession | None = None
+        self._was_active = False
+        self._vol: int | None = None
+
+    # ---- volume
+    def volume_mode(self) -> str:
+        s = self.hub.settings
+        if self.hub.amp is not None and s.get("spotify_vol_to_amp", True):
+            return "amp"
+        return "fixed" if s.get("librespot_volume") == "fixed" else "software"
+
+    def slider(self) -> dict | None:
+        mode = self.volume_mode()
+        if mode == "fixed":
+            return None
+        st = self.playstate
+        vol = round(st["volume"] * 100 / st["volume_steps"]) if st and st.get("volume_steps") and st.get("volume") is not None else None
+        return {"active": bool(st) and not st.get("stopped"), "volume": vol, "digital": mode == "software"}
+
+    async def set_slider(self, pct: int) -> None:
+        if self.http is None:
+            self.http = ClientSession(timeout=ClientTimeout(total=4))
+        async with self.http.post(f"http://{API}/player/volume", json={"volume": max(0, min(100, int(pct)))}) as r:
+            await r.read()
+
+    def _bridge(self) -> None:
+        """Tell the volume bridge what the slider did since the last look."""
+        sl = self.slider() or {}
+        active, vol = bool(sl.get("active")), sl.get("volume")
+        if active and not self._was_active:
+            self.hub.vol.on_active()  # the slider is set from the amplifier, not the other way
+        elif active and vol is not None and vol != self._vol:
+            self.hub.vol.on_volume_changed(vol)
+        self._was_active, self._vol = active, vol
 
     # ---- configuration (go-librespot reads config.yml at start)
     def device_name(self) -> str:
@@ -74,7 +115,7 @@ class Librespot(SourcePlugin):
 
     def config(self) -> str:
         s = self.hub.settings
-        soft = s.get("librespot_volume") == "software"
+        mode = self.volume_mode()
         avahi = shutil.which("avahi-daemon") is not None
         q = lambda v: json.dumps(v, ensure_ascii=False)  # noqa: E731 - a JSON string is a valid YAML string
         return "\n".join([
@@ -92,9 +133,13 @@ class Librespot(SourcePlugin):
             "audio_device: pipewire",
             f"bitrate: {int(s.get('librespot_bitrate', 320))}",
             "normalisation_disabled: true",
-            f"external_volume: {'false' if soft else 'true'}",
-            "initial_volume: 100",
-            "ignore_last_volume: true",
+            "volume_steps: 100",
+            # amp: the slider is only reported, and starts low until the bridge has set it from
+            # the amplifier. fixed: full scale, untouched. software: go-librespot scales, and
+            # starts where it was left, at a modest level the first time.
+            f"external_volume: {'false' if mode == 'software' else 'true'}",
+            f"initial_volume: {dict(amp=0, fixed=100, software=30)[mode]}",
+            f"ignore_last_volume: {'false' if mode == 'software' else 'true'}",
             "server:",
             "  enabled: true",
             "  address: 127.0.0.1",
@@ -131,18 +176,22 @@ class Librespot(SourcePlugin):
 
     async def settings_applied(self, upd: dict) -> None:
         if await self.installed() and await self.write_config() and await self.active():
-            await collect.run(["systemctl", "--user", "restart", "librespot.service"], as_user=True, timeout=30)
+            await self._restart()
+
+    async def _restart(self) -> None:
+        await collect.run(["systemctl", "--user", "restart", "librespot.service"], as_user=True, timeout=30)
 
     # ---- source
     async def installed(self) -> bool:
         return os.path.exists(BIN) and os.path.exists(UNIT)
 
     async def start(self) -> str:
-        await self.write_config()
+        if await self.write_config() and await self.active():
+            await self._restart()  # already running with an older configuration
         return await super().start()
 
     async def stop(self) -> str:
-        self.playstate = None
+        self.playstate, self._was_active = None, False
         return await super().stop()
 
     async def playing(self) -> bool | None:
@@ -171,9 +220,16 @@ class Librespot(SourcePlugin):
         async with self.http.get(f"http://{API}/status") as r:
             self.playstate = await r.json() if r.status == 200 else None
         self._at = time.time()
+        self._bridge()
         self.hub.source_changed(self)
 
     async def _follow(self):
+        try:  # a new panel version or another set of modules may want another configuration
+            if self.hub.settings.get("source") == self.id and await self.installed() \
+                    and await self.write_config() and await self.active():
+                await self._restart()
+        except Exception:  # noqa: BLE001
+            log.exception("configuration at start")
         while True:
             if self.hub.settings.get("source") != self.id:
                 self.playstate = None
@@ -190,6 +246,7 @@ class Librespot(SourcePlugin):
                 log.exception("following go-librespot")
             if self.playstate is not None:
                 self.playstate = None
+                self._bridge()
                 self.hub.source_changed(self)
             await asyncio.sleep(4)
 

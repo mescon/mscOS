@@ -28,6 +28,7 @@ class Spotify(SourcePlugin):
     terms = {"sv": "Soloist hämtas från Spotify till den här enheten. Du behöver Spotify Premium och en egen nyckel, som du skapar på Spotifys utvecklarsida och anger här efteråt. Nyckeln är personlig.",
              "en": "Soloist is downloaded from Spotify to this device. You need Spotify Premium and a key of your own, which you create on Spotify's developer site and enter here afterwards. The key is personal."}
     terms_url = "https://developer.spotify.com/documentation/soloist"
+    has_slider = True
 
     async def installed(self) -> bool:
         return os.path.exists(BIN) and os.path.exists(collect.SOLOIST_UNIT)
@@ -36,6 +37,15 @@ class Spotify(SourcePlugin):
         if not collect.api_key_info()["set"]:
             return ""  # installed but no key yet: nothing to start, the panel asks for the key
         return await super().start()
+
+    def slider(self) -> dict | None:
+        h = self.hub
+        return {"active": bool(h.soloist_ws and h.auth.get("is_active")), "volume": h.playback.get("volume"),
+                "digital": not h.vol.enabled()}
+
+    async def set_slider(self, pct: int) -> None:
+        if self.hub.soloist_ws:
+            await self.hub.soloist_cmd({"command": "set_volume", "volume": pct})
 
     async def state(self) -> dict:
         return {"key_set": collect.api_key_info()["set"]}

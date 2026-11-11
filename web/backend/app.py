@@ -1109,7 +1109,7 @@ async def get_optimizations(request):
     cur = hub.source
     items = await asyncio.to_thread(collect.optimizations, hub.status, hub.playback, hub.vol.enabled(),
                                     hub.names()["output"],
-                                    {"id": cur.id, "pipewire": cur.pipewire, "label": cur.label} if cur else None)
+                                    {"id": cur.id, "pipewire": cur.pipewire, "label": cur.label, "slider": cur.slider()} if cur else None)
     return web.json_response({"t": int(time.time()), "items": items})
 
 
@@ -1213,7 +1213,8 @@ async def set_settings(request):
     if "leds" in upd:
         collect.apply_leds(upd["leds"])
     for p in hub.plugins.values():
-        if any(k in upd for k in p.defaults):
+        # the bridge setting decides how a source with a slider handles volume
+        if any(k in upd for k in p.defaults) or ("spotify_vol_to_amp" in upd and getattr(type(p), "has_slider", False)):
             await p.settings_applied(upd)
     if b.get("net_speed") in (100, 1000) and b["net_speed"] != hub.settings.get("net_speed"):
         hub.settings["net_speed"] = b["net_speed"]
@@ -1590,8 +1591,10 @@ async def on_startup(app):
     asyncio.ensure_future(restore())
     app["tasks"] = [asyncio.create_task(c) for p in hub.plugins.values() for c in p.tasks()]
     core = [hub.sample_loop()]
-    if "spotify" in hub.plugins:  # the Soloist relay and its volume bridge
-        core += [hub.soloist_loop(), hub.vol.amp_loop(), hub.vol.stream_loop()]
+    if "spotify" in hub.plugins:  # the Soloist relay
+        core += [hub.soloist_loop()]
+    if any(getattr(type(p), "has_slider", False) for p in hub.sources.values()):  # the volume bridge
+        core += [hub.vol.amp_loop(), hub.vol.stream_loop()]
     app["tasks"] += [asyncio.create_task(c) for c in core]
 
 

@@ -128,6 +128,7 @@ class SourcePlugin(Plugin):
     hint: dict[str, str] = {}          # what the listener does to play, e.g. choose it in the app
     terms: dict[str, str] = {}         # shown before installing (licence, account needed)
     terms_url = ""
+    has_slider = False                 # its app has a volume slider the bridge can use: slider()
 
     async def installed(self) -> bool:
         return False
@@ -170,6 +171,15 @@ class SourcePlugin(Plugin):
     async def state(self) -> dict:
         """Extra facts for the panel's status (version, ...)."""
         return {}
+
+    def slider(self) -> dict | None:
+        """The volume slider in the source's own app (Spotify), for the volume bridge:
+        {"active": this device is the one selected, "volume": 0-100 or None, "digital": the
+        slider scales the samples}. None: no slider, or it is switched off."""
+        return None
+
+    async def set_slider(self, pct: int) -> None:
+        """Move that slider (the amplifier was changed elsewhere)."""
 
 
 def discover() -> dict[str, type[Plugin]]:

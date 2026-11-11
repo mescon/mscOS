@@ -576,8 +576,9 @@ def optimizations(status: dict, playback: dict, vol_bridge: bool = False, output
             T("PipeWire är låst till {khz} kHz, samma som Spotify.", khz=decimal(44.1)), rate_ok,
             T("Utgång {format} {khz} kHz", format=sink.get("format"), khz=decimal(44.1)) if live else (T("Låst till {khz} kHz", khz=decimal(44.1)) if locked else T("Inte låst")))
         sink_ok = sink.get("volume") is None or abs(sink["volume"] - 1) < 1e-6
-        if soloist:
-            vol = playback.get("volume")
+        slider = src.get("slider")  # the source's own volume slider, if it has one that is on
+        if soloist or slider:
+            vol = playback.get("volume") if soloist else slider.get("volume")
             if vol_bridge:  # the Spotify slider drives the amplifier; the stream is kept at unity
                 add(G, "volume", T("Full digital volym"),
                     T("Spotify-reglaget styr förstärkaren. Strömmen hålls på 100 %, så samplen räknas aldrig om."),
@@ -586,10 +587,11 @@ def optimizations(status: dict, playback: dict, vol_bridge: bool = False, output
                 add(G, "volume", T("Full digital volym"),
                     T("All volym under 100 % räknar om samplen. Volymen sköts i förstärkaren."), (vol in (None, 100)) and sink_ok,
                     f"Spotify {vol if vol is not None else '–'} %, PipeWire {round((sink.get('volume') or 0) * 100)} %")
-            norm = solo.get("normalization")
-            add(G, "norm", T("Volymnormalisering av"),
-                T("Spotify sänker annars vissa låtar med flera dB."), norm is False,
-                T("Av") if norm is False else (T("På") if norm else T("Okänt")))
+            if soloist:
+                norm = solo.get("normalization")
+                add(G, "norm", T("Volymnormalisering av"),
+                    T("Spotify sänker annars vissa låtar med flera dB."), norm is False,
+                    T("Av") if norm is False else (T("På") if norm else T("Okänt")))
         else:
             add(G, "volume", T("Full digital volym"),
                 T("All volym under 100 % räknar om samplen. Volymen sköts i förstärkaren."), sink_ok,

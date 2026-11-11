@@ -1,5 +1,9 @@
 """Spotify's volume slider drives the amplifier module (e.g. Mark Levinson 585.5); the signal stays bit-perfect.
 
+The bridge works with any source module that has a slider (SourcePlugin.slider): Soloist,
+and go-librespot with external volume, which reports the slider and never scales samples.
+What follows about PipeWire stream volume is Soloist's case only.
+
 Soloist applies the Spotify volume as PipeWire stream volume (channelVolumes on its
 "spotify" stream node = (v/100)^3), not in its own samples. It reads channelVolumes back
 (resetting them made it report 100 %), so the panel sets softVolumes to 1.0 instead: the
@@ -45,7 +49,14 @@ class VolumeBridge:
     def enabled(self) -> bool:
         h = self.hub
         return (h.amp is not None and bool(h.settings.get("spotify_vol_to_amp", True))
-                and h.settings.get("source") == "spotify")
+                and getattr(type(h.source), "has_slider", False))
+
+    def _slider(self) -> dict:
+        src = self.hub.source
+        return (src.slider() if src else None) or {}
+
+    def _active(self) -> bool:
+        return bool(self._slider().get("active"))
 
     def _amp_ok(self) -> bool:
         a = self.hub.amp
@@ -108,11 +119,12 @@ class VolumeBridge:
             await self._set_spotify(self.to_pct(db))  # the slider shows where the amplifier is
 
     async def _set_spotify(self, pct: int):
-        if not self.hub.soloist_ws:
+        src = self.hub.source
+        if src is None:
             return
         self._sent = (pct, time.time())
         try:
-            await self.hub.soloist_cmd({"command": "set_volume", "volume": pct})
+            await src.set_slider(pct)
         except Exception as e:  # noqa: BLE001 - never break the panel over this
             log.warning("volume bridge: set_volume %s", e)
 
@@ -122,7 +134,7 @@ class VolumeBridge:
 
     async def sync_from_amp(self, force: bool = False):
         """Amplifier level -> Spotify slider."""
-        if not self.enabled() or not self._amp_ok() or not self.hub.auth.get("is_active"):
+        if not self.enabled() or not self._amp_ok() or not self._active():
             return
         try:
             db = await self.hub.amp.read_volume()
@@ -134,7 +146,7 @@ class VolumeBridge:
             return
         self._amp_db = db
         pct = self.to_pct(db)
-        if force or pct != self.hub.playback.get("volume"):
+        if force or pct != self._slider().get("volume"):
             log.info("amplifier %.1f dB -> Spotify %d %%", db, pct)
             await self._set_spotify(pct)
 
@@ -143,7 +155,7 @@ class VolumeBridge:
     async def amp_loop(self):
         while True:
             try:
-                if self.enabled() and self.hub.auth.get("is_active") and time.time() - self._active_t > GRACE_S:
+                if self.enabled() and self._active() and time.time() - self._active_t > GRACE_S:
                     await self.sync_from_amp()
             except Exception:
                 log.exception("volume bridge poll")
@@ -151,9 +163,10 @@ class VolumeBridge:
 
     async def stream_loop(self):
         """Keep the Spotify stream at unity: watch PipeWire (pw-dump -m) and set softVolumes
-        to 1.0 after every new channelVolumes from Soloist, also on a newly created stream."""
+        to 1.0 after every new channelVolumes from Soloist, also on a newly created stream.
+        Only Soloist needs this; other sources leave the samples alone themselves."""
         while True:
-            if not self.enabled():
+            if not (self.enabled() and self.hub.soloist):
                 await asyncio.sleep(10)
                 continue
             proc = None
@@ -178,7 +191,7 @@ class VolumeBridge:
                             oid = collect.spotify_stream_changed(o) if isinstance(o, dict) else None
                             if oid is not None:
                                 await collect.spotify_stream_unity(oid)
-                    if not self.enabled():
+                    if not (self.enabled() and self.hub.soloist):
                         break
             except Exception:
                 log.exception("volume bridge stream watch")
