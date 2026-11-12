@@ -5,11 +5,12 @@
 | Punkt i avsnitt 6 | Läge |
 |---|---|
 | 1. Städa, lokalt läge, licens | klart |
-| 2. Översättning, moduler, generisk DAC | klart (panelen och backend på svenska och engelska; källor, förstärkare och integrationer som moduler). Uppdelningen av `app.js` och `app.py` i mindre filer är påbörjad (`setup.js`, `i18n`, `board`, `plugins/`). |
-| 3. Paket och guide vid första start | klart (`packaging/build.sh`, guiden i panelen). Apt-arkivet publiceras av `.github/workflows/packages.yml` när repot är offentligt och en signeringsnyckel finns. |
-| 4. Avbildningar | `image/build.sh` finns för SOtM, Raspberry Pi, PC och arm64. x86-avbildningen är byggd och startad i en virtuell maskin (första start, kortprofil, kärnargument och guiden fungerar). SOtM-avbildningen är byggd och innehållet kontrollerat. Ingen avbildning är startad på hårdvara än, och Pi- och arm64-avbildningarna är inte byggda. |
-| 5. Fler källor | Spotify Connect (go-librespot) och HQPlayer NAA finns som moduler, inte provade på en enhet. UPnP, Squeezelite och AirPlay återstår. |
-| 6. CM6632A-patchen till upstream | återstår. DKMS-paketet finns men är obyggt mot en riktig kärna. |
+| 2. Översättning, moduler, generisk DAC | klart. Panelen och backend finns på svenska och engelska. Allt som hör till en viss anläggning är en modul under `modules/` (källor, förstärkare, larm, integrationer), och en modul beskriver själv sitt gränssnitt: sidan känner inte till någon enskild förstärkare, receiver eller larmtjänst. Soloist ligger helt i sin modul. Kvar: sidans kod för Spotify Lossless (signalkedjan, kön, verifieringen) ligger fortfarande i `app.js` och inte hos modulen. |
+| 3. Paket och guide vid första start | klart (`packaging/build.sh`, guiden i panelen). En ny installation från paketen är provad i en tom Debian 13-behållare. Apt-arkivet publiceras av `.github/workflows/packages.yml` när repot är offentligt och en signeringsnyckel finns. |
+| 4. Avbildningar | `image/build.sh` finns för SOtM, Raspberry Pi, PC och arm64. x86-avbildningen är byggd och startad i en virtuell maskin. SOtM- och Pi-avbildningarna är byggda och innehållet kontrollerat. Ingen avbildning är startad på hårdvara än, och arm64-avbildningen är inte byggd. |
+| 5. Fler källor | Spotify Connect (go-librespot) är provad på SOtM:en med uppspelning, knappar och volymbrygga. HQPlayer NAA är installerad och startar, men uppspelning är inte provad. UPnP, Squeezelite och AirPlay återstår. |
+| 6. CM6632A-patchen till upstream | återstår. DKMS-paketet bygger drivrutinen mot Debian 13:s egen kärna (6.12), men den är inte provad med en DAC på den kärnan. |
+| 7. Moduler från andra | klart: katalogen `modules/index.json`, bläddring och installation i panelen, egna moduler från en annan utgivare, och automatiska tester (`tools/test.sh`). Kvar: signering av utgåvor och katalog innan repot blir offentligt. |
 
 Ursprunglig plan följer. Målet är ett musik-OS som andra hifi-entusiaster kan flasha på sin egen enhet och ställa in själva:
 
