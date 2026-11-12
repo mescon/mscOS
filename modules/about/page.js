@@ -427,6 +427,8 @@ export default function page(api) {
   };
   return {
     route: wordsRoute,
+    // a sleeve for when the player has none: the album's front from the Cover Art Archive
+    coverFor: (t) => `/api/about/cover?${new URLSearchParams({ artist: String(t.artist || "").split(/, | \/ /)[0], ...(t.album ? { album: t.album } : { title: t.title || "" }) })}`,
     // called whenever the page is drawn: ask when the track is another one
     render() {
       const t = api.track(), ok = t && t.artist && t.title;

@@ -29,9 +29,27 @@ log = logging.getLogger("roon")
 API_FILE = os.path.join(collect.STATE_DIR, "roon-api.json")   # the servers' tokens, root only
 EXTENSION = {"extension_id": "org.mscos.panel", "display_name": "mscOS", "display_version": "1",
              "publisher": "mscOS", "email": "noreply@mscos.invalid",
-             "required_services": [roonapi.TRANSPORT], "optional_services": [roonapi.BROWSE],
+             "required_services": [roonapi.TRANSPORT], "optional_services": [roonapi.BROWSE, roonapi.IMAGE],
              "provided_services": ["com.roonlabs.ping:1"]}
 LOOP = {"off": "disabled", "context": "loop", "track": "loop_one"}
+
+
+def _session(b: dict) -> str:
+    """The page's own place in Roon's lists (a name the page made up for itself)."""
+    s = b.get("session")
+    return f"mscos-{s}" if isinstance(s, str) and re.fullmatch(r"[a-z0-9]{8,24}", s) else "mscos"
+
+
+def _plain(text) -> str:
+    """Roon writes a name that is a link as [[id|Name]]: the name."""
+    return re.sub(r"\[\[\d+\|([^\]]*)\]\]", r"\1", str(text or ""))[:300]
+
+
+def _row(i: dict) -> dict:
+    """An entry of one of Roon's lists, for the page."""
+    key = i.get("image_key")
+    return {"title": _plain(i.get("title")), "subtitle": _plain(i.get("subtitle")), "hint": i.get("hint") if isinstance(i.get("hint"), str) else None,
+            "image": f"/api/roon/image/{key}" if isinstance(key, str) and re.fullmatch(r"[A-Za-z0-9_-]{8,128}", key) else None}
 
 
 class Roon(SourcePlugin):
@@ -63,6 +81,9 @@ class Roon(SourcePlugin):
         self._told = None                      # what the panel was last told (to tell it only of changes)
         self.http: ClientSession | None = None
         self.raat = raat.Log()                 # what Roon Bridge's own log says of the stream
+        self._no_image: set[str] = set()       # sleeves the server would not hand out (said once in the log)
+        self._searching = asyncio.Lock()       # one laid-out search at a time
+        self._asked: dict[str, str] = {}       # the latest words each page searched for
 
     async def state(self) -> dict:
         """For the Signal view: the stream as Roon Bridge set it up, the server it comes from
@@ -72,6 +93,7 @@ class Roon(SourcePlugin):
         vol = (outs[0].get("volume") if outs and isinstance(outs[0], dict) else None) or None
         core = self.api.core if self.api and self.api.registered else {}
         return {"raat": await asyncio.to_thread(self.raat.latest), "version": await self.version() or "",
+                "tells": bool(core),     # the server says what plays: when it says nothing, nothing plays
                 "server": {"name": str(core.get("display_name") or ""), "version": str(core.get("display_version") or "")},
                 "zone": str(z.get("display_name") or ""), "grouped": len(outs) > 1,
                 "volume": {k: vol.get(k) for k in ("type", "value", "min", "max", "is_muted")} if isinstance(vol, dict) else None}
@@ -247,7 +269,7 @@ class Roon(SourcePlugin):
                 raise web.HTTPBadRequest()
             zone = self._zone()
             try:
-                d = await self.api.browse(hierarchy, zone["zone_id"] if zone else "", **where)
+                d = await self.api.browse(hierarchy, zone["zone_id"] if zone else "", session=_session(b), **where)
             except (RuntimeError, OSError, websockets.WebSocketException) as e:
                 raise web.HTTPBadGateway(text=T("Roon tog inte emot kommandot ({why}).", why=e))
             ok_key = lambda k: isinstance(k, str) and re.fullmatch(r"[A-Za-z0-9_-]{8,128}", k)   # noqa: E731
@@ -257,10 +279,58 @@ class Roon(SourcePlugin):
                 "list": {"title": str(lst.get("title") or "")[:200], "subtitle": str(lst.get("subtitle") or "")[:200], "level": lst.get("level") or 0,
                          "count": lst.get("count") or 0, "image": f"/api/roon/image/{lst['image_key']}" if ok_key(lst.get("image_key")) else None,
                          "hint": lst.get("hint")},
-                "items": [{"title": str(i.get("title") or "")[:300], "subtitle": str(i.get("subtitle") or "")[:300], "hint": i.get("hint"),
+                "items": [{"title": _plain(i.get("title")), "subtitle": _plain(i.get("subtitle")), "hint": i.get("hint"),
                            "item_key": i.get("item_key") if isinstance(i.get("item_key"), str) else None,
                            "image": f"/api/roon/image/{i['image_key']}" if ok_key(i.get("image_key")) else None,
                            "prompt": bool(i.get("input_prompt"))} for i in d.get("items", [])[:200]]})
+
+        @routes.post("/api/roon/search")
+        async def search(request):
+            """A search, laid out: Roon answers a search with the kinds of things it found
+            (artists, albums, tracks...) as lists to go into. Here the first of each are read
+            too, so that the page can show what was found at once. Done in a place of its
+            own, apart from where the page is in Roon's lists."""
+            if not (self.api and self.api.registered):
+                raise web.HTTPConflict(text=T("Godkänn mscOS i Roon under Inställningar, Tillägg."))
+            try:
+                b = await request.json()
+                q = " ".join(str(b.get("q") or "").split())[:120]
+                session = _session(b) + "-s"
+            except (ValueError, AttributeError):
+                raise web.HTTPBadRequest()
+            if len(q) < 2:
+                raise web.HTTPBadRequest()
+            zone = self._zone()
+            zid = zone["zone_id"] if zone else ""
+            self._asked[session] = q
+            while len(self._asked) > 64:
+                self._asked.pop(next(iter(self._asked)))
+            try:
+                async with self._searching:
+                    newer = lambda: self._asked.get(session) != q      # noqa: E731  (the listener typed on)
+                    if newer():
+                        raise web.HTTPConflict()
+                    top = await self.api.browse("search", zid, count=20, session=session, pop_all=True, input=q)
+                    hits = [_row(i) for i in top["items"] if i.get("image_key") and i.get("item_key")][:4]
+                    sections = []
+                    kinds = [_plain(i.get("title")) for i in top["items"] if not i.get("image_key") and i.get("hint") == "list" and i.get("item_key")][:5]
+                    here = top["items"]
+                    for n, kind in enumerate(kinds):
+                        if newer():
+                            raise web.HTTPConflict()
+                        it = next((i for i in here if _plain(i.get("title")) == kind and i.get("item_key")), None)
+                        if not it:
+                            continue
+                        d = await self.api.browse("search", zid, count=8, session=session, item_key=it["item_key"])
+                        if d["action"] != "list":
+                            break
+                        sections.append({"title": kind[:120], "count": (d.get("list") or {}).get("count") or 0,
+                                         "items": [_row(i) for i in d["items"] if i.get("item_key")][:8]})
+                        if n + 1 < len(kinds):   # back up, for the next kind (the keys of the list are new after that)
+                            here = (await self.api.browse("search", zid, count=20, session=session, pop_levels=1))["items"]
+            except (RuntimeError, OSError, websockets.WebSocketException) as e:
+                raise web.HTTPBadGateway(text=T("Roon tog inte emot kommandot ({why}).", why=e))
+            return web.json_response({"q": q, "top": hits, "sections": [s for s in sections if s["items"]]})
 
         @routes.get("/api/roon/image/{key}")
         async def image(request):
@@ -271,15 +341,30 @@ class Roon(SourcePlugin):
             if self.http is None:
                 self.http = ClientSession(timeout=ClientTimeout(total=8))
             url = f"http://{self.server['host']}:{self.server['port']}/api/image/{key}"
+            kinds = ("image/jpeg", "image/png", "image/webp")
             try:
                 async with self.http.get(url, params={"scale": "fit", "width": 640, "height": 640, "format": "image/jpeg"}) as r:
                     data = await collect.read_capped(r, 4 * 1024 * 1024)   # all of it: a part of a picture is a picture cut off
                     ctype = r.headers.get("Content-Type", "")
                     ctype = ctype.split(";")[0].strip().lower()
-                    if r.status != 200 or len(data) > 4 * 1024 * 1024 or ctype not in ("image/jpeg", "image/png", "image/webp"):
-                        raise web.HTTPNotFound()
+                    status = r.status
             except (OSError, asyncio.TimeoutError):
                 raise web.HTTPBadGateway()
+            if status == 404:
+                # The web address does not hand it out: asked for through the image service
+                # (when the listener has let the extension use it).
+                try:
+                    ctype, data = await self.api.image(key)
+                    status = 200
+                    log.info("sleeve %s: from the image service", key[:8])
+                except (RuntimeError, OSError, websockets.WebSocketException) as e:
+                    if key not in self._no_image:
+                        log.info("sleeve %s: not on the web address, not from the image service (%s)", key[:8], e)
+                    self._no_image.add(key)
+                    if len(self._no_image) > 500:
+                        self._no_image.clear()
+            if status != 200 or len(data) > 4 * 1024 * 1024 or ctype not in kinds:
+                raise web.HTTPNotFound()
             # whatever the server sent, the browser takes it as that picture and nothing else
             return web.Response(body=data, content_type=ctype, headers={
                 "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; sandbox"})

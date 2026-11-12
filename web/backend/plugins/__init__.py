@@ -284,7 +284,9 @@ class SourcePlugin(Plugin):
         return None
 
     async def state(self) -> dict:
-        """Extra facts for the panel's status (version, ...)."""
+        """Extra facts for the panel's status (version, ...). "tells": True says that the
+        source reports what plays (now_playing): the panel then takes its silence as nothing
+        playing, also while the DAC is held open."""
         return {}
 
     def optimization_rows(self) -> list[dict]:

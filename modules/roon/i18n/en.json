@@ -44,5 +44,8 @@
  "Orört på enheten": "Untouched on the device",
  "Roon skickar {0}{1}, och Roon Bridge lämnar det till DAC:en som det kom. Vad servern gjort före det (DSP, volymutjämning, omsampling) visar Roons egen signalväg.": "Roon sends {0}{1}, and Roon Bridge hands it to the DAC as it came. What the server did before that (DSP, volume levelling, resampling) shows in Roon's own signal path.",
  "{0} bit ljud i {1}-bitars ram, {2} kHz": "{0} bit audio in a {1} bit frame, {2} kHz",
- "Roon skickar 32 bit, mer än musikfiler innehåller. Det tyder på att servern bearbetar ljudet (DSP, volymutjämning eller Roons egen volym). Roons signalväg visar vad, och där stänger man av det för orört ljud. Roon Bridge lämnar det som kommer till DAC:en oförändrat.": "Roon sends 32 bit, more than music files hold. That suggests the server works on the audio (DSP, volume levelling or Roon's own volume). Roon's signal path shows what, and that is where to switch it off for untouched audio. Roon Bridge hands what arrives to the DAC unchanged."
+ "Roon skickar 32 bit, mer än musikfiler innehåller. Det tyder på att servern bearbetar ljudet (DSP, volymutjämning eller Roons egen volym). Roons signalväg visar vad, och där stänger man av det för orört ljud. Roon Bridge lämnar det som kommer till DAC:en oförändrat.": "Roon sends 32 bit, more than music files hold. That suggests the server works on the audio (DSP, volume levelling or Roon's own volume). Roon's signal path shows what, and that is where to switch it off for untouched audio. Roon Bridge hands what arrives to the DAC unchanged.",
+ "Söker…": "Searching…",
+ "Inget i Roon heter {0}.": "Nothing in Roon is called {0}.",
+ "Visa alla {0}": "Show all {0}"
 }

@@ -265,6 +265,42 @@ async def spot(http, name: str, album_title: str = "", title: str = "", spotify_
         found = {"artist": await find_artist(http, name, "", title, spotify_id), "release": ""}
     return found if found["artist"] else {}
 
+async def cover(http, artist: str, album: str = "", title: str = "") -> str:
+    """The address of the album's sleeve at the Cover Art Archive (MusicBrainz' own store of
+    sleeves), found by the album's name or else by a song on it; "" when it is not known.
+    Not every album has a sleeve there: of the albums that fit, the first that has one."""
+    groups: list[str] = []
+    if album:
+        d = await _mb(http, "release-group", query=f"releasegroup:{_q(plain(album))} AND artist:{_q(artist)}", limit=5)
+        for g in sorted((g for g in d.get("release-groups", []) if g.get("score", 0) >= 85),
+                        key=lambda g: (_fold(g.get("title")) != _fold(plain(album)), -g.get("score", 0))):
+            if _credited([g], artist) and g.get("id"):
+                groups.append(g["id"])
+    elif title:
+        d = await _mb(http, "recording", query=f"recording:{_q(plain(title))} AND artist:{_q(artist)}", limit=5)
+        for rec in d.get("recordings", []):
+            if rec.get("score", 0) < 85 or not _credited([rec], artist):
+                continue
+            for r in rec.get("releases", []):
+                g = r.get("release-group") or {}
+                # the album the song is from, before a collection it was put on or a concert
+                rank = len(g.get("secondary-types") or [])
+                if g.get("id") and g.get("primary-type") in ("Album", "EP", "Single"):
+                    groups.append((rank, g["id"]))
+        groups = [g for _, g in sorted(groups, key=lambda x: x[0])]
+    for group in list(dict.fromkeys(groups))[:4]:
+        if not re.fullmatch(r"[0-9a-f-]{36}", group):
+            continue
+        url = f"https://coverartarchive.org/release-group/{group}/front-500"
+        try:
+            async with http.get(url, headers={"User-Agent": UA}, allow_redirects=False) as r:
+                if r.status in (200, 302, 307):     # (it answers with where the picture is kept)
+                    return url
+        except (OSError, asyncio.TimeoutError):
+            return ""
+    return ""
+
+
 # ---- more than one source: each writes its own text, and the reader chooses
 LINK_HOSTS = (("allmusic.com", "AllMusic"), ("rateyourmusic.com", "Rate Your Music"), ("genius.com", "Genius"),
               ("last.fm", "Last.fm"), ("bandcamp.com", "Bandcamp"), ("secondhandsongs.com", "SecondHandSongs"),

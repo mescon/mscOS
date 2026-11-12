@@ -24,6 +24,7 @@ SOOD_PORT, SOOD_GROUP = 9003, "239.255.90.90"
 ROON_SERVICE = "00720724-5143-4a9b-abac-0e50cba674bb"
 TRANSPORT = "com.roonlabs.transport:2"
 BROWSE = "com.roonlabs.browse:1"
+IMAGE = "com.roonlabs.image:1"
 
 
 # ---- discovery
@@ -114,7 +115,7 @@ def moo_parse(frame: bytes) -> dict | None:
     first = lines[0].split(" ", 2)
     if len(first) != 3 or first[0] != "MOO/1":
         return None
-    msg = {"verb": first[1], "name": first[2], "request_id": None, "body": None}
+    msg = {"verb": first[1], "name": first[2], "request_id": None, "body": None, "type": ""}
     ctype, clen = "", None
     for line in lines[1:]:
         k, _, v = line.partition(":")
@@ -132,6 +133,8 @@ def moo_parse(frame: bytes) -> dict | None:
             msg["body"] = json.loads(rest[:clen])
         except ValueError:
             return None
+    elif clen and ctype:       # something that is not JSON (a picture): the bytes as they are
+        msg["body"], msg["type"] = bytes(rest[:clen]), ctype.split(";")[0].strip().lower()
     return msg
 
 
@@ -158,8 +161,9 @@ class Roon:
         await self.ws.send(moo_encode("REQUEST", name, rid, body))
         return rid
 
-    async def request(self, name: str, body=None, timeout: float = 8) -> dict:
-        """A request with one answer. Raises RuntimeError when the server says no or is gone."""
+    async def request(self, name: str, body=None, timeout: float = 8, whole: bool = False) -> dict:
+        """A request with one answer (whole: the message itself, not only its body). Raises
+        RuntimeError when the server says no or is gone."""
         if self.ws is None:
             raise RuntimeError("not connected")
         fut = asyncio.get_running_loop().create_future()
@@ -173,7 +177,7 @@ class Roon:
             self._waiting.pop(rid, None)
         if msg["name"] != "Success":
             raise RuntimeError(msg["name"])
-        return msg.get("body") or {}
+        return msg if whole else (msg.get("body") or {})
 
     async def run(self, ws) -> None:
         """Speak with the server until the connection ends."""
@@ -232,17 +236,26 @@ class Roon:
         self.changed()
 
     # ---- browse: Roon keeps the place in its lists; we say where to go and read what is there
-    async def browse(self, hierarchy: str, zone_id: str = "", count: int = 100, **where) -> dict:
+    async def browse(self, hierarchy: str, zone_id: str = "", count: int = 100, session: str = "mscos", **where) -> dict:
         """Go somewhere in a hierarchy ("browse" or "search") and read the list that is there:
         where = item_key (an item chosen), input (a search), pop_all (to the top), pop_levels.
-        {"action", "message", "list": {...}, "items": [...]}"""
-        opts = {"hierarchy": hierarchy, "multi_session_key": "mscos", **({"zone_or_output_id": zone_id} if zone_id else {}), **where}
+        Roon keeps one place per session: two pages with the same session would move each
+        other about. {"action", "message", "list": {...}, "items": [...]}"""
+        opts = {"hierarchy": hierarchy, "multi_session_key": session, **({"zone_or_output_id": zone_id} if zone_id else {}), **where}
         d = await self.request(f"{BROWSE}/browse", opts, timeout=15)
         out = {"action": d.get("action"), "message": d.get("message") or "", "is_error": bool(d.get("is_error")), "list": d.get("list"), "items": []}
         if d.get("action") == "list":
-            got = await self.request(f"{BROWSE}/load", {"hierarchy": hierarchy, "multi_session_key": "mscos", "offset": 0, "count": count}, timeout=15)
+            got = await self.request(f"{BROWSE}/load", {"hierarchy": hierarchy, "multi_session_key": session, "offset": 0, "count": count}, timeout=15)
             out["list"], out["items"] = got.get("list") or d.get("list"), got.get("items") or []
         return out
+
+    async def image(self, key: str, size: int = 640) -> tuple[str, bytes]:
+        """A picture by its key, through the image service: (media type, bytes). Asked this
+        way when the server's web address does not hand the picture out."""
+        msg = await self.request(f"{IMAGE}/get_image", {"image_key": key, "scale": "fit", "width": size, "height": size, "format": "image/jpeg"}, whole=True)
+        if not isinstance(msg.get("body"), bytes):
+            raise RuntimeError("no picture")
+        return msg["type"], msg["body"]
 
     # ---- transport
     async def control(self, zone_id: str, what: str) -> None:

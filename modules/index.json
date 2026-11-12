@@ -1,38 +1,38 @@
 {
  "format": 1,
- "serial": 49,
+ "serial": 55,
  "modules": [
   {
    "id": "about",
-   "version": "1.6.0",
+   "version": "1.7.0",
    "kind": "integration",
    "name": {
     "sv": "Om musiken",
     "en": "About the music"
    },
    "description": {
-    "sv": "Text om artisten, albumet och låten som spelas, vilka som medverkar, och låttexten i takt med musiken. Från Wikipedia, MusicBrainz, Wikidata, Discogs, Last.fm och LRCLIB. Enheten frågar de tjänsterna om det som spelas.",
-    "en": "Notes on the artist, the album and the song that is playing, who plays on it, and the words in time with the music. From Wikipedia, MusicBrainz, Wikidata, Discogs, Last.fm and LRCLIB. The device asks those services about what is playing."
+    "sv": "Text om artisten, albumet och låten som spelas, vilka som medverkar, och låttexten i takt med musiken. Ett omslag när spelaren saknar ett. Från Wikipedia, MusicBrainz, Cover Art Archive, Wikidata, Discogs, Last.fm och LRCLIB. Enheten frågar de tjänsterna om det som spelas.",
+    "en": "Notes on the artist, the album and the song that is playing, who plays on it, and the words in time with the music. A sleeve when the player has none. From Wikipedia, MusicBrainz, the Cover Art Archive, Wikidata, Discogs, Last.fm and LRCLIB. The device asks those services about what is playing."
    },
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "52879ba0db30cb88420fb6739bd846e290222a44f5178446b2100d83ecdc2fdd",
+     "sha256": "98ee554e97ff3c0475b1ff144b84fc765c2f5afd406c13c7aa92de49b6271e86",
      "exec": false
     },
     {
      "path": "lookup.py",
-     "sha256": "2352af9b279944917eadc643fa05302d0133c8d84e54a744f181d3cb2e9eb0e7",
+     "sha256": "7ceaf876a2c545078e7725437e34b055ba4897447f64c8e9392f4cab7c20efcb",
      "exec": false
     },
     {
      "path": "module.json",
-     "sha256": "ca8dfa067a4dc764569f3dbe63cf599ec9c81c8b93e174d0435f275b58a487a2",
+     "sha256": "372adc9541b2c5c6a21d877ccdc312a6f1cfdbe7a1c826b84bd14d3378224ad0",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "0eefdffd5fa8cded8046bc9287fb9b3f3c7e3463dd019d4956d6556b4bb9ddfd",
+     "sha256": "370f81d850bc375772ee78329428726fd67ed2e734341d2221891375cc97d2ce",
      "exec": false
     },
     {
@@ -269,7 +269,7 @@
   },
   {
    "id": "roon",
-   "version": "1.6.0",
+   "version": "1.8.0",
    "kind": "source",
    "name": {
     "sv": "Roon Bridge",
@@ -282,7 +282,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "b490e35ba0ae16e710af3cde573de32c4e3fae4083778a9cc42db18c5616a0d1",
+     "sha256": "02c6c76ad2df0b6e91bf83c97d372667120f70d3d7423fb89142dee5e7965650",
      "exec": false
     },
     {
@@ -292,12 +292,12 @@
     },
     {
      "path": "module.json",
-     "sha256": "f9df10ace3f8f710da570dfe2f62e30b8f0b3f76ee830c942e03cac997a5e0d2",
+     "sha256": "608cd023dc87488e16e6f15d7d4eed6e762f6813a7b565698634e17feaa9fef7",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "b8b827fd9a6b32f48b08f21e7d5171ac4191eb74efef742c7ede034b25f8ddc4",
+     "sha256": "1379331ae619676b51e3ac059e7f44541e9733fd7d56b09d734397ba85f7abc1",
      "exec": false
     },
     {
@@ -322,7 +322,7 @@
     },
     {
      "path": "roonapi.py",
-     "sha256": "4f282105d23c66842f5f36befc2ad84c531e889530129320b811456c44df9e36",
+     "sha256": "e3acba1ece2eb5d51f52323eb322571f73953c45fdcb9d27a3b1fcdfccc67506",
      "exec": false
     },
     {
@@ -332,7 +332,7 @@
     },
     {
      "path": "i18n/en.json",
-     "sha256": "01bea13e29de53f0d46d973407dbdc937f3f83c30811204b69f52b9fe7290143",
+     "sha256": "a75d11a3ade198630ef1177bdbd2fa65c8fac19cbe6f6d11e3f2f27e8ca56f7b",
      "exec": false
     },
     {

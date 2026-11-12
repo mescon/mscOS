@@ -1600,6 +1600,8 @@ async def cache_headers(request, handler):
     resp = await handler(request)
     if request.path.startswith("/api/roon/image/"):
         resp.headers["Cache-Control"] = "private, max-age=604800, immutable"   # a picture under its own key: never another
+    elif request.path.startswith("/api/about/cover") and resp.status == 200:
+        pass                                            # (a sleeve found elsewhere: kept by the browser as the module says)
     elif request.path.startswith("/api/"):
         resp.headers["Cache-Control"] = "no-store"
     elif not request.path.startswith("/fonts/"):

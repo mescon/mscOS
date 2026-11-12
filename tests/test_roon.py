@@ -25,8 +25,8 @@ class Messages(unittest.TestCase):
     def test_a_request_and_its_answer(self):
         raw = roonapi.moo_encode("REQUEST", "com.roonlabs.transport:2/control", 7, {"control": "pause"})
         self.assertTrue(raw.startswith(b"MOO/1 REQUEST com.roonlabs.transport:2/control\nRequest-Id: 7\nContent-Length: 20\nContent-Type: application/json\n\n"))
-        self.assertEqual(roonapi.moo_parse(raw), {"verb": "REQUEST", "name": "com.roonlabs.transport:2/control", "request_id": "7", "body": {"control": "pause"}})
-        self.assertEqual(roonapi.moo_parse(b"MOO/1 COMPLETE Success\nRequest-Id: 3\n\n"), {"verb": "COMPLETE", "name": "Success", "request_id": "3", "body": None})
+        self.assertEqual(roonapi.moo_parse(raw), {"verb": "REQUEST", "name": "com.roonlabs.transport:2/control", "request_id": "7", "body": {"control": "pause"}, "type": ""})
+        self.assertEqual(roonapi.moo_parse(b"MOO/1 COMPLETE Success\nRequest-Id: 3\n\n"), {"verb": "COMPLETE", "name": "Success", "request_id": "3", "body": None, "type": ""})
 
     def test_what_is_not_a_message(self):
         for junk in (b"", b"hello", b"MOO/1 COMPLETE Success\n\n", b"HTTP/1.1 200 OK\nRequest-Id: 1\n\n",
@@ -166,3 +166,11 @@ class BridgeLog(unittest.TestCase):
 
     def test_a_log_that_is_not_there(self):
         self.assertEqual(self.raat.Log("/nonexistent/raat.txt").latest(), {})
+
+
+class Pictures(unittest.TestCase):
+    def test_an_answer_that_is_a_picture(self):
+        frame = b"MOO/1 COMPLETE Success\nRequest-Id: 7\nContent-Length: 4\nContent-Type: image/jpeg\n\n\xff\xd8\xff\xe0 and more"
+        msg = roonapi.moo_parse(frame)
+        self.assertEqual((msg["name"], msg["type"], msg["body"]), ("Success", "image/jpeg", b"\xff\xd8\xff\xe0"))
+        self.assertEqual(roonapi.moo_parse(roonapi.moo_encode("COMPLETE", "Success", 3, {"a": 1}))["body"], {"a": 1})

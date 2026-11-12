@@ -166,6 +166,8 @@ the listener came straight to this address), and `api.route()` says where the pa
 browser's back and forward: the module shows what the address says. An address should name the
 thing itself (an album's id, the names of the lists one went into), so that it can be kept,
 sent, and opened later: `/music/album/<id>`, `/music/search/<words>`, `/music/roon/Playlists/<name>`.
+A `coverFor(track)` hook lets a module offer a sleeve for `{artist, album, title}` when the
+player's own is missing or broken (`api.coverFor(track)` asks for one).
 The panel does the same for its own parts: a panel that is open is `/signal/clock`, a module's
 card is `/system/modules/<id>`. What stands in `sub` comes
 from the address bar, so it is checked before it is used. `usbStage(dac, running)` and

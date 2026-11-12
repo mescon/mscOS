@@ -232,12 +232,20 @@ const PAGES = {}, PAGE_V = {};
 const VIEW = () => PAGES[srcId()] || {};          // the current source's own view, if it brings one
 const pagesDo = (hook, ...a) => Object.values(PAGES).forEach((p) => { try { p[hook]?.(...a); } catch (e) { console.error(e); } });
 const nowTrack = () => VIEW().track?.() ?? (S.now?.title ? { title: S.now.title, artist: S.now.artist || "", album: S.now.album || "" } : null);
+function coverFor(t) {
+  if (!t || !t.artist || !(t.album || t.title)) return "";
+  for (const p of Object.values(PAGES)) { try { const u = p.coverFor?.(t); if (u) return u; } catch (e) { console.error(e); } }
+  return "";
+}
 function pageApi(id) {
   return { $, $$, S, tr, esc, dec, khz, fmtWord, fmtTime, clock, stamp, post, toast, fv, loc, MARK,
     outName, srcId, srcState, sigWord, usbStage,
     // to a view, and to something of the module's inside it: go("v-music", ["album", id]). The
     // module's route(view, sub) is told where the page is, also when the listener goes back.
     go, back: goBack, route: () => routeNow(),
+    // a sleeve from elsewhere for {artist, album, title} when the player's own is missing or
+    // broken: an address, or "" (a module offers it through a coverFor(track) hook)
+    coverFor,
     lang: () => LANG,
     // where in the track the music is, how long the track is (milliseconds), and whether it plays
     position: () => posNow(), duration: () => durOf(), playing: () => isPlaying(),
@@ -370,6 +378,9 @@ function renderDock() {
   const img = $("#np-cover"), has = !img.hidden && !!img.src, dk = $("#dk-cover");
   dk.hidden = !has; if (has && dk.src !== img.src) dk.src = img.src;
   $("#ambient").style.backgroundImage = has ? `url("${img.src}")` : "";
+  // the bar is there while there is something in it: a track (playing or paused), or music
+  // that plays without the source saying what it is
+  document.body.classList.toggle("no-dock", !(nowTrack()?.title || isPlaying()));
   $("#dk-title").textContent = $("#np-title").textContent;
   $("#dk-artist").textContent = $("#np-artist").textContent;
   const playing = !$("#i-pause").hasAttribute("hidden");
@@ -434,9 +445,16 @@ function setCover(url) {
   };
   if (!abs) { fade(() => { img.hidden = true; img.removeAttribute("src"); empty.hidden = false; }); return; }
   const pre = new Image();
-  pre.onload = pre.onerror = () => {
-    if (coverWant !== abs) return;          // another track since
-    fade(() => { img.src = abs; img.hidden = false; empty.hidden = true; });
+  const show = (u) => { if (coverWant === abs) fade(() => { img.src = u; img.hidden = false; empty.hidden = true; }); };   // (unless another track since)
+  pre.onload = () => show(abs);
+  pre.onerror = () => {
+    // the player's sleeve does not load: one from elsewhere, if a module knows of one; else none
+    const other = coverFor(nowTrack());
+    if (!other) { if (coverWant === abs) fade(() => { img.hidden = true; img.removeAttribute("src"); empty.hidden = false; }); return; }
+    const alt = new Image();
+    alt.onload = () => show(new URL(other, location.href).href);
+    alt.onerror = () => { if (coverWant === abs) fade(() => { img.hidden = true; img.removeAttribute("src"); empty.hidden = false; }); };
+    alt.src = other;
   };
   pre.src = abs;
 }
@@ -477,7 +495,8 @@ function renderPlay() {
       return;
     }
     // a source that opens the DAC itself (Roon, HQPlayer): the DAC shows what arrives
-    const running = !s.pipewire && d.state === "RUNNING";
+    // (a source that says what plays, and says nothing now, is not playing: some keep the DAC open between tracks)
+    const running = !s.pipewire && d.state === "RUNNING" && !stt.tells;
     $("#np-title").textContent = running ? tr`Spelar via ${s.label}` : s.label;
     $("#np-artist").textContent = running ? tr`${sigWord(d.hw_params?.format, parseInt(d.hw_params?.rate) || 44100)} till ${outName()}` : srcHint(s);
     $("#np-album").textContent = ""; fe.hidden = true;
@@ -504,7 +523,7 @@ function posNow() {
   return Math.max(0, Math.min(ms, dur || ms));
 }
 // is music playing, as far as the panel knows
-const isPlaying = () => (VIEW().playing ? !!VIEW().playing() : S.now ? !!S.now.playing : S.status.dac?.state === "RUNNING");
+const isPlaying = () => (VIEW().playing ? !!VIEW().playing() : S.now ? !!S.now.playing : srcState().tells ? false : S.status.dac?.state === "RUNNING");
 function tickProgress() {
   const dur = durOf(), ms = posNow();
   $("#np-pos").textContent = fmtTime(ms); $("#np-dur").textContent = fmtTime(dur);

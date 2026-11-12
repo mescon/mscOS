@@ -1,13 +1,13 @@
 {
  "id": "about",
- "version": "1.6.0",
+ "version": "1.7.0",
  "kind": "integration",
  "name": {
   "sv": "Om musiken",
   "en": "About the music"
  },
  "description": {
-  "sv": "Text om artisten, albumet och låten som spelas, vilka som medverkar, och låttexten i takt med musiken. Från Wikipedia, MusicBrainz, Wikidata, Discogs, Last.fm och LRCLIB. Enheten frågar de tjänsterna om det som spelas.",
-  "en": "Notes on the artist, the album and the song that is playing, who plays on it, and the words in time with the music. From Wikipedia, MusicBrainz, Wikidata, Discogs, Last.fm and LRCLIB. The device asks those services about what is playing."
+  "sv": "Text om artisten, albumet och låten som spelas, vilka som medverkar, och låttexten i takt med musiken. Ett omslag när spelaren saknar ett. Från Wikipedia, MusicBrainz, Cover Art Archive, Wikidata, Discogs, Last.fm och LRCLIB. Enheten frågar de tjänsterna om det som spelas.",
+  "en": "Notes on the artist, the album and the song that is playing, who plays on it, and the words in time with the music. A sleeve when the player has none. From Wikipedia, MusicBrainz, the Cover Art Archive, Wikidata, Discogs, Last.fm and LRCLIB. The device asks those services about what is playing."
  }
 }

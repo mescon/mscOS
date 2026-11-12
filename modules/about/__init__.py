@@ -30,8 +30,8 @@ KEEP, KEEP_EMPTY, MOST = 60 * 86400, 2 * 86400, 600   # seconds found / not foun
 class About(Plugin):
     id = "about"
     name = {"sv": "Om musiken", "en": "About the music"}
-    description = {"sv": "Text om artisten, albumet och låten som spelas, vilka som medverkar, och låttexten i takt med musiken. Från Wikipedia, MusicBrainz, Wikidata, Discogs, Last.fm och LRCLIB. Enheten frågar de tjänsterna om det som spelas.",
-                   "en": "Notes on the artist, the album and the song that is playing, who plays on it, and the words in time with the music. From Wikipedia, MusicBrainz, Wikidata, Discogs, Last.fm and LRCLIB. The device asks those services about what is playing."}
+    description = {"sv": "Text om artisten, albumet och låten som spelas, vilka som medverkar, och låttexten i takt med musiken. Ett omslag när spelaren saknar ett. Från Wikipedia, MusicBrainz, Cover Art Archive, Wikidata, Discogs, Last.fm och LRCLIB. Enheten frågar de tjänsterna om det som spelas.",
+                   "en": "Notes on the artist, the album and the song that is playing, who plays on it, and the words in time with the music. A sleeve when the player has none. From Wikipedia, MusicBrainz, the Cover Art Archive, Wikidata, Discogs, Last.fm and LRCLIB. The device asks those services about what is playing."}
     defaults = {"about_lyrics": False}
     options = ({"key": "about_lyrics", "type": "toggle", "label": {"sv": "Visa låttexten", "en": "Show the words of the song"},
                 "help": {"sv": "Texten hämtas från LRCLIB, en öppen databas som användare fyller på, och följer med i musiken när den är tidssatt.",
@@ -194,6 +194,34 @@ class About(Plugin):
             if part not in ("", "artist", "album", "track"):
                 raise web.HTTPBadRequest()
             return web.json_response(await self.about(artist, album, title, lang, m.group(1) if m else "", part))
+
+        @routes.get("/api/about/cover")
+        async def cover(request):
+            """A sleeve for when the player has none to show (its own picture is missing or
+            broken): the album's front from the Cover Art Archive, passed on by the device."""
+            q = request.query
+            artist, album, title = (" ".join(str(q.get(k) or "").split())[:200] for k in ("artist", "album", "title"))
+            if not artist or not (album or title):
+                raise web.HTTPBadRequest()
+            if self.http is None:
+                self.http = ClientSession(timeout=ClientTimeout(total=15))
+            first = re.split(r", | / ", artist)[0]
+            try:
+                url = await self._one(self._file("cover2", first, album or "\0" + title), lambda: lookup.cover(self.http, first, album, "" if album else title))
+            except lookup.Unavailable:
+                raise web.HTTPServiceUnavailable()
+            if not url:
+                raise web.HTTPNotFound()
+            try:
+                async with self.http.get(url, headers={"User-Agent": lookup.UA}) as r:
+                    data = await collect.read_capped(r, 3 * 1024 * 1024)
+                    ctype = r.headers.get("Content-Type", "").split(";")[0].strip().lower()
+                    if r.status != 200 or len(data) > 3 * 1024 * 1024 or ctype not in ("image/jpeg", "image/png", "image/webp"):
+                        raise web.HTTPNotFound()
+            except (OSError, asyncio.TimeoutError):
+                raise web.HTTPBadGateway()
+            return web.Response(body=data, content_type=ctype, headers={
+                "Cache-Control": "private, max-age=604800", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; sandbox"})
 
         @routes.post("/api/about/lyrics")
         async def lyrics(request):
