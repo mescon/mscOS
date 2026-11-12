@@ -86,6 +86,7 @@ function showView(id) {
   requestAnimationFrame(fitListen);
   if (id === "v-signal") { loadOpts(); loadDac(); requestAnimationFrame(() => { renderSpark(); if (S.dacd?.clock_avg) renderClockChart(S.dacd.clock_avg.series || []); }); }
   if (id === "v-mods") loadMods();
+  if (id === "v-music") setTimeout(loadListened);
   if (id === "v-signal") waveSet(WAVE.on);
 }
 document.addEventListener("click", (e) => {
@@ -211,9 +212,7 @@ function stageLayout() {
   const empty = ![...$$("#v-play .console-col [data-page-of]")].some((el) => !el.hidden);
   // Controls: the amplifier's input and power, and the modules' own cards. No tab when there are none.
   // Music: only when the current source's module has put something there
-  const music = [...$$("#v-music [data-page-of]")].some((el) => !el.hidden);
-  $("#tab-music").hidden = !music;
-  if (!music && document.body.dataset.view === "v-music") showView("v-play");
+  $("#tab-music").hidden = false;   // every source has the listening history there, some a way to choose music too
   const ctl = !$("#f-amp").hidden || !$("#f-source").hidden || $("#panels").children.length > 0;
   $("#tab-ctl").hidden = !ctl;
   if (!ctl && document.body.dataset.view === "v-ctl") showView("v-play");
@@ -240,6 +239,8 @@ async function handle(m) {
   if (m.type !== "hello" && Object.values(PAGES).some((p) => { try { return p.message?.(m); } catch (e) { console.error(e); return false; } })) m = null;
   if (m) handleMsg(m);
   pagesDo("render"); renderDock(); stageLayout();
+  // the history names each source as the panel does: drawn again once the sources are known
+  if (m?.type === "hello" && document.body.dataset.view === "v-music") loadListened();
 }
 function handleMsg(m) {
   switch (m.type) {
@@ -248,7 +249,7 @@ function handleMsg(m) {
       AMP = m.amp || null;
       pagesDo("hello", m);
       renderFeatures(); renderAll(); break;
-    case "now": if (m.source === srcId()) { S.now = m.now; renderPlay(); renderSignal(); } break;
+    case "now": if (m.source === srcId()) { S.now = m.now; renderPlay(); renderSignal(); listenedSoon(); } break;
     case "status": S.status = m.status; if (!VIEW().play) S.now = m.status.now ?? null; renderStatus(); renderSignal(); renderPlay(); break;
     case "xrun": S.xruns.push(m.point); if (S.xruns.length > 2880) S.xruns.shift(); renderSpark(); renderSignal(); break;
     case "panels": S.panels = m.panels || {}; renderPanels(); break;
@@ -646,6 +647,26 @@ function renderSettings() {
   fv("alerts", !st.alerts_configured ? tr("Inte inställt") : st.alerts ? tr("På") : tr("Av"), !st.alerts_configured || !st.alerts);
   $$("#net-speed button").forEach((b) => b.setAttribute("aria-checked", +b.dataset.v === (S.features?.board?.link_mbps === 1000 ? 1000 : S.features?.board?.link_mbps ? 100 : st.net_speed || 100)));
 }
+// ------------------------------------------------------------------ listening history (Music view)
+let listenedTimer = 0;
+const listenedSoon = () => { if (document.body.dataset.view !== "v-music") return; clearTimeout(listenedTimer); listenedTimer = setTimeout(loadListened, 4000); };
+async function loadListened() {
+  let d;
+  try { const r = await fetch("/api/listened"); if (!r.ok) return; d = await r.json(); } catch { return; }
+  $("#listen-history").checked = !!d.on;
+  const label = (id) => sources().find((s) => s.id === id)?.label || id;
+  const day = (t) => new Date(t * 1000).toLocaleDateString(LANG === "sv" ? "sv-SE" : "en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  $("#listened-note").textContent = !d.on ? tr("Avstängd: inget sparas.") : d.items.length ? "" : tr("Här listas det som spelas på enheten: låt, artist, album, när och från vilken källa.");
+  let last = "", html = "";
+  for (const e of d.items) {
+    const dd = day(e.t);
+    if (dd !== last) { html += `${last ? "</ol>" : ""}<h4>${esc(dd)}</h4><ol>`; last = dd; }
+    html += `<li><time>${esc(clock(e.t))}</time><span><b>${esc(e.title)}</b><span>${esc([e.artist, e.album].filter(Boolean).join(" · "))}</span></span><small>${esc(label(e.source))}</small></li>`;
+  }
+  $("#listened-list").innerHTML = html + (last ? "</ol>" : "");
+}
+$("#listen-history").addEventListener("change", async (e) => { await setSetting("listen_history", e.target.checked, e.target); loadListened(); });
+$("#listened-clear").addEventListener("click", async () => { try { await post("/api/tests/listened-clear", {}); toast(tr("Lyssningshistoriken är rensad.")); } catch {} loadListened(); });
 async function setSetting(key, on, el) {
   try { const r = await post("/api/settings", { [key]: on }); S.settings = { ...S.settings, ...r.settings }; renderSettings(); }
   catch { el.checked = !on; }
@@ -910,8 +931,7 @@ function renderAmp() {
   $("#ml-ctl").hidden = !m.reachable;
   $("#ml-numbox").hidden = !m.reachable || m.power === false;
   const num = $("#ml-num");
-  num.max = max;
-  if (document.activeElement !== num) num.value = m.volume_db != null ? m.volume_db : "";
+  if (document.activeElement !== num) num.value = m.volume_db != null ? dec(m.volume_db) : "";
   $("#ml-step").hidden = !m.reachable || m.power === false;
   $("#amp").classList.toggle("live", !!m.reachable && m.power !== false);
   $("#amp").classList.toggle("off", m.power === false);
@@ -971,14 +991,16 @@ function ampStep(d) {
 // the level typed as a number: to the nearest half dB, and never above the panel's ceiling
 $("#ml-num").addEventListener("change", (e) => {
   const m = AMP || {}, max = +(m.max_db || 40), v = parseFloat(String(e.target.value).replace(",", "."));
-  if (!Number.isFinite(v)) { e.target.value = m.volume_db ?? ""; return; }
-  if (v > max) { toast(tr`Panelen går högst till ${dec(max)} dB. Högre volym ställer du med fjärrkontrollen.`); e.target.value = m.volume_db ?? ""; return; }
+  const was = m.volume_db != null ? dec(m.volume_db) : "";
+  if (!Number.isFinite(v)) { e.target.value = was; return; }
+  if (v > max) { toast(tr`Panelen går högst till ${dec(max)} dB. Högre volym ställer du med fjärrkontrollen.`); e.target.value = was; return; }
   const to = Math.max(0, Math.round(v * 2) / 2);
-  e.target.value = to; e.target.blur();
+  e.target.value = dec(to); e.target.blur();
   $("#ml-vol-v").textContent = dec(to);
   amp({ volume_db: to });
 });
 $("#ml-num").addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.blur(); });
+$("#ml-num").addEventListener("focus", (e) => e.target.select());   // typing replaces the number
 $("#ml-down").addEventListener("click", () => ampStep(-1));
 $("#ml-up").addEventListener("click", () => ampStep(1));
 $("#ml-vol").addEventListener("change", (e) => amp({ volume_db: +e.target.value }));

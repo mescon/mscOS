@@ -55,7 +55,7 @@ class Spotify(SourcePlugin):
     transport = ("toggle", "play", "pause", "next", "prev", "seek", "shuffle", "repeat")
     pushes_playing = True  # Soloist's events say when playback starts and stops here
     rt_proc = "soloist"   # its rendering threads run with realtime priority (soloist-rt)
-    defaults = {"auto_verify": True, "soloist_normalization": False, "spotify_history": True}
+    defaults = {"auto_verify": True, "soloist_normalization": False}
     alert_kinds = ({"id": "soloist", "label": {"sv": "Soloist har stannat", "en": "Soloist has stopped"}},
                    {"id": "verify", "label": {"sv": "En verifiering avviker", "en": "A verification deviates"}},
                    {"id": "expiry", "label": {"sv": "Spotify-bygget går snart ut", "en": "The Spotify build expires soon"}})
@@ -137,9 +137,6 @@ class Spotify(SourcePlugin):
                             cooldown=24 * 3600)
 
     options = (
-        {"key": "spotify_history", "type": "toggle", "label": {"sv": "Kom ihåg vad som spelats", "en": "Remember what has been played"},
-         "help": {"sv": "Album, låtar och artister som spelats här visas under Musik, för alla som når panelen i nätverket. Av: inget sparas, och det som sparats raderas. Listan töms också med Rensa historik under Profil.",
-                  "en": "Albums, tracks and artists played here are shown under Music, to everyone who reaches the panel on the network. Off: nothing is kept, and what was kept is deleted. Clear history under Profile empties the list too."}},
         {"key": "soloist_normalization", "type": "toggle", "label": {"sv": "Normalisera volymen", "en": "Normalize the volume"},
          "help": {"sv": "Av ger bitperfekt ljud. Spotify-appens reglage når inte Soloist, så det styrs här. Soloist startas om när du ändrar.",
                   "en": "Off gives bit-perfect audio. The Spotify app's own switch does not reach Soloist, so it is set here. Soloist restarts when you change it."}},
@@ -158,10 +155,6 @@ class Spotify(SourcePlugin):
     def update_settings(self, b: dict, upd: dict) -> None:
         if "auto_verify" in b:
             upd["auto_verify"] = bool(b["auto_verify"])
-        if "spotify_history" in b:
-            upd["spotify_history"] = bool(b["spotify_history"])
-            if not upd["spotify_history"]:
-                self.forget_played()
         if "soloist_normalization" in b:
             if not so.prefs_paths():
                 raise web.HTTPConflict(text=T("Soloist har inte loggat in än. Anslut från Spotify-appen först."))
@@ -301,6 +294,8 @@ class Spotify(SourcePlugin):
             self.auth = ev
         elif t == "playback_state":
             self.playback = ev
+            if ev.get("status") == "playing":   # already playing when the panel (re)connected
+                self.note_played(ev.get("item"))
         elif t == "track_changed":
             asyncio.ensure_future(self.measure_track_quality())
             self.playback["item"] = ev.get("item")
@@ -426,8 +421,10 @@ class Spotify(SourcePlugin):
             deco = lambda e: (e or {}).get("decorations") or {}   # noqa: E731
             name = lambda e: (deco(e).get("identity") or {}).get("name") or ""   # noqa: E731
             uri = (item or {}).get("uri") or ""
-            if not SPOTIFY_URI.fullmatch(uri) or self.auth.get("is_active") is False or not self.hub.settings.get("spotify_history", True):
+            if not SPOTIFY_URI.fullmatch(uri) or self.auth.get("is_active") is False or not self.hub.settings.get("listen_history", True):
                 return
+            who = ", ".join(name(c.get("entity")) for c in (deco(item).get("creators") or [])[:6] if name(c.get("entity")))
+            self.hub.note_listened(self.id, name(item), who, name((deco(item).get("parent") or {}).get("entity")))
             h = self._history()
             if h and h[-1].get("uri") == uri:
                 return
@@ -861,7 +858,7 @@ class Spotify(SourcePlugin):
         async def spotify_played(request):
             # Open to the network like the rest of what the panel shows a listener (what plays,
             # the queue): the owner switches the keeping off, or clears it, in the settings.
-            return web.json_response(sp.played() if hub.settings.get("spotify_history", True) else {"albums": [], "tracks": [], "artists": [], "off": True})
+            return web.json_response(sp.played() if hub.settings.get("listen_history", True) else {"albums": [], "tracks": [], "artists": [], "off": True})
 
         @routes.post("/api/soloist/restart")
         async def soloist_restart(request):

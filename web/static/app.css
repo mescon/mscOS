@@ -821,8 +821,22 @@ html { -webkit-tap-highlight-color: transparent; }
   .transport { margin: 8px auto 2px; }
 }
 
-/* the level as a number, under the slider */
-.vol-num { display: flex; align-items: center; gap: 8px; margin: 8px 4px 0; font-size: .8125rem; color: var(--engraved); }
-.vol-num input { width: 5.2em; min-height: 40px; padding: 0 8px; border: 1px solid var(--btn-line); border-radius: 2px; background: transparent;
-  font: inherit; font-size: 1rem; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
-.vol-num input:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+/* the level, to read and to type: it looks like the number it is until it is pressed */
+.vol-num { display: flex; align-items: baseline; justify-content: center; gap: 6px; margin: 2px 0 6px; }
+.vol-num input { width: 4.2em; min-height: 44px; padding: 0 4px; border: 0; border-bottom: 1px solid transparent; border-radius: 0; background: none;
+  font: inherit; font-weight: 300; font-size: 1.875rem; color: var(--red); text-align: right; font-variant-numeric: tabular-nums; cursor: text; }
+.vol-num input:hover { border-bottom-color: var(--hair); }
+.vol-num input:focus { outline: none; border-bottom-color: var(--ink); color: var(--ink); }
+.vol-num small { font-size: .8125rem; color: var(--engraved); }
+
+/* ============================================================ listening history, in the Music view */
+.listened { margin-top: 44px; padding-top: 22px; border-top: 1px solid var(--hair); }
+.listened-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.listened-head h3 { flex: 1 1 auto; font-family: var(--serif); font-weight: 500; font-size: 1.375rem; }
+.listened h4 { margin: 22px 0 4px; font-size: .8125rem; font-weight: 400; letter-spacing: .03em; color: var(--engraved); }
+.listened ol { list-style: none; padding: 0; margin: 0; }
+.listened li { display: grid; grid-template-columns: 3.2em minmax(0, 1fr) auto; align-items: baseline; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--hair); }
+.listened time { font-size: .8125rem; color: var(--engraved); font-variant-numeric: tabular-nums; }
+.listened li b { display: block; font-family: var(--serif); font-weight: 600; font-size: 1.0625rem; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.listened li span span { display: block; font-size: .8125rem; color: var(--engraved); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.listened li small { font-size: .75rem; color: var(--engraved); white-space: nowrap; }

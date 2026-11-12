@@ -7,6 +7,7 @@ snapshots, Soloist playback events and job output; actions are plain POSTs.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import collections
 import hashlib
 import json
@@ -136,6 +137,7 @@ class Hub:
         self.jobs: dict[str, dict] = {}
         self.saved_stats: dict = {}  # the stats file as read, for the modules that keep state in it
         self.settings: dict = {"alerts": True, "leds": True, "net_speed": 100, "spotify_vol_to_amp": True,
+                               "listen_history": True,  # keep the list of what has been listened to
                                "source": "",  # the source module that owns the DAC (one at a time)
                                "language": "en"}  # system language (alerts); the panel follows the browser
         # 30 s samples, 24 h: the DAC's measured clock and the supply rail
@@ -254,6 +256,47 @@ class Hub:
                 p.lost_dac()
         return {"ok": ok_, "source": src, "dac_released": released, "error": (err + e2)[:300]}
 
+    # ---- what has been listened to: track, artist, album, when, and from which source
+    LISTENED = os.path.join(STATE_DIR, "listened.json")
+
+    def listened(self) -> list:
+        if not hasattr(self, "_listened"):
+            try:
+                with open(self.LISTENED, encoding="utf-8") as f:
+                    d = json.load(f)
+                self._listened = d if isinstance(d, list) else []
+            except (OSError, ValueError):
+                self._listened = []
+        return self._listened
+
+    def note_listened(self, source: str, title, artist="", album="") -> None:
+        """A track began to play here. Kept as the owner has set it (settings: listen_history)."""
+        try:
+            title, artist, album = (" ".join(str(x or "").split())[:200] for x in (title, artist, album))
+            if not title or not self.settings.get("listen_history", True):
+                return
+            h = self.listened()
+            last = h[-1] if h else {}
+            if (last.get("source"), last.get("title"), last.get("artist"), last.get("album")) == (source, title, artist, album) \
+                    and time.time() - last.get("t", 0) < 6 * 3600:
+                return   # the same track still (paused and resumed, the panel restarted)
+            h.append({"t": int(time.time()), "source": source, "title": title, "artist": artist, "album": album})
+            del h[:-5000]
+            with open(self.LISTENED + ".new", "w", encoding="utf-8") as f:
+                json.dump(h, f, ensure_ascii=False)
+            os.replace(self.LISTENED + ".new", self.LISTENED)
+        except Exception as e:  # noqa: BLE001 - the list must never get in the way of playing
+            log.warning("listening history: %s", e)
+
+    def forget_listened(self) -> None:
+        self._listened = []
+        with contextlib.suppress(OSError):
+            os.unlink(self.LISTENED)
+        for p in self.plugins.values():   # lists a module keeps of the same (to play again)
+            forget = getattr(p, "forget_played", None)
+            if forget:
+                forget()
+
     def source_changed(self, plugin) -> None:
         """A source module reports new state (what plays): tell the panel, note play starts."""
         if plugin is not self.source:
@@ -261,6 +304,8 @@ class Hub:
         np = plugin.now_playing()
         if np is not None:
             self._set_playing(bool(np.get("playing")))
+            if np.get("playing") and np.get("title"):
+                self.note_listened(plugin.id, np.get("title"), np.get("artist"), np.get("album"))
         asyncio.ensure_future(self.broadcast({"type": "now", "source": plugin.id, "now": np}))
 
     @property
@@ -822,7 +867,9 @@ async def get_settings(request):
 @routes.post("/api/settings")
 async def set_settings(request):
     b = await body(request)
-    upd: dict = {k: bool(b[k]) for k in ("alerts", "leds", "spotify_vol_to_amp", "setup_done") if k in b}
+    upd: dict = {k: bool(b[k]) for k in ("alerts", "leds", "spotify_vol_to_amp", "setup_done", "listen_history") if k in b}
+    if upd.get("listen_history") is False:
+        hub.forget_listened()   # switched off: nothing is kept, and what was kept goes
     for k in ("output_name", "streamer_name"):
         if k in b:
             v = re.sub(r"\s+", " ", str(b[k])).strip()
@@ -1255,8 +1302,23 @@ async def alerts_test(request):
     return ok()
 
 
+@routes.get("/api/listened")
+async def listened(request):
+    """What has been listened to, the latest first. Open like what plays and the queue;
+    the owner switches the keeping off, or clears it."""
+    on = bool(hub.settings.get("listen_history", True))
+    return web.json_response({"on": on, "items": list(reversed(hub.listened()[-400:])) if on else []})
+
+
+@routes.post("/api/tests/listened-clear")
+async def listened_clear(request):
+    hub.forget_listened()
+    return ok()
+
+
 @routes.post("/api/tests/clear")
 async def tests_clear(request):
+    hub.forget_listened()
     for p in hub.plugins.values():
         p.clear_history()
     hub.xruns.clear()

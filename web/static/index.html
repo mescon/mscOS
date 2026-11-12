@@ -36,6 +36,8 @@
       <span class="amp-vol"><b id="ml-vol-v">–</b><small>dB</small></span>
     </button>
     <div class="vol-pop" id="vol-pop" hidden>
+      <!-- the level, to read and to type: pressing the number makes it a field -->
+      <label class="vol-num" id="ml-numbox" hidden><input type="text" id="ml-num" inputmode="decimal" autocomplete="off" aria-label="Volym i dB, skriv ett värde"><small>dB</small></label>
       <div class="vol-row">
         <div class="amp-step" id="ml-step" hidden>
           <button class="step" id="ml-down" aria-label="Sänk volymen">−</button>
@@ -45,7 +47,6 @@
           <input class="line" type="range" id="ml-vol" min="0" max="40" step="0.5" value="30" aria-label="Förstärkarens volym">
         </div>
       </div>
-      <label class="vol-num" id="ml-numbox" hidden><span>Ställ in</span><input type="number" id="ml-num" min="0" max="40" step="0.5" inputmode="decimal" aria-label="Volym i dB"><small>dB</small></label>
       <p class="amp-state" id="ml-state">Söker förstärkaren i nätverket…</p>
       <p class="fine" id="ml-limit"></p>
     </div>
@@ -135,6 +136,15 @@
   <section class="view" id="v-music" aria-labelledby="h-music">
     <h2 id="h-music" class="view-title">Musik</h2>
     <i id="slot-music" hidden></i>
+    <section class="listened" id="listened" aria-labelledby="h-listened">
+      <div class="listened-head">
+        <h3 id="h-listened">Lyssningshistorik</h3>
+        <label class="toggle admin"><input type="checkbox" id="listen-history"><span class="toggle-ui" aria-hidden="true"></span><span>Spara</span></label>
+        <button class="btn admin" id="listened-clear">Rensa</button>
+      </div>
+      <p class="fine" id="listened-note"></p>
+      <div id="listened-list"></div>
+    </section>
   </section>
 
   <section class="view" id="v-ctl" aria-labelledby="h-ctl">
