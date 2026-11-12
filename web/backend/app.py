@@ -1498,7 +1498,7 @@ async def get_logs(request):
 
 # ---- static PWA
 @routes.get("/")
-@routes.get(r"/{view:listen|music|signal|control|system|profile}{rest:(/[^/]{1,200}){0,4}/?}")
+@routes.get(r"/{view:listen|music|signal|control|system|profile}{rest:(/.{0,1500})?}")
 async def index(request):
     """The page, at the root and at each view's own address (and what a module opens under it)."""
     return web.FileResponse(os.path.join(STATIC, "index.html"), headers={"Cache-Control": "no-cache"})

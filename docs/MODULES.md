@@ -163,7 +163,11 @@ there as a step in the browser's history (`{replace: true}` as a third argument 
 address without a step), `api.back(view, sub)` goes one step back (or to the place given, when
 the listener came straight to this address), and `api.route()` says where the page is
 (`{view, sub}`). A `route(view, sub)` hook is called whenever the address changes, also by the
-browser's back and forward: the module shows what the address says. What stands in `sub` comes
+browser's back and forward: the module shows what the address says. An address should name the
+thing itself (an album's id, the names of the lists one went into), so that it can be kept,
+sent, and opened later: `/music/album/<id>`, `/music/search/<words>`, `/music/roon/Playlists/<name>`.
+The panel does the same for its own parts: a panel that is open is `/signal/clock`, a module's
+card is `/system/modules/<id>`. What stands in `sub` comes
 from the address bar, so it is checked before it is used. `usbStage(dac, running)` and
 `sigWord(format, rate)` are the panel's own USB stage and wording of a format, for a `chain()`
 of the module's own. The markup is removed when the module is

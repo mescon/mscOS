@@ -103,9 +103,37 @@ function routeOf(pathname) {
 }
 const routeNow = () => routeOf(location.pathname) || { view: "v-play", sub: [] };
 let histN = history.state?.n || 0;     // how many steps into the panel this entry is: 0 has nothing of ours behind it
+// The address names what is open inside the view: a panel by its key (/signal/clock), a module's
+// card by the module's id (/system/modules/roon). In Music the rest of the address is the
+// current source's own (its route hook).
+let modWanted = "";
+function showMod() {
+  const li = modWanted && $(`#v-mods li.mod[data-id="${CSS.escape(modWanted)}"]`);
+  if (!li) return;
+  modWanted = "";
+  const more = li.querySelector("details.mod-more"); if (more) more.open = true;
+  requestAnimationFrame(() => li.scrollIntoView({ block: "start" }));
+}
+function routeInside(r) {
+  if (!r.sub[0] || r.view === "v-music") return;
+  if (r.view === "v-mods") { modWanted = r.sub[0]; showMod(); return; }
+  const d = $(`#${r.view} details.fold[data-k="${CSS.escape(r.sub[0])}"]`);
+  if (d) { d.open = true; requestAnimationFrame(() => d.scrollIntoView({ block: "start" })); }
+}
+// The listener opened or closed a panel or a module's card: the address follows (no new step).
+document.addEventListener("click", (e) => {
+  const sum = e.target.closest("summary"), d = sum?.parentElement, view = d?.closest(".view.active");
+  if (!d || !view || view.id === "v-music" || !PATHS[view.id]) return;
+  const key = d.matches("details.fold") ? d.dataset.k : d.matches("details.mod-more") ? d.closest("li.mod")?.dataset.id : "";
+  if (!key) return;
+  const mine = `${PATHS[view.id]}/${encodeURIComponent(key)}`;
+  const path = !d.open ? mine : location.pathname === mine ? PATHS[view.id] : "";   // (the click comes before the panel changes)
+  if (path && path !== location.pathname) history.replaceState({ n: histN }, "", path);
+});
 function applyRoute() {
   const r = routeNow();
   if (document.body.dataset.view !== r.view) showView(r.view);
+  routeInside(r);
   setTimeout(() => pagesDo("route", r.view, r.sub));   // what a module shows inside the view
 }
 // Go to a view (and to something inside it). replace: instead of the entry that is there now.
@@ -134,6 +162,7 @@ document.addEventListener("click", (e) => {
   if (PATHS[v]) history.replaceState({ n: histN }, "", PATHS[v]);
 }
 showView(routeNow().view);
+routeInside(routeNow());   // what the address names inside the view
 // remember which rows are open; a chart drawn while its row was closed is redrawn at full width
 const foldKey = (d) => `fold:${d.dataset.k}`;
 // Every fold-out opens and closes with a short, soft movement. One listener for all of them,
@@ -249,6 +278,7 @@ async function loadPages(list = []) {
       $$(`[data-page-of="${CSS.escape(p.id)}"]`).forEach((el) => el.remove());
     }
   }
+  if (fresh) routeInside(routeNow());   // a panel of a module's, named in the address, is there now
   return fresh;
 }
 // "Mark Levinson Nº585.5 via SOtM sMS-200Ultra": both names are settings, detected by default
@@ -1265,6 +1295,7 @@ function renderMods() {
   const badge = $("#nav-mods"); badge.hidden = !ups && !MODS.restart_needed;
   fv("mods", tr`${on} av ${MODS.plugins.length} på`);
   sysBadge();
+  showMod();   // the card the address names, now that the cards are drawn
 }
 // A module's own settings (declared by the module), saved one at a time as they change.
 function modOptions(p) {

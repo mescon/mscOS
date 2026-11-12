@@ -39,31 +39,62 @@ export default function page(api) {
       </style>
     </section>`);
   let hier = "browse", shown = null, seq = 0, timer = 0, loaded = false;
+  // Where one is in Roon's lists stands in the address as the names of the lists one went into:
+  // /music/roon/Playlists/Morning, and for a search /music/roon-search/<words>/... . Roon itself
+  // knows a place only by a key that lasts for the visit, so an address is followed by name:
+  // from the top into the list of that name, and on. That is what makes an address something to
+  // keep or to send, and what makes forward work after back. An entry that does something
+  // (Play now) is never followed from an address.
+  let trail = [], query = "", walking = false;
+  const subOf = (t = trail) => (hier === "search" ? ["roon-search", query, ...t] : t.length ? ["roon", ...t] : []);
+  const same = (x, y) => x.length === y.length && x.every((v, i) => v === y[i]);
+  const tell = (step) => {   // the address follows the place (a new step in the history, or the same one)
+    if (walking || !current() || api.route().view !== "v-music" || same(api.route().sub, subOf())) return;
+    api.go("v-music", subOf(), { replace: !step });
+  };
 
-  // One step in Roon's lists, and the list that is there after it.
-  // Roon keeps the place in its lists itself, as a depth. The address carries that depth
-  // (/music/roon/2), so that going back in the browser goes one list up in Roon. Forward again
-  // cannot be done: Roon has forgotten the list that was left.
-  const depthAt = () => { const r = api.route(); return r.view === "v-music" && r.sub[0] === "roon" ? Math.max(0, parseInt(r.sub[1]) || 0) : 0; };
-  const depthSub = (n) => (n > 0 ? ["roon", String(n)] : []);
-  async function go(step) {
+  // One step in Roon's lists, and the list that is there after it. True when a list was shown.
+  // title: the name of the entry that was chosen (what the address is given for it).
+  async function go(step, title, newStep) {
     const n = ++seq;
     let d;
     try {
       const r = await fetch("/api/roon/browse", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ hierarchy: hier, ...step }) });
       d = r.ok ? await r.json() : { error: (await r.text()) || tr("Roon svarar inte.") };
     } catch { d = { error: tr("Roon svarar inte.") }; }
-    if (n !== seq) return;
-    if (d.error) { shown = null; $("#rm-head").innerHTML = ""; $("#rm-list").innerHTML = `<p class="none">${esc(d.error)}</p>`; return; }
+    if (n !== seq) return false;
+    if (d.error) { shown = null; trail = []; $("#rm-head").innerHTML = ""; $("#rm-list").innerHTML = `<p class="none">${esc(d.error)}</p>`; return false; }
     if (d.action === "list") {
-      shown = d; draw();
       const level = d.list?.level || 0;
-      if (current() && api.route().view === "v-music" && level !== depthAt()) api.go("v-music", depthSub(level), { replace: level < depthAt() });
-      return;
+      trail = step.pop_all ? [] : title != null && level > trail.length ? [...trail, title || "…"] : trail.slice(0, level);
+      shown = d; draw();
+      tell(newStep);
+      return true;
     }
     // something was done (played, queued): Roon says so in its own words; the list is where it was, or moved
     if (d.message) toast(d.message);
-    if (d.action !== "none") go({});
+    return d.action !== "none" ? go({}) : false;
+  }
+  // Follow an address: to the search or the top it names, then into each list by its name.
+  async function follow(sub) {
+    const wantHier = sub[0] === "roon-search" ? "search" : "browse";
+    const wantQ = wantHier === "search" ? String(sub[1] || "").slice(0, 120) : "";
+    const want = sub[0] === "roon" ? sub.slice(1) : sub[0] === "roon-search" ? sub.slice(2) : [];
+    const here = !!shown && hier === wantHier && query === wantQ;
+    if (here && same(want, trail)) return;
+    loaded = true; walking = true;
+    try {
+      let rest = want, ok = true;
+      if (here && want.length < trail.length && same(want, trail.slice(0, want.length))) { ok = await go({ pop_levels: trail.length - want.length }); rest = []; }
+      else if (here && same(trail, want.slice(0, trail.length))) rest = want.slice(trail.length);
+      else { hier = wantHier; query = wantQ; $("#rm-find").value = wantQ; ok = await go({ pop_all: true, ...(wantQ ? { input: wantQ } : {}) }); }
+      for (const name of rest) {
+        if (!ok) break;
+        const it = (shown?.items || []).find((i) => i.title === name && i.item_key && i.hint !== "action");
+        ok = !!it && await go({ item_key: it.item_key }, name);
+      }
+    } finally { walking = false; }
+    tell(false);   // where it could not be followed all the way, the address says how far it got
   }
   function draw() {
     const d = shown, l = d.list || {}, level = l.level || 0;
@@ -80,22 +111,31 @@ export default function page(api) {
     const pics = items.some((i) => i.image);
     $("#rm-list").innerHTML = `<ul class="rm-list">${items.map((i) => i.hint === "header" || !i.item_key
       ? `<li class="head">${esc(i.title)}</li>`
-      : `<li><button class="go${pics ? "" : " plain"}" data-key="${esc(i.item_key)}">${pics ? (i.image ? `<img src="${esc(i.image)}" alt="" loading="lazy">` : `<span class="ph"></span>`) : ""}<span><b>${esc(i.title)}</b>${i.subtitle ? `<span>${esc(i.subtitle)}</span>` : ""}</span>${i.hint === "action" ? "" : chev}</button></li>`).join("")}</ul>`;
+      : `<li><button class="go${pics ? "" : " plain"}" data-key="${esc(i.item_key)}" data-title="${esc(i.title)}"${i.hint === "action" ? ' data-act="1"' : ""}>${pics ? (i.image ? `<img src="${esc(i.image)}" alt="" loading="lazy">` : `<span class="ph"></span>`) : ""}<span><b>${esc(i.title)}</b>${i.subtitle ? `<span>${esc(i.subtitle)}</span>` : ""}</span>${i.hint === "action" ? "" : chev}</button></li>`).join("")}</ul>`;
   }
   function search(text) {
     clearTimeout(timer);
     timer = setTimeout(() => {       // a short wait: not a question for every key
       text = text.trim();
-      if (text.length >= 2) { hier = "search"; go({ pop_all: true, input: text }); }
-      else if (!text) { hier = "browse"; go({ pop_all: true }); }
+      const began = hier !== "search";    // a search is one step in the history, however many keys
+      if (text.length >= 2) { hier = "search"; query = text.slice(0, 120); go({ pop_all: true, input: query }, null, began); }
+      else if (!text) { hier = "browse"; query = ""; go({ pop_all: true }); }
     }, 320);
   }
+  // A sleeve Roon names but does not hand out (it happens for tracks from a streaming service
+  // that are not in the library): the empty square instead of a broken picture.
+  box.addEventListener("error", (e) => {
+    const img = e.target; if (!(img instanceof HTMLImageElement)) return;
+    if (img.closest(".rm-list")) { const ph = document.createElement("span"); ph.className = "ph"; img.replaceWith(ph); } else img.remove();
+  }, true);
   $("#rm-find").addEventListener("input", (e) => search(e.target.value));
   box.addEventListener("click", (e) => {
     const b = e.target.closest("[data-key], [data-back]"); if (!b) return;
-    if (b.dataset.back) api.back("v-music", depthSub((shown?.list?.level || 1) - 1)); else if (b.dataset.key) go({ item_key: b.dataset.key });
+    if (b.dataset.back) api.back("v-music", subOf(trail.slice(0, -1)));
+    // into a list: a step, named by the entry. Something done (Play now): no name, no step.
+    else if (b.dataset.key) go({ item_key: b.dataset.key }, b.dataset.act || b.dataset.title == null ? null : b.dataset.title, true);
   });
-  const open = () => { if (!loaded) { loaded = true; hier = "browse"; go({ pop_all: true }); } };
+  const open = () => { if (!loaded) { loaded = true; follow(api.route().view === "v-music" ? api.route().sub : []); } };
 
   // ---------------------------------------------------------------- the signal chain
   // Roon's server decodes the music and sends it to Roon Bridge on this device, which hands
@@ -162,18 +202,17 @@ export default function page(api) {
     chain,
     render() { box.hidden = !current(); if (current() && document.body.dataset.view === "v-music") open(); },
     view(id) { if (id === "v-music" && current()) open(); },
-    // the listener went back (or the address says a depth): up that many lists in Roon
+    // the address changed (back, forward, a link, a kept address): go where it says
     route(view, sub) {
-      if (view !== "v-music" || !current() || !shown) return;
-      const have = shown.list?.level || 0, want = depthAt();
-      if (want < have) go({ pop_levels: have - want });
-      else if (want > have) api.go("v-music", depthSub(have), { replace: true });
+      if (view !== "v-music" || !current()) return;
+      if (sub.length && !["roon", "roon-search"].includes(sub[0])) { api.go("v-music", subOf(), { replace: true }); return; }   // not an address of Roon's
+      follow(sub);
     },
     // from Listen: the album or the artist that plays, looked up in Roon
     find(kind, t) {
       const text = kind === "album" ? [t.album, String(t.artist || "").split(" / ")[0]].filter(Boolean).join(" ") : String(t.artist || "").split(" / ")[0];
       if (!text) return;
-      loaded = true; $("#rm-find").value = text; clearTimeout(timer); hier = "search"; go({ pop_all: true, input: text });
+      loaded = true; $("#rm-find").value = text; clearTimeout(timer); hier = "search"; query = text.slice(0, 120); go({ pop_all: true, input: query }, null, true);
     },
   };
 }

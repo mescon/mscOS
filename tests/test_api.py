@@ -34,10 +34,11 @@ class NewInstallation(unittest.IsolatedAsyncioTestCase):
             r = await self.client.get(path)
             self.assertEqual(r.status, 200, path)
         # every view has its own address, and so has what a module opens inside one: the same page
-        for path in ("/music", "/signal", "/control", "/system", "/system/modules", "/profile", "/listen", "/music/album/4aawyAB9vmqN3uQ7FjRGTy"):
+        for path in ("/music", "/signal", "/control", "/system", "/system/modules", "/profile", "/listen", "/music/album/4aawyAB9vmqN3uQ7FjRGTy",
+                     "/signal/clock", "/system/modules/roon", "/music/roon/Playlists/Morgon%20%2F%20kv%C3%A4ll/a/b/c/d"):
             r = await self.client.get(path)
             self.assertEqual((r.status, r.content_type), (200, "text/html"), path)
-        for path in ("/musicx", "/nothing", "/music/a/b/c/d/e"):
+        for path in ("/musicx", "/nothing", "/music/" + "a" * 1600):
             self.assertEqual((await self.client.get(path)).status, 404, path)
 
         # a module's page code is served only while the module is on, and nothing else from its folder ever

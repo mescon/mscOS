@@ -239,7 +239,13 @@ export default function page(api) {
   }
   function find() {
     const text = $("#sp-find").value.trim();
-    if (page) api.go("v-music", [], { replace: true });   // typing leaves the opened album: so does the address
+    // The search is in the address (/music/search/<words>): a step when it begins, then the same
+    // step for every key. (A pasted link is not a search.)
+    if (current() && api.route().view === "v-music") {
+      const at = api.route().sub, words = text.length >= 2 && !spotifyUri(text) ? text : "";
+      if (words) { if (!(at[0] === "search" && at[1] === words)) api.go("v-music", ["search", words], { replace: at[0] === "search" }); }
+      else if (at.length) api.go("v-music", [], { replace: true });
+    }
     page = null; clearTimeout(findTimer); drawMusic();
     if (!M.search || spotifyUri(text) || text.length < 2) return;
     const n = ++findSeq;
@@ -475,7 +481,11 @@ export default function page(api) {
       if (view !== "v-music" || !current()) return;
       const [kind, id] = sub;
       if (["album", "artist", "playlist"].includes(kind) && /^[A-Za-z0-9]{8,40}$/.test(id || "")) { if (!(page && page.kind === kind && page.id === id)) showPage(kind, id); }
-      else if (page) { page = null; drawMusic(); }
+      else {
+        const words = kind === "search" ? String(id || "").slice(0, 120) : "", box = $("#sp-find");
+        if (page) { page = null; drawMusic(); }
+        if (box.value.trim() !== words && !(spotifyUri(box.value.trim()) && !words)) { box.value = words; find(); }
+      }
     },
     // as the current source: the Listen view, the progress bar, the signal chain
     play, track, duration, position, chain, carry,

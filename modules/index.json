@@ -1,6 +1,6 @@
 {
  "format": 1,
- "serial": 48,
+ "serial": 49,
  "modules": [
   {
    "id": "about",
@@ -269,7 +269,7 @@
   },
   {
    "id": "roon",
-   "version": "1.5.0",
+   "version": "1.6.0",
    "kind": "source",
    "name": {
     "sv": "Roon Bridge",
@@ -292,12 +292,12 @@
     },
     {
      "path": "module.json",
-     "sha256": "c188482ca9c83088a9e290c5ac55d221c171e4d80ea3f3bc6163f19ce8b6608f",
+     "sha256": "f9df10ace3f8f710da570dfe2f62e30b8f0b3f76ee830c942e03cac997a5e0d2",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "e14f3a525e857419db31a48cdf4182295027260459d44ba372746e7dba2c346e",
+     "sha256": "b8b827fd9a6b32f48b08f21e7d5171ac4191eb74efef742c7ede034b25f8ddc4",
      "exec": false
     },
     {
@@ -344,7 +344,7 @@
   },
   {
    "id": "spotify",
-   "version": "1.10.0",
+   "version": "1.10.1",
    "kind": "source",
    "name": {
     "sv": "Spotify Lossless (Soloist)",
@@ -367,12 +367,12 @@
     },
     {
      "path": "module.json",
-     "sha256": "94eb032445ebf17de1060ae3e78e471bce64104a26fc77bf30367d28d6f72b5b",
+     "sha256": "859d3624531a5c318d78cedbcf82bff1b184490f9e1cec42f7ec1d5a47d81047",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "0590fefed41f5456e92c5502f293a792c4d803725e8c1bab85ad8cea73b3906d",
+     "sha256": "f4f81f2e4fe1b06b7433ab7f1771b1203065db23fba984d0b1ff7b254674478a",
      "exec": false
     },
     {
