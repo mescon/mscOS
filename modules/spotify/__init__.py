@@ -394,16 +394,29 @@ class Spotify(SourcePlugin):
             log.warning("resume after restart: %s", e)
 
     async def measure_track_quality(self):
-        """6 s of what goes to the DAC, a few seconds into each track: on the 16-bit lattice
-        means a 16-bit file, content below it 24-bit, no lattice at all lossy (or processed).
-        Read-only tap on the sink monitor; one at a time; skipped while a verification runs."""
+        """Measure the track that plays, and then the one that plays when that is done: a track
+        that began while another was being measured (or waited for) is not left unmeasured.
+        One measurement at a time; a few tries for a track, then it is left alone."""
         if getattr(self, "_quality_busy", False):
             return
-        uri = (self.playback.get("item") or {}).get("uri")
-        if not uri or not self.hub.soloist:
-            log.info("track quality: no track")
-            return
         self._quality_busy = True
+        try:
+            tries: dict[str, int] = {}
+            while True:
+                uri = (self.playback.get("item") or {}).get("uri")
+                # (whether it plays is looked at after the wait in _measure_once: a track is
+                # still buffering when it is announced)
+                if not uri or not self.hub.soloist or (self.track_quality or {}).get("uri") == uri or tries.get(uri, 0) >= 3:
+                    return
+                tries[uri] = tries.get(uri, 0) + 1
+                await self._measure_once(uri)
+        finally:
+            self._quality_busy = False
+
+    async def _measure_once(self, uri: str):
+        """6 s of what goes to the DAC, a few seconds into the track: on the 16-bit lattice
+        means a 16-bit file, content below it 24-bit, no lattice at all lossy (or processed).
+        Read-only tap on the sink monitor; skipped while a verification runs."""
         try:
             await asyncio.sleep(8)  # past the track start (gapless join, fades)
             if (self.playback.get("item") or {}).get("uri") != uri or self.playback.get("status") != "playing" or not self.auth.get("is_active") \
@@ -441,8 +454,6 @@ class Spotify(SourcePlugin):
             await self.hub.broadcast({"type": "quality", "quality": self.track_quality})
         except Exception as e:  # noqa: BLE001 - never disturb playback over this
             log.warning("track quality: %s", e)
-        finally:
-            self._quality_busy = False
 
     async def maybe_auto_verify(self):
         if not self.hub.settings.get("auto_verify") or self.hub.jobs.get("audio-test", {}).get("running"):
