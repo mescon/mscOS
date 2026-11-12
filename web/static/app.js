@@ -79,6 +79,9 @@ function showView(id) {
   $$(".view").forEach((v) => v.classList.toggle("active", v.id === id));
   $$(".tabs a").forEach((a) => { const on = a.getAttribute("href") === `#${id}`; a.classList.toggle("on", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   document.body.dataset.view = id;
+  // the one level control: beside the transport in Listen, in the "playing now" bar elsewhere
+  const amp = $("#amp"), home = id === "v-play" ? $("#vol-slot") : $("#dock");
+  if (amp && home && amp.parentElement !== home) { $("#vol-pop").hidden = true; $("#vol-btn").setAttribute("aria-expanded", "false"); home.append(amp); }
   if (id === "v-signal") { loadOpts(); loadDac(); requestAnimationFrame(() => { renderSpark(); if (S.dacd?.clock_avg) renderClockChart(S.dacd.clock_avg.series || []); }); }
   if (id === "v-mods") loadMods();
   if (id === "v-signal") waveSet(WAVE.on);
@@ -245,9 +248,6 @@ function renderDock() {
   const playing = !$("#i-pause").hidden;
   $("#dk-i").setAttribute("d", playing ? DK.pause : DK.play);
   $("#dk-play").setAttribute("aria-label", playing ? tr("Pausa") : tr("Spela"));
-  const m = AMP || {};
-  $("#dk-volbox").hidden = $("#amp").hidden || !m.reachable || m.power === false;
-  $("#dk-vol").textContent = $("#ml-vol-v").textContent;
   const v = S.status.system?.mscos; $("#rail-ver").textContent = v ? `mscOS ${v}` : ""; $("#about-ver").textContent = v || "";
 }
 // ------------------------------------------------------------------ now playing
@@ -930,8 +930,6 @@ $("#ml-mute").addEventListener("click", () => amp({ mute: !AMP?.muted }));
 $("#ml-vol").addEventListener("input", (e) => {
   $("#ml-vol-v").textContent = dec(+e.target.value);
 });
-$("#dk-down").addEventListener("click", () => ampStep(-1));
-$("#dk-up").addEventListener("click", () => ampStep(1));
 $("#dk-play").addEventListener("click", () => $("#b-play").click());
 // ± one dB per press; never above the panel ceiling, and never "raising" a remote-set level down to it
 function ampStep(d) {
@@ -939,7 +937,7 @@ function ampStep(d) {
   if (m.volume_db == null) return;
   if (d > 0 && m.volume_db >= max) { toast(tr`Panelen går högst till ${dec(max)} dB. Högre volym ställer du med fjärrkontrollen.`); return; }
   const v = Math.max(0, Math.min(max, Math.round((m.volume_db + d) * 2) / 2));
-  $("#ml-vol-v").textContent = $("#dk-vol").textContent = dec(v);
+  $("#ml-vol-v").textContent = dec(v);
   amp({ volume_db: v });
 }
 $("#ml-down").addEventListener("click", () => ampStep(-1));

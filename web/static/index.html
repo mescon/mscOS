@@ -41,26 +41,6 @@
     <p><span id="dev-name"></span> <span id="dev-sub">ansluter…</span></p>
   </div>
   <p class="vh" id="source-note" aria-live="polite"></p>
-  <!-- the amplifier's level: a small button with the number; pressing it opens the slider -->
-  <section class="amp" id="amp" aria-label="Förstärkaren">
-    <button class="vol-btn" id="vol-btn" aria-haspopup="true" aria-expanded="false" aria-controls="vol-pop" aria-label="Volym">
-      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18 6.5a7.8 7.8 0 0 1 0 11"/></svg>
-      <span class="amp-vol"><b id="ml-vol-v">–</b><small>dB</small></span>
-    </button>
-    <div class="vol-pop" id="vol-pop" hidden>
-      <div class="vol-row">
-        <div class="amp-step" id="ml-step" hidden>
-          <button class="step" id="ml-down" aria-label="Sänk volymen">−</button>
-          <button class="step" id="ml-up" aria-label="Höj volymen">+</button>
-        </div>
-        <div id="ml-ctl" hidden>
-          <input class="line" type="range" id="ml-vol" min="0" max="40" step="0.5" value="30" aria-label="Förstärkarens volym">
-        </div>
-      </div>
-      <p class="amp-state" id="ml-state">Söker förstärkaren i nätverket…</p>
-      <p class="fine" id="ml-limit"></p>
-    </div>
-  </section>
 </header>
 
 <!-- First start: the guide (setup.js), shown on a new installation only -->
@@ -119,6 +99,7 @@
               <b id="b-repeat-1" hidden>1</b>
             </button>
           </div>
+          <div class="vol-slot" id="vol-slot"></div>
         </div>
       </div>
 
@@ -445,11 +426,27 @@
   <button class="dock-play needs-transport" id="dk-play" aria-label="Spela">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path id="dk-i" d="M9 6.5v11l9-5.5z" fill="currentColor"/></svg>
   </button>
-  <div class="dock-vol" id="dk-volbox" hidden>
-    <button class="step" id="dk-down" aria-label="Sänk volymen">−</button>
-    <p><b id="dk-vol">–</b><small>dB</small></p>
-    <button class="step" id="dk-up" aria-label="Höj volymen">+</button>
-  </div>
+  <!-- the amplifier's level: a small button with the number; pressing it opens the slider.
+       The one control: it sits here, and moves beside the transport while Listen is shown. -->
+  <section class="amp" id="amp" aria-label="Förstärkaren">
+    <button class="vol-btn" id="vol-btn" aria-haspopup="true" aria-expanded="false" aria-controls="vol-pop" aria-label="Volym">
+      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18 6.5a7.8 7.8 0 0 1 0 11"/></svg>
+      <span class="amp-vol"><b id="ml-vol-v">–</b><small>dB</small></span>
+    </button>
+    <div class="vol-pop" id="vol-pop" hidden>
+      <div class="vol-row">
+        <div class="amp-step" id="ml-step" hidden>
+          <button class="step" id="ml-down" aria-label="Sänk volymen">−</button>
+          <button class="step" id="ml-up" aria-label="Höj volymen">+</button>
+        </div>
+        <div id="ml-ctl" hidden>
+          <input class="line" type="range" id="ml-vol" min="0" max="40" step="0.5" value="30" aria-label="Förstärkarens volym">
+        </div>
+      </div>
+      <p class="amp-state" id="ml-state">Söker förstärkaren i nätverket…</p>
+      <p class="fine" id="ml-limit"></p>
+    </div>
+  </section>
 </aside>
 
 <!-- output of an installation or update, visible from every view -->
