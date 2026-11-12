@@ -30,6 +30,8 @@ stage_panel() {  # <dir>
     install -d "$1/usr/lib/mscos/panel" "$1/usr/lib/mscos/modules" "$1/usr/lib/systemd/system"
     cp -r "$ROOT/web/backend" "$ROOT/web/static" "$1/usr/lib/mscos/panel/"
     find "$1/usr/lib/mscos/panel" -name __pycache__ -prune -exec rm -rf {} +
+    # the page cache is named after the version, so every build replaces the one before it
+    sed -i "s/^const CACHE = \"mscos-v[0-9]*\";/const CACHE = \"mscos-$VERSION\";/" "$1/usr/lib/mscos/panel/static/sw.js"
     cp -r "$ROOT"/modules/. "$1/usr/lib/mscos/modules/"
     find "$1/usr/lib/mscos/modules" -name __pycache__ -prune -exec rm -rf {} +
     rm -f "$1/usr/lib/mscos/modules/index.json" "$1/usr/lib/mscos/modules/README.md"
