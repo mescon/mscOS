@@ -7,4 +7,4 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 exec docker run --rm -v "$ROOT:/src:ro" -w /src debian:trixie-slim bash -c '
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq && apt-get install -y -qq --no-install-recommends python3 python3-aiohttp python3-websockets python3-numpy >/dev/null
-    cp -r /src /work && cd /work && python3 -m unittest discover -s tests -t . -v'
+    mkdir /work && cd /src && cp -r web modules boards tools tests examples /work/ && cd /work && python3 -m unittest discover -s tests -t . -v'
