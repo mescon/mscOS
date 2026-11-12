@@ -110,5 +110,12 @@
  "Inget av det du spelat heter så. Att söka i hela Spotify kräver Spotifys webb-API, som inte är inkopplat än. Klistra in en Spotify-länk för att spela något nytt.": "Nothing you have played is called that. Searching all of Spotify needs Spotify's Web API, which is not connected yet. Paste a Spotify link to play something new.",
  "Varje låt mäts kort när den börjar. Verifieringen här är den längre kontrollen: 20 sekunder av exakt det som går till DAC:en, varje sampel mot Spotifys FLAC-raster, och att inga avbrott finns.": "Every track is measured briefly as it begins. The verification here is the longer check: 20 seconds of exactly what goes to the DAC, every sample against Spotify's FLAC grid, and that there are no dropouts.",
  "Samma kontroll av sig själv, mitt i en låt, bara när musik spelar. Den skriver i loggen och skickar larm vid avvikelse, också när ingen tittar på sidan.": "The same check by itself, in the middle of a track, only while music plays. It writes to the log and sends an alert on a deviation, also when nobody is looking at the page.",
- "Lyssningshistoriken är avstängd, så här finns inget att spela igen. Klistra in en Spotify-länk ovan för att spela något.": "The listening history is switched off, so there is nothing here to play again. Paste a Spotify link above to play something."
+ "Lyssningshistoriken är avstängd, så här finns inget att spela igen. Klistra in en Spotify-länk ovan för att spela något.": "The listening history is switched off, so there is nothing here to play again. Paste a Spotify link above to play something.",
+ "Sök i Spotify, eller klistra in en Spotify-länk": "Search Spotify, or paste a Spotify link",
+ "Spotify hittar inget på \"{0}\".": "Spotify finds nothing for \"{0}\".",
+ "Sök i Spotify ovan. Här under samlas det som spelas på enheten, att spela igen.": "Search Spotify above. What is played on the device gathers below, to play again.",
+ "Senast spelat": "Recently played",
+ "Tillbaka": "Back",
+ "Hämtar…": "Fetching…",
+ "Spotify svarar inte.": "Spotify does not answer."
 }

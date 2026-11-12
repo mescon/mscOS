@@ -121,6 +121,23 @@ export default function page(api) {
         .m-artists button:hover { border-color: var(--btn-line); }
         .m-link { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 16px; padding: 14px 16px; border: 1px solid var(--hair); border-radius: 3px; background: var(--plate); }
         .m-link p { flex: 1 1 12em; margin: 0; }
+        .music .m-lead { margin: 26px 0 -14px; font-size: .8125rem; letter-spacing: .04em; color: var(--engraved); }
+        .m-artists button { display: flex; align-items: center; gap: 10px; }
+        .m-artists img { width: 28px; height: 28px; margin-left: -8px; border-radius: 50%; object-fit: cover; }
+        .m-tracks .n { width: 44px; text-align: center; color: var(--engraved); font-variant-numeric: tabular-nums; }
+        .m-tracks li { grid-template-columns: minmax(0, 1fr) auto auto; }
+        .m-tracks .len { font-size: .8125rem; color: var(--engraved); font-variant-numeric: tabular-nums; }
+        .m-back { appearance: none; display: inline-flex; align-items: center; gap: 4px; min-height: 44px; margin: 10px 0 0 -6px; padding: 0 8px 0 0; border: 0; background: none;
+          color: var(--engraved); font: inherit; font-size: .875rem; cursor: pointer; }
+        .m-back:hover { color: var(--ink); }
+        .m-back svg { width: 18px; height: 18px; }
+        .m-hero { display: grid; grid-template-columns: minmax(96px, 200px) minmax(0, 1fr); gap: 20px; align-items: end; margin: 8px 0 22px; }
+        .m-hero img, .m-hero .ph { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 2px; background: var(--plate); box-shadow: 0 0 0 1px var(--hair); }
+        .m-hero.artist img, .m-hero.artist .ph { border-radius: 50%; }
+        .m-hero .part { font-size: .8125rem; letter-spacing: .04em; color: var(--engraved); }
+        .m-hero h3 { margin: 4px 0 2px; font-size: clamp(1.5rem, 4vw, 2.25rem); line-height: 1.1; overflow-wrap: anywhere; }
+        .m-hero .by { margin: 0 0 14px; color: var(--engraved); }
+        .m-hero .btn { margin-top: 12px; }
       </style>
     </section>`);
   let played = null, playedAt = 0, playedFor = "";
@@ -139,6 +156,20 @@ export default function page(api) {
     try { await post("/api/soloist/command", { command: "add_to_queue", uri }); toast(name ? tr`${name} ligger i kön` : tr("Lagt i kön")); } catch {}
   }
   const img = (u) => (u && /^https:\/\/[^"'\s]+$/.test(u) ? `<img src="${esc(u)}" alt="" loading="lazy">` : `<span class="ph"></span>`);
+  // Lists as the Music view draws them, whether the rows come from what was played or from a search.
+  const idOf = (uri) => String(uri || "").split(":")[2] || "";
+  const albumList = (albums) => `<ul class="m-albums">${albums.map((a) =>
+    `<li><button ${M.search ? `data-album="${esc(a.id || idOf(a.uri))}"` : `data-play="${esc(a.uri)}"`} data-name="${esc(a.name)}">${img(a.cover)}<b>${esc(a.name)}</b><span>${esc([a.artist, a.year].filter(Boolean).join(" · "))}</span></button></li>`).join("")}</ul>`;
+  const artistList = (artists) => `<ul class="m-artists">${artists.map((a) =>
+    `<li><button ${M.search ? `data-artist="${esc(a.id || idOf(a.uri))}"` : `data-play="${esc(a.uri)}"`} data-name="${esc(a.name)}">${a.cover ? img(a.cover) : ""}${esc(a.name)}</button></li>`).join("")}</ul>`;
+  const trackList = (tracks, numbered) => `<ol class="m-tracks">${tracks.map((t) =>
+    `<li><button class="go" data-play="${esc(t.uri)}" data-name="${esc(t.name)}">${numbered ? `<span class="n">${esc(t.n ?? "")}</span>` : img(t.cover)}<span><b>${esc(t.name)}</b><span>${esc([t.artist, numbered ? "" : t.album].filter(Boolean).join(" · "))}</span></span></button>
+       ${t.duration_ms ? `<span class="len">${esc(api.fmtTime(t.duration_ms))}</span>` : ""}<button class="q" data-queue="${esc(t.uri)}" data-name="${esc(t.name)}">${esc(tr("Kö"))}</button></li>`).join("")}</ol>`;
+  const sections = (d, few) => (d.albums.length ? `<h3>${esc(tr("Album"))}</h3>${albumList(d.albums.slice(0, few))}` : "")
+    + (d.artists.length ? `<h3>${esc(tr("Artister"))}</h3>${artistList(d.artists.slice(0, few))}` : "")
+    + (d.tracks.length ? `<h3>${esc(tr("Låtar"))}</h3>${trackList(d.tracks.slice(0, few * 2))}` : "");
+
+  let found = null, findSeq = 0, findTimer = 0, page = null;   // the search's answer; the album or artist that is open
   function drawMusic() {
     const text = $("#sp-find").value.trim(), link = spotifyUri(text), box = $("#sp-link"), out = $("#sp-results");
     box.hidden = !link;
@@ -148,22 +179,59 @@ export default function page(api) {
         <button class="btn primary" data-play="${esc(link.uri)}">${esc(tr("Spela"))}</button>
         ${link.kind === "track" ? `<button class="btn" data-queue="${esc(link.uri)}">${esc(tr("Lägg i kön"))}</button>` : ""}`;
     }
+    if (page) { out.innerHTML = pageHtml(page); return; }
+    // with the Web API: all of Spotify, as it is typed
+    if (M.search && !link && text.length >= 2) {
+      if (found && found.q === text) {
+        out.innerHTML = found.error ? `<p class="none">${esc(found.error)}</p>`
+          : sections(found, 8) || `<p class="none">${esc(tr`Spotify hittar inget på "${text}".`)}</p>`;
+      }
+      return;   // (until the answer comes, what is there stays: the list changes under the typing, it does not blink)
+    }
     if (!played) { out.innerHTML = ""; return; }
+    if (played.off) { out.innerHTML = `<p class="none">${esc(tr("Lyssningshistoriken är avstängd, så här finns inget att spela igen. Klistra in en Spotify-länk ovan för att spela något."))}</p>`; return; }
     const words = link ? [] : text.toLowerCase().split(/\s+/).filter(Boolean);
     const hit = (...f) => words.every((w) => f.some((x) => (x || "").toLowerCase().includes(w)));
-    const albums = played.albums.filter((a) => hit(a.name, a.artist)), tracks = played.tracks.filter((t) => hit(t.name, t.artist, t.album)),
-      artists = played.artists.filter((a) => hit(a.name));
-    if (played.off) { out.innerHTML = `<p class="none">${esc(tr("Lyssningshistoriken är avstängd, så här finns inget att spela igen. Klistra in en Spotify-länk ovan för att spela något."))}</p>`; return; }
-    if (!played.tracks.length) { out.innerHTML = `<p class="none">${esc(tr("Här samlas det som spelas på enheten: album, låtar och artister, att spela igen. Starta något i Spotify-appen, eller klistra in en Spotify-länk ovan."))}</p>`; return; }
-    if (!albums.length && !tracks.length && !artists.length) { out.innerHTML = link ? "" : `<p class="none">${esc(tr("Inget av det du spelat heter så. Att söka i hela Spotify kräver Spotifys webb-API, som inte är inkopplat än. Klistra in en Spotify-länk för att spela något nytt."))}</p>`; return; }
-    const few = words.length ? 60 : 18;
-    out.innerHTML = (albums.length ? `<h3>${esc(tr("Album"))}</h3><ul class="m-albums">${albums.slice(0, few).map((a) =>
-        `<li><button data-play="${esc(a.uri)}" data-name="${esc(a.name)}">${img(a.cover)}<b>${esc(a.name)}</b><span>${esc(a.artist)}</span></button></li>`).join("")}</ul>` : "")
-      + (artists.length ? `<h3>${esc(tr("Artister"))}</h3><ul class="m-artists">${artists.slice(0, few).map((a) =>
-        `<li><button data-play="${esc(a.uri)}" data-name="${esc(a.name)}">${esc(a.name)}</button></li>`).join("")}</ul>` : "")
-      + (tracks.length ? `<h3>${esc(tr("Låtar"))}</h3><ul class="m-tracks">${tracks.slice(0, words.length ? 80 : 30).map((t) =>
-        `<li><button class="go" data-play="${esc(t.uri)}" data-name="${esc(t.name)}">${img(t.cover)}<span><b>${esc(t.name)}</b><span>${esc(t.artist)}${t.album ? ` · ${esc(t.album)}` : ""}</span></span></button>
-           <button class="q" data-queue="${esc(t.uri)}" data-name="${esc(t.name)}">${esc(tr("Kö"))}</button></li>`).join("")}</ul>` : "");
+    const mine = { albums: played.albums.filter((x) => hit(x.name, x.artist)), tracks: played.tracks.filter((t) => hit(t.name, t.artist, t.album)),
+      artists: played.artists.filter((x) => hit(x.name)) };
+    if (!played.tracks.length) { out.innerHTML = `<p class="none">${esc(M.search ? tr("Sök i Spotify ovan. Här under samlas det som spelas på enheten, att spela igen.") : tr("Här samlas det som spelas på enheten: album, låtar och artister, att spela igen. Starta något i Spotify-appen, eller klistra in en Spotify-länk ovan."))}</p>`; return; }
+    if (!mine.albums.length && !mine.tracks.length && !mine.artists.length) { out.innerHTML = link ? "" : `<p class="none">${esc(tr("Inget av det du spelat heter så. Att söka i hela Spotify kräver Spotifys webb-API, som inte är inkopplat än. Klistra in en Spotify-länk för att spela något nytt."))}</p>`; return; }
+    out.innerHTML = (M.search && !words.length ? `<p class="m-lead">${esc(tr("Senast spelat"))}</p>` : "") + sections(mine, words.length ? 60 : 18);
+  }
+  function pageHtml(pg) {
+    const d = pg.data, back = `<button class="m-back" data-back="1"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 6-6 6 6 6"/></svg>${esc(tr("Tillbaka"))}</button>`;
+    if (!d) return back + `<p class="none">${esc(pg.error || tr("Hämtar…"))}</p>`;
+    const hero = `<div class="m-hero ${pg.kind}">${img(d.cover)}<div>
+        <p class="part">${esc(pg.kind === "album" ? [KIND.album, d.year, d.label].filter(Boolean).join(" · ") : KIND.artist)}</p>
+        <h3>${esc(d.name)}</h3>${pg.kind === "album" ? `<p class="by">${esc(d.artist)}</p>` : ""}
+        <button class="btn primary" data-play="${esc(d.uri)}" data-name="${esc(d.name)}">${esc(tr("Spela"))}</button></div></div>`;
+    return back + hero + (pg.kind === "album" ? trackList(d.tracks, true) : (d.albums.length ? `<h3>${esc(tr("Album"))}</h3>${albumList(d.albums)}` : ""));
+  }
+  async function openPage(kind, id) {
+    page = { kind, id, data: null }; drawMusic(); music.scrollIntoView({ block: "start" });
+    const mine = page;
+    try {
+      const r = await fetch(`/api/spotify/${kind}/${encodeURIComponent(id)}`);
+      if (page !== mine) return;
+      if (r.ok) mine.data = await r.json(); else mine.error = (await r.text()) || tr("Spotify svarar inte.");
+    } catch { if (page === mine) mine.error = tr("Spotify svarar inte."); }
+    if (page === mine) drawMusic();
+  }
+  function find() {
+    const text = $("#sp-find").value.trim();
+    page = null; clearTimeout(findTimer); drawMusic();
+    if (!M.search || spotifyUri(text) || text.length < 2) return;
+    const n = ++findSeq;
+    findTimer = setTimeout(async () => {     // a short wait: not a question for every key
+      let d;
+      try {
+        const r = await fetch(`/api/spotify/search?q=${encodeURIComponent(text)}`);
+        d = r.ok ? await r.json() : { error: (await r.text()) || tr("Spotify svarar inte.") };
+      } catch { d = { error: tr("Spotify svarar inte.") }; }
+      if (n !== findSeq) return;             // a later question has been asked since
+      found = { q: text, albums: [], artists: [], tracks: [], ...d };
+      drawMusic();
+    }, 220);
   }
   async function loadMusic(force) {
     const now = (M.playback.item || {}).uri || "";
@@ -174,10 +242,14 @@ export default function page(api) {
       drawMusic();
     } catch {}
   }
-  $("#sp-find").addEventListener("input", drawMusic);
+  $("#sp-find").addEventListener("input", find);
   music.addEventListener("click", (e) => {
-    const b = e.target.closest("[data-play], [data-queue]"); if (!b) return;
-    if (b.dataset.play) playUri(b.dataset.play, b.dataset.name); else queueUri(b.dataset.queue, b.dataset.name);
+    const b = e.target.closest("[data-play], [data-queue], [data-album], [data-artist], [data-back]"); if (!b) return;
+    if (b.dataset.back) { page = null; drawMusic(); }
+    else if (b.dataset.album) openPage("album", b.dataset.album);
+    else if (b.dataset.artist) openPage("artist", b.dataset.artist);
+    else if (b.dataset.play) playUri(b.dataset.play, b.dataset.name);
+    else queueUri(b.dataset.queue, b.dataset.name);
   });
 
   // ---------------------------------------------------------------- now playing
@@ -344,7 +416,8 @@ export default function page(api) {
     // the first message on the socket: this module's part of the state
     hello(m) {
       Object.assign(M, { playback: m.playback || {}, auth: m.auth || {}, queue: m.queue || {}, quality: m.quality || {},
-        lastTest: m.last_test || null, tests: m.tests || [] });
+        lastTest: m.last_test || null, tests: m.tests || [], search: !!m.spotify_search });
+      $("#sp-find").placeholder = M.search ? tr("Sök i Spotify, eller klistra in en Spotify-länk") : tr("Sök i det du spelat, eller klistra in en Spotify-länk");
       renderQueue(); renderTest(M.lastTest); renderVlog();
     },
     // every later message; true = it was this module's and the panel need not look at it

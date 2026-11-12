@@ -1,6 +1,6 @@
 {
  "format": 1,
- "serial": 33,
+ "serial": 34,
  "modules": [
   {
    "id": "about",
@@ -17,12 +17,12 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "e7869a8787aab4abc894d9bec9b85f002ee3c8272cb5a3ec2e241b0bbd3ca90a",
+     "sha256": "1dd57677b0950b10762d79f9e43728065b0a5431a3d4a89bdb78309df27aa1cb",
      "exec": false
     },
     {
      "path": "lookup.py",
-     "sha256": "0d8c5ee4409a871a22260f6c77d401fc3fc7268cc009277b241bb0e88505c3f4",
+     "sha256": "a1cd2f83949162b392f91417150ea39c6efd9627f816afbfee9330aefa02e921",
      "exec": false
     },
     {
@@ -329,7 +329,7 @@
   },
   {
    "id": "spotify",
-   "version": "1.6.1",
+   "version": "1.7.0",
    "kind": "source",
    "name": {
     "sv": "Spotify Lossless (Soloist)",
@@ -342,7 +342,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "1dd697646981bb727dd516026aafd02dbafed1e760b19ad7ceed1ea1cd65c3a8",
+     "sha256": "44f71cd3ac856ee644f95fb8213d93765e8fde7ae25f70c376f86ae4a70be514",
      "exec": false
     },
     {
@@ -352,12 +352,12 @@
     },
     {
      "path": "module.json",
-     "sha256": "73a7ca53cf801eb1cf68b6f9a8858f5195d486293a3b4699f83377bbb41c011f",
+     "sha256": "0a64b429a3b3cae2834edfadf8b34385c198635b19c639cf4482f5aae266231e",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "0df3e14e8aa258b86cbce44e2d5c39dab7f56f5802626f89f9bbac595834f515",
+     "sha256": "f1909606722f5e9e98901b9349576019fa6575e52c3af79539a784be2ab474a3",
      "exec": false
     },
     {
@@ -396,8 +396,13 @@
      "exec": false
     },
     {
+     "path": "webapi.py",
+     "sha256": "d266def9d71ccc611c2e1a77a347fa7f07ec31aa21160546e40207254b89a96a",
+     "exec": false
+    },
+    {
      "path": "i18n/en.json",
-     "sha256": "22b7d5c8890c34b30551d485daf3873113e2f4bc2350a3de1dcb8cd829a56d32",
+     "sha256": "ea78b93268864d4f8f5c748715345122683d2705549be4ef8f291c3dd80daeef",
      "exec": false
     }
    ]

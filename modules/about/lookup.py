@@ -260,13 +260,16 @@ async def lastfm(http, key: str, method: str, node: str, lang: str, **params) ->
     """A Last.fm write-up ({"text", "url"}), with the listener's own API key. None: none, or no key."""
     if not key:
         return None
-    d = await _json(http, "https://ws.audioscrobbler.com/2.0/", {
-        "method": method, "api_key": key, "format": "json", "autocorrect": 1, "lang": lang, **params})
-    e = (d or {}).get(node) or {}
-    wiki = e.get("bio") or e.get("wiki") or {}
-    text = lastfm_clean(wiki.get("content") or wiki.get("summary") or "")
-    url = e.get("url") or ""
-    return {"text": text, "url": url if url.startswith("https://www.last.fm/") else "https://www.last.fm/"} if text else None
+    for lg in dict.fromkeys((lang, "en")):   # many write-ups exist in English only
+        d = await _json(http, "https://ws.audioscrobbler.com/2.0/", {
+            "method": method, "api_key": key, "format": "json", "autocorrect": 1, "lang": lg, **params})
+        e = (d or {}).get(node) or {}
+        wiki = e.get("bio") or e.get("wiki") or {}
+        text = lastfm_clean(wiki.get("content") or wiki.get("summary") or "")
+        url = e.get("url") or ""
+        if len(text) > 40:
+            return {"text": text, "lang": lg, "url": url if url.startswith("https://www.last.fm/") else "https://www.last.fm/"}
+    return None
 
 
 async def wikidata_facts(http, qid: str, lang: str, props: dict[str, str], most: int = 5) -> list[list]:
@@ -354,7 +357,7 @@ async def artist(http, mbid: str, langs: tuple[str, ...], token: str = "", lastf
     texts = [_text("Wikipedia", art["intro"], art["lang"], art["url"])] if art else []
     if lf := await lastfm(http, lastfm_key, "artist.getinfo", "artist", langs[0], mbid=mbid) or \
             await lastfm(http, lastfm_key, "artist.getinfo", "artist", langs[0], artist=name):
-        texts.append(_text("Last.fm", lf["text"], langs[0], lf["url"]))
+        texts.append(_text("Last.fm", lf["text"], lf["lang"], lf["url"]))
     if art:
         out["links"].append({"name": "Wikipedia", "url": art["url"]})
     out["image"] = (art or {}).get("image") or (await wikidata_image(http, rels["wikidata"]) if "wikidata" in rels else "")
@@ -392,7 +395,7 @@ async def album(http, mbid: str, artist_name: str, title: str, langs: tuple[str,
     out = {"name": full.get("title", title), "links": [{"name": "Wikipedia", "url": art["url"]}] if art else []}
     texts = [_text("Wikipedia", art["intro"], art["lang"], art["url"])] if art else []
     if lf := await lastfm(http, lastfm_key, "album.getinfo", "album", langs[0], artist=artist_name, album=out["name"]):
-        texts.append(_text("Last.fm", lf["text"], langs[0], lf["url"]))
+        texts.append(_text("Last.fm", lf["text"], lf["lang"], lf["url"]))
     rec = reception(art["sections"]) if art else ""
     if not rec and art and art["lang"] != "en" and (en := await wiki_titles(http, [rels["wikidata"]], ("en",))):
         # the reviews are mostly written up in the English article
@@ -433,7 +436,7 @@ async def track(http, artist_name: str, title: str, langs: tuple[str, ...], last
     a = await wiki_song(http, artist_name, plain(title), langs)
     texts = [_text("Wikipedia", a["intro"], a["lang"], a["url"], 900)] if a else []
     if lf := await lastfm(http, lastfm_key, "track.getinfo", "track", langs[0], artist=artist_name, track=plain(title)):
-        texts.append(_text("Last.fm", lf["text"], langs[0], lf["url"], 900))
+        texts.append(_text("Last.fm", lf["text"], lf["lang"], lf["url"], 900))
     texts = [t for t in texts if t]
     if not texts:
         return None

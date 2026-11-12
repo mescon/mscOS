@@ -26,6 +26,7 @@ import websockets
 
 import bitcheck
 import collect
+from . import webapi
 from i18n import T
 from plugins import SourcePlugin
 from . import soloist as so
@@ -97,7 +98,14 @@ class Spotify(SourcePlugin):
 
     def hello(self) -> dict:
         return {"playback": self.playback, "auth": self.auth, "queue": self.queue, "last_test": self.last_test,
-                "quality": self.track_quality, "tests": list(self.tests)[-30:]}
+                "quality": self.track_quality, "tests": list(self.tests)[-30:], "spotify_search": self.web.ready()}
+
+    @property
+    def web(self):
+        """Spotify's Web API (search), with the listener's own app credentials."""
+        if not hasattr(self, "_web"):
+            self._web = webapi.WebApi(lambda: (self.hub.secret("spotify_client_id") or "", self.hub.secret("spotify_client_secret") or ""))
+        return self._web
 
     def summary(self) -> dict:
         return {"soloist": self._ha_soloist()}
@@ -176,6 +184,8 @@ class Spotify(SourcePlugin):
                 await self.set_key(value)
         else:
             await super().set_secret(key, value)
+            if key.startswith("spotify_client"):
+                self.web.token = ""
 
     def secret_set(self, key: str) -> bool:
         return so.api_key_info()["set"] if key == "soloist_key" else super().secret_set(key)
@@ -863,6 +873,34 @@ class Spotify(SourcePlugin):
             if r and r.get("type") == "error":
                 raise web.HTTPBadGateway(text=f"Soloist: {r.get('message')}")
             return hub.ok(result=r)
+
+        def failed(e: webapi.WebApiError):
+            text = {"credentials": T("Spotify godtog inte appens Client ID och Client secret. Kontrollera dem under Moduler, Spotify Lossless."),
+                    "busy": T("Spotify tar inte emot fler frågor just nu. Försök igen om en stund.")}.get(e.kind, T("Spotify svarar inte."))
+            return web.HTTPBadGateway(text=text)
+
+        @routes.get("/api/spotify/search")
+        async def spotify_search(request):
+            q = " ".join(request.query.get("q", "").split())[:100]
+            if len(q) < 2:
+                raise web.HTTPBadRequest()
+            try:
+                return web.json_response(await sp.web.search(q))
+            except webapi.WebApiError as e:
+                raise failed(e)
+
+        @routes.get("/api/spotify/{kind:album|artist}/{sid}")
+        async def spotify_item(request):
+            sid = request.match_info["sid"]
+            if not webapi.ID.fullmatch(sid):
+                raise web.HTTPBadRequest()
+            try:
+                d = await (sp.web.album(sid) if request.match_info["kind"] == "album" else sp.web.artist(sid))
+            except webapi.WebApiError as e:
+                raise failed(e)
+            if d is None:
+                raise web.HTTPNotFound()
+            return web.json_response(d)
 
         @routes.get("/api/spotify/played")
         async def spotify_played(request):
