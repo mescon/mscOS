@@ -2,12 +2,18 @@
 # Update mscOS itself from its releases: newer mscos-*.deb packages are downloaded from the
 # project's release page (HOME_URL in /etc/mscos-release, a GitHub repository) and installed
 # with apt, which also restarts the panel.
-#   mscos-update --check    print {"current", "latest", "available"} as JSON, change nothing
+#   mscos-update --check    print {"current", "latest", "available", "signed"} as JSON, change nothing
 #   mscos-update            install the latest release if it is newer
+# A release is installed only when its SHA256SUMS carries the project's signature
+# (SHA256SUMS.sig, checked by mscos-verify against the keys in /usr/share/mscos/keys) and
+# every package matches it. MSCOS_ALLOW_UNSIGNED=1 in /etc/mscos/site.env is the device
+# owner's way to install from a repository of their own without a key.
 # MSCOS_RELEASES overrides the address of the release information (the GitHub API's
 # releases/latest of another repository, for a fork).
 set -euo pipefail
 . /etc/mscos-release 2>/dev/null || true
+[ -n "${MSCOS_ALLOW_UNSIGNED:-}" ] || MSCOS_ALLOW_UNSIGNED=$(sed -n 's/^MSCOS_ALLOW_UNSIGNED=//p' /etc/mscos/site.env 2>/dev/null | tail -1 || true)
+VERIFY=$(dirname "$(readlink -f "$0")")/mscos-verify
 CUR=${VERSION:-0}
 REPO=$(printf '%s' "${HOME_URL:-}" | sed -n 's|^https://github.com/\([^/]*/[^/]*\)/*$|\1|p')
 API=${MSCOS_RELEASES:-${REPO:+https://api.github.com/repos/$REPO/releases/latest}}
@@ -17,7 +23,7 @@ tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 code=$(curl --proto '=https' --proto-redir '=https' --silent --show-error --location --retry 2 --max-time 30 -o "$tmp/rel.json" -w '%{http_code}' \
     -H 'Accept: application/vnd.github+json' "$API") || { echo "The release page could not be reached" >&2; exit 1; }
 if [ "$code" = 404 ]; then
-    [ "${1:-}" = --check ] && { printf '{"current": "%s", "latest": null, "available": false}\n' "$CUR"; exit 0; }
+    [ "${1:-}" = --check ] && { printf '{"current": "%s", "latest": null, "available": false, "signed": false}\n' "$CUR"; exit 0; }
     echo "No release has been published yet."; exit 0
 fi
 [ "$code" = 200 ] || { echo "The release page answered $code" >&2; exit 1; }
@@ -27,20 +33,42 @@ LATEST=${TAG#v}
 NEWER=false
 dpkg --compare-versions "$LATEST" gt "$CUR" && NEWER=true
 
+# has the maintainer signed it yet? (the packages are built first, the signature follows)
+SIGNED=$(python3 -c 'import json,sys
+n = {a.get("name") for a in json.load(open(sys.argv[1])).get("assets", [])}
+print("true" if {"SHA256SUMS", "SHA256SUMS.sig"} <= n else "false")' "$tmp/rel.json")
 if [ "${1:-}" = --check ]; then
-    printf '{"current": "%s", "latest": "%s", "available": %s}\n' "$CUR" "$LATEST" "$NEWER"
+    printf '{"current": "%s", "latest": "%s", "available": %s, "signed": %s}\n' "$CUR" "$LATEST" "$NEWER" "$SIGNED"
     exit 0
 fi
 $NEWER || { echo "mscOS $CUR is the latest."; exit 0; }
 
-# only the packages this device has, from the release's own files
-# Only files of this repository's own release, each with the checksum GitHub recorded for it
-# when it was uploaded. That guards against a damaged or swapped download; it does not
-# guard against a release published by someone who has taken over the repository (the
-# packages are not signed yet).
-python3 - "$tmp/rel.json" "$REPO" > "$tmp/assets" <<'PY'
+# Only files of this repository's own release. The checksums come from the release's
+# SHA256SUMS, which must carry the project's signature: the private key is not kept with the
+# repository, so someone who has taken the repository over cannot publish a release that
+# devices install. Without a signature the checksum GitHub recorded at upload is used only
+# when the device's owner has allowed unsigned releases.
+get() { curl --proto '=https' --proto-redir '=https' --fail --silent --show-error --location --retry 3 -o "$2" "$1"; }
+SUMS=
+if [ "$SIGNED" = true ] && [ -n "$REPO" ]; then
+    get "https://github.com/$REPO/releases/download/$TAG/SHA256SUMS" "$tmp/SHA256SUMS"
+    get "https://github.com/$REPO/releases/download/$TAG/SHA256SUMS.sig" "$tmp/SHA256SUMS.sig"
+    if "$VERIFY" "$tmp/SHA256SUMS" "$tmp/SHA256SUMS.sig"; then SUMS=$tmp/SHA256SUMS; fi
+fi
+if [ -z "$SUMS" ] && [ "${MSCOS_ALLOW_UNSIGNED:-}" != 1 ]; then
+    if [ "$SIGNED" = true ]; then echo "The signature of release $TAG is not the project's. Nothing was installed." >&2
+    else echo "Release $TAG is not signed yet. Nothing was installed; try again later." >&2; fi
+    exit 1
+fi
+[ -n "$SUMS" ] || echo "Unsigned release, allowed by MSCOS_ALLOW_UNSIGNED."
+python3 - "$tmp/rel.json" "$REPO" "$SUMS" > "$tmp/assets" <<'PY'
 import json, re, sys
-repo = sys.argv[2]
+repo, sums = sys.argv[2], {}
+if sys.argv[3]:
+    for line in open(sys.argv[3]):
+        m = re.fullmatch(r"([0-9a-f]{64})  ([\w.+~-]+)\n?", line)
+        if m:
+            sums[m.group(2)] = m.group(1)
 for a in json.load(open(sys.argv[1])).get("assets", []):
     n, u, d = a.get("name", ""), a.get("browser_download_url", ""), a.get("digest") or ""
     if not re.fullmatch(r"mscos[a-z-]*_[0-9A-Za-z.+~-]+_all\.deb", n):
@@ -48,8 +76,9 @@ for a in json.load(open(sys.argv[1])).get("assets", []):
     if repo and not u.startswith(f"https://github.com/{repo}/releases/download/"):
         continue
     m = re.fullmatch(r"sha256:([0-9a-f]{64})", d)
-    if u.startswith("https://") and m:
-        print(n, u, m.group(1))
+    want = sums.get(n) if sys.argv[3] else (m.group(1) if m else None)
+    if u.startswith("https://") and want:
+        print(n, u, want)
 PY
 debs=()
 while read -r name url sum; do

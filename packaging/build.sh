@@ -19,7 +19,10 @@ COMMIT=${MSCOS_COMMIT:-$(git -C "$ROOT" describe --always --dirty 2>/dev/null ||
 stage_core() {  # <dir>
     install -d "$1/usr/lib/mscos/bin" "$1/usr/share/mscos/boards/dts" "$1/usr/share/mscos/pipewire" \
         "$1/usr/lib/systemd/system" "$1/etc"
-    install -m 755 "$ROOT"/core/mscos-setup "$ROOT"/core/mscos-board "$ROOT"/core/mscos-tuning "$ROOT"/core/mscos-update "$1/usr/lib/mscos/bin/"
+    install -m 755 "$ROOT"/core/mscos-setup "$ROOT"/core/mscos-board "$ROOT"/core/mscos-tuning "$ROOT"/core/mscos-update \
+        "$ROOT"/core/mscos-verify "$1/usr/lib/mscos/bin/"
+    install -d "$1/usr/share/mscos/keys"   # the project's public keys: releases and the module catalogue are signed
+    install -m 644 "$ROOT"/core/keys/*.pem "$1/usr/share/mscos/keys/"
     install -m 644 "$ROOT"/boards/*.conf "$1/usr/share/mscos/boards/"
     install -m 644 "$ROOT"/boards/dts/*.dts "$1/usr/share/mscos/boards/dts/"
     install -m 644 "$ROOT"/core/10-bitperfect.conf "$ROOT"/core/50-usb-dac.conf "$1/usr/share/mscos/pipewire/"
@@ -34,7 +37,7 @@ stage_panel() {  # <dir>
     sed -i "s/^const CACHE = \"mscos-v[0-9]*\";/const CACHE = \"mscos-$VERSION\";/" "$1/usr/lib/mscos/panel/static/sw.js"
     cp -r "$ROOT"/modules/. "$1/usr/lib/mscos/modules/"
     find "$1/usr/lib/mscos/modules" -name __pycache__ -prune -exec rm -rf {} +
-    rm -f "$1/usr/lib/mscos/modules/index.json" "$1/usr/lib/mscos/modules/README.md"
+    rm -f "$1/usr/lib/mscos/modules/index.json" "$1/usr/lib/mscos/modules/index.json.sig" "$1/usr/lib/mscos/modules/README.md"
     install -m 644 "$ROOT/web/mscos-panel.service" "$1/usr/lib/systemd/system/"
 }
 stage_dkms() {  # <dir>

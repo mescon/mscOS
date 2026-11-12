@@ -169,6 +169,12 @@ module is kept in `/var/lib/mscos/plugins/` and replaces the shipped one only wh
 newer; removing it goes back to the shipped one. `MSCOS_CATALOGUE` in `/etc/mscos/site.env`
 points the panel at another catalogue (a fork, a mirror).
 
+The catalogue is signed (`modules/index.json.sig`), and a device refuses one that is not: a
+module runs as root, and the catalogue names every file with its checksum. A pull request
+changes `index.json` but cannot sign it. The maintainer signs after reviewing and merging
+(`tools/sign.sh catalogue`), and until then devices keep the modules they have. See
+[INSTALL.md](INSTALL.md#signatures) for the keys and for forks.
+
 ## Modules of your own
 
 A module does not have to come with mscOS. Put its package in

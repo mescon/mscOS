@@ -2,6 +2,8 @@
 # release; with the APT_GPG_KEY secret set, a signed apt repository is also published to
 # GitHub Pages (suite "trixie", component "main"), which is where "apt upgrade" on a
 # device gets new mscOS versions from.
+# Devices that update from the panel install a release only once the maintainer has signed
+# it: run `tools/sign.sh release <tag>` afterwards (the signing key is not kept here).
 name: packages
 on:
   push:

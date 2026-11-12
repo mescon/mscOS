@@ -10,7 +10,7 @@
 | 4. Avbildningar | `image/build.sh` finns för SOtM, Raspberry Pi, PC och arm64. x86-avbildningen är byggd och startad i en virtuell maskin. SOtM-, Pi- och arm64-avbildningarna är byggda och innehållet kontrollerat. Ingen avbildning är startad på hårdvara än. |
 | 5. Fler källor | Spotify Connect (go-librespot) är provad på SOtM:en med uppspelning, knappar och volymbrygga. HQPlayer NAA är installerad och startar, men uppspelning är inte provad. UPnP, Squeezelite och AirPlay återstår. |
 | 6. CM6632A-patchen till upstream | återstår. DKMS-paketet bygger drivrutinen mot Debian 13:s egen kärna (6.12), men den är inte provad med en DAC på den kärnan. |
-| 7. Moduler från andra | klart: katalogen `modules/index.json`, bläddring och installation i panelen, egna moduler från en annan utgivare, och automatiska tester (`tools/test.sh`). Kvar: signering av utgåvor och katalog innan repot blir offentligt. |
+| 7. Moduler från andra | klart: katalogen `modules/index.json`, bläddring och installation i panelen, egna moduler från en annan utgivare, och automatiska tester (`tools/test.sh`). Utgåvor och katalogen är signerade (Ed25519, `tools/sign.sh`; enheten kontrollerar med `mscos-verify`), provat mot en ändrad katalog på SOtM:en och mot sex olika utgåvor i en Debian-behållare. |
 
 Ursprunglig plan följer. Målet är ett musik-OS som andra hifi-entusiaster kan flasha på sin egen enhet och ställa in själva:
 

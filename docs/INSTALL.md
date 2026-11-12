@@ -95,6 +95,26 @@ to the HTTPS name. Do not expose the panel to the internet.
 - mscOS itself: **System, Look for a new version of mscOS** installs newer packages from
   the project's releases, or install them the same way as in B.
 
+### Signatures
+
+A device installs a release, or a module from the catalogue, only when it carries the
+project's signature. The public keys come with mscOS (`/usr/share/mscos/keys/`); the private
+key is the maintainer's and is kept neither in the repository nor with the build service, so
+a release or a catalogue published by someone who has taken the repository over is refused.
+A release shows as "published but not signed yet" until the maintainer has signed it.
+
+To check packages you downloaded by hand, get `SHA256SUMS` and `SHA256SUMS.sig` from the same
+release and a public key from `core/keys/` in the repository:
+
+    base64 -d SHA256SUMS.sig > sig.bin
+    openssl pkeyutl -verify -pubin -inkey mscos-1.pem -rawin -in SHA256SUMS -sigfile sig.bin
+    sha256sum --check SHA256SUMS
+
+Running a fork or a mirror of your own: put your public key in `/etc/mscos/keys/` on the
+device, or set `MSCOS_ALLOW_UNSIGNED=1` in `/etc/mscos/site.env` to do without signatures.
+A module installed from another publisher's address (Modules, Install from an address) is
+not covered by the project's signature: you are trusting that publisher.
+
 ## If something does not work
 
 - **The panel does not open:** check that the device has an address on your network; try

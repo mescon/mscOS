@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Check a signature of the mscOS project: mscos-verify <file> <signature file>
+# The signature is Ed25519 over the file's bytes, base64 encoded (tools/sign.sh writes it).
+# It must match one of the public keys in /usr/share/mscos/keys (they come with mscOS) or
+# /etc/mscos/keys (the device owner's own, for a fork or a mirror). Exit 0 only on a match.
+set -uo pipefail
+file=${1:?file} sig=${2:?signature file}
+[ -f "$file" ] && [ -f "$sig" ] || { echo "mscos-verify: file or signature missing" >&2; exit 2; }
+command -v openssl >/dev/null || { echo "mscos-verify: openssl is not installed" >&2; exit 2; }
+raw=$(mktemp); trap 'rm -f "$raw"' EXIT
+base64 -d "$sig" > "$raw" 2>/dev/null || { echo "mscos-verify: the signature is not base64" >&2; exit 1; }
+[ "$(stat -c %s "$raw")" = 64 ] || { echo "mscos-verify: not an Ed25519 signature" >&2; exit 1; }
+shopt -s nullglob
+for key in ${MSCOS_KEYS:-/usr/share/mscos/keys}/*.pem /etc/mscos/keys/*.pem; do
+    # keys only root can replace
+    [ -f "$key" ] && [ ! -L "$key" ] || continue
+    if openssl pkeyutl -verify -pubin -inkey "$key" -rawin -in "$file" -sigfile "$raw" >/dev/null 2>&1; then
+        exit 0
+    fi
+done
+echo "mscos-verify: no key of this installation made that signature" >&2
+exit 1

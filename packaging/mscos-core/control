@@ -5,7 +5,7 @@ Section: sound
 Priority: optional
 Maintainer: mescon <mescon@users.noreply.github.com>
 Homepage: https://github.com/mescon/mscOS
-Depends: pipewire, pipewire-alsa, wireplumber, alsa-utils, python3, curl, ca-certificates, iproute2, util-linux, passwd, systemd
+Depends: pipewire, pipewire-alsa, wireplumber, alsa-utils, python3, curl, ca-certificates, openssl, iproute2, util-linux, passwd, systemd
 Recommends: avahi-daemon, ethtool, device-tree-compiler
 Description: mscOS: bit-perfect audio base for a network streamer
  The audio user and its PipeWire session (44.1 kHz, no resampling, the USB DAC as a

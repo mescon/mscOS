@@ -1052,6 +1052,21 @@ def catalogue_url() -> str:
 
 
 _catalogue: tuple[float, list] = (0.0, [])
+MSCOS_VERIFY = os.path.join(collect.LIB, "bin", "mscos-verify")
+
+
+def signed_by_project(data: bytes, sig: bytes) -> bool:
+    """Does `sig` (base64 Ed25519) over `data` match one of this installation's keys?"""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        for name, content in (("data", data), ("sig", sig)):
+            with open(os.path.join(d, name), "wb") as f:
+                f.write(content)
+        try:
+            return subprocess.run([MSCOS_VERIFY, os.path.join(d, "data"), os.path.join(d, "sig")],
+                                  capture_output=True, timeout=20).returncode == 0
+        except (OSError, subprocess.TimeoutExpired):
+            return False
 
 
 async def fetch_catalogue(http) -> list[dict]:
@@ -1064,7 +1079,16 @@ async def fetch_catalogue(http) -> list[dict]:
     async with http.get(url) as r:
         if r.status != 200:
             raise OSError(f"HTTP {r.status}")
-        d = json.loads(await r.text())
+        raw = await r.content.read(2_000_000)
+    # The catalogue names every file of every module with its checksum, and modules run as root:
+    # it must carry the project's signature (tools/sign.sh; the keys come with mscOS). The device's
+    # owner can allow an unsigned one of their own with MSCOS_ALLOW_UNSIGNED=1.
+    if env("ALLOW_UNSIGNED") != "1":
+        async with http.get(url + ".sig") as r:
+            sig = await r.content.read(4096) if r.status == 200 else b""
+        if not sig or not await asyncio.to_thread(signed_by_project, raw, sig):
+            raise PermissionError("unsigned")
+    d = json.loads(raw)
     mods = [m for m in d.get("modules", []) if isinstance(m, dict) and extmods.ID.fullmatch(str(m.get("id", "")))
             and extmods.VERSION.fullmatch(str(m.get("version", ""))) and isinstance(m.get("files"), list)]
     _catalogue = (time.time(), mods)
@@ -1092,6 +1116,8 @@ async def plugins_catalogue(request):
     try:
         async with ClientSession(timeout=ClientTimeout(total=20)) as http:
             mods = await fetch_catalogue(http)
+    except PermissionError:
+        raise web.HTTPBadGateway(text=T("Katalogen bär inte mscOS-projektets signatur. Inget hämtades."))
     except (OSError, ValueError, asyncio.TimeoutError) as e:
         raise web.HTTPBadGateway(text=T("Katalogen kunde inte hämtas: {why}", why=e if isinstance(e, OSError) else type(e).__name__))
     out = []
@@ -1134,6 +1160,8 @@ async def plugins_install(request):
             await asyncio.to_thread(extmods.install_files, m["id"], m["version"], "catalogue", files)
         except ValueError as e:
             raise web.HTTPBadRequest(text=T("Modulen kunde inte installeras: {why}", why=e))
+        except PermissionError:
+            raise web.HTTPBadGateway(text=T("Katalogen bär inte mscOS-projektets signatur. Inget hämtades."))
         except (OSError, asyncio.TimeoutError) as e:
             raise web.HTTPBadGateway(text=T("Modulen kunde inte hämtas: {why}", why=type(e).__name__))
         log.info("module %s %s installed from the catalogue", m["id"], m["version"])

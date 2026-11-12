@@ -572,8 +572,9 @@ $("#os-check").addEventListener("click", async () => {
   try {
     const r = await (await fetch("/api/system/mscos-update")).json();
     if (r.ok === false || r.current == null) throw new Error();
-    info.textContent = r.available ? tr`mscOS ${r.latest} finns. Du har ${r.current}.` : r.latest ? tr`mscOS ${r.current} är den senaste.` : tr`Ingen utgåva är publicerad än. Du har ${r.current}.`;
-    $("#os-run").hidden = !r.available;
+    info.textContent = r.available ? (r.signed === false ? tr`mscOS ${r.latest} är publicerad men inte signerad än. Du har ${r.current}. Försök igen senare.` : tr`mscOS ${r.latest} finns. Du har ${r.current}.`)
+      : r.latest ? tr`mscOS ${r.current} är den senaste.` : tr`Ingen utgåva är publicerad än. Du har ${r.current}.`;
+    $("#os-run").hidden = !r.available || r.signed === false;
   } catch { info.textContent = tr("Kunde inte söka efter en ny version av mscOS."); }
   b.disabled = false;
 });
