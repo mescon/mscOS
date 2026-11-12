@@ -406,7 +406,18 @@ class Spotify(SourcePlugin):
                 uri = (self.playback.get("item") or {}).get("uri")
                 # (whether it plays is looked at after the wait in _measure_once: a track is
                 # still buffering when it is announced)
-                if not uri or not self.hub.soloist or (self.track_quality or {}).get("uri") == uri or tries.get(uri, 0) >= 3:
+                tq = self.track_quality or {}
+                if not uri or not self.hub.soloist:
+                    return
+                if tq.get("uri") == uri:
+                    # Measured. A track found lossy is looked at again every half minute while it
+                    # plays (a few times): the page says how it is now, not how it began.
+                    if tq.get("verdict") != "lossy_or_processed" or tries.get(uri, 0) >= 8:
+                        return
+                    await asyncio.sleep(25)
+                    if (self.playback.get("item") or {}).get("uri") != uri:
+                        continue
+                elif tries.get(uri, 0) >= 3:
                     return
                 tries[uri] = tries.get(uri, 0) + 1
                 await self._measure_once(uri)
@@ -414,11 +425,11 @@ class Spotify(SourcePlugin):
             self._quality_busy = False
 
     async def _measure_once(self, uri: str):
-        """6 s of what goes to the DAC, a few seconds into the track: on the 16-bit lattice
+        """3 s of what goes to the DAC, a few seconds into the track: on the 16-bit lattice
         means a 16-bit file, content below it 24-bit, no lattice at all lossy (or processed).
         Read-only tap on the sink monitor; skipped while a verification runs."""
         try:
-            await asyncio.sleep(8)  # past the track start (gapless join, fades)
+            await asyncio.sleep(4)  # past the track start (gapless join, fades)
             if (self.playback.get("item") or {}).get("uri") != uri or self.playback.get("status") != "playing" or not self.auth.get("is_active") \
                     or self.hub.jobs.get("audio-test", {}).get("running"):
                 log.info("track quality: skipped (track changed, paused, played elsewhere or a verification running)")
@@ -431,13 +442,14 @@ class Spotify(SourcePlugin):
             os.close(fd)
             os.chown(wav, uid, -1)
             try:
-                await collect.run(["timeout", "7", "pw-record", "-P", "{ stream.capture.sink=true }",
+                await collect.run(["timeout", "4", "pw-record", "-P", "{ stream.capture.sink=true }",
                                    "--target", sink["name"], "--rate", "44100", "--channels", "2",
                                    "--format", "f32", wav], as_user=True, timeout=20)
 
                 def analyse():
                     x = bitcheck.read_f32_wav(wav)
-                    return bitcheck.lattice(x[22050:]) if len(x) > 3 * 44100 else {"verdict": "too_short"}
+                    # half a second in, and two seconds at least (x is frames, 44100 a second)
+                    return bitcheck.lattice(x[22050:]) if len(x) > 2 * 44100 else {"verdict": "too_short"}
                 r = await asyncio.get_running_loop().run_in_executor(None, analyse)
             finally:
                 with contextlib.suppress(OSError):
@@ -448,8 +460,8 @@ class Spotify(SourcePlugin):
             if v in ("silent", "too_short"):
                 log.info("track quality: %s, not recorded", v)
                 return
-            if v == "lossy_or_processed" and getattr(self, "_lossy_once", None) != uri:
-                # One look can be wrong (a dropout or a seek inside the six seconds breaks the
+            if v == "lossy_or_processed" and getattr(self, "_lossy_once", None) != uri and (self.track_quality or {}).get("uri") != uri:
+                # One look can be wrong (a dropout or a seek inside the three seconds breaks the
                 # pattern as lossy audio does): said only when a second look agrees.
                 self._lossy_once = uri
                 log.info("track quality: lossy at the first look, measuring once more")

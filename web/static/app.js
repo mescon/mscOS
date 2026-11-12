@@ -898,7 +898,8 @@ function renderAmp() {
   const m = AMP || {}, max = +(m.max_db || 40);
   const inp = (m.inputs || []).find((i) => i.id === m.input);
   const name = inp ? (inp.label !== inp.id ? `${inp.label} (${inp.id})` : inp.id) : "";
-  $("#ml-state").textContent = m.note ? loc(m.note) : m.power === false ? tr("I standby") : tr`På${name ? `, ${name}` : ""}${m.muted ? ", ljudet av" : ""}`;
+  $("#ml-state").textContent = m.note ? loc(m.note) : m.power === false ? tr`${outName()}: i standby`
+    : tr`${outName()}: på${name ? tr`, ingång ${name}` : ""}${m.muted ? tr(", ljudet av") : ""}`;
   $("#ml-ctl").hidden = !m.reachable;
   $("#ml-step").hidden = !m.reachable || m.power === false;
   $("#amp").classList.toggle("live", !!m.reachable && m.power !== false);

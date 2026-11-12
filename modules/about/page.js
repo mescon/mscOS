@@ -48,7 +48,7 @@ export default function page(api) {
       .about article { scroll-margin-top: 14px; }
       /* the title, the artist and the album above lead to their cards */
       [data-about] { cursor: pointer; }
-      [data-about]:hover { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+      p[data-about]:hover { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
     </style>
   </section>`);
   const cols = box.querySelector("#about-cols");
@@ -103,9 +103,9 @@ export default function page(api) {
     links();
   }
   // The title, the artist and the album at the top of Listen lead to their cards, opened.
-  const LINK = { track: "#np-title", artist: "#np-artist", album: "#np-album" };
+  const LINK = [["track", "#np-title"], ["artist", "#np-artist"], ["album", "#np-album"], ["album", ".cover"]];
   function links() {
-    for (const [kind, sel] of Object.entries(LINK)) {
+    for (const [kind, sel] of LINK) {
       const el = $(sel);
       if (!el) continue;
       if (cols.isConnected && !box.hidden && cols.querySelector(`article[data-part="${kind}"]`)) {
@@ -121,7 +121,7 @@ export default function page(api) {
     setOpen(a, true, false);   // at its full height at once, so the scroll ends where the card begins
     a.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
   }
-  for (const [kind, sel] of Object.entries(LINK)) {
+  for (const [kind, sel] of LINK) {
     const el = $(sel);
     if (!el) continue;
     el.addEventListener("click", () => { if (el.dataset.about) go(kind); });
