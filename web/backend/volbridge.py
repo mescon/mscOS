@@ -30,7 +30,11 @@ import collect
 
 log = logging.getLogger("volbridge")
 
-GRACE_S = 2.0      # after the device becomes active: Spotify's own volume restore, not a move
+GRACE_S = 2.0      # after the device becomes active: then the slider is set from the amplifier
+SETTLE_S = 7.0     # after it becomes active or playback starts: the app pushes the volume it has
+                   # stored for the device, sometimes seconds later. That is never a move: the
+                   # slider is put back where the amplifier is. (Found 2026-11-12: starting playback
+                   # with the amplifier at 1 dB raised it 6 dB.)
 ECHO_S = 4.0       # our own set_volume coming back as volume_changed
 POLL_S = 5.0       # amplifier volume poll while Spotify is active
 MAX_UP_DB = 6.0    # largest rise from one slider event (a jump is capped; the slider then follows)
@@ -43,6 +47,7 @@ class VolumeBridge:
         self._sent: tuple[int, float] | None = None   # (spotify volume we set, when)
         self._amp_db: float | None = None             # last amplifier level we know of
         self._lock = asyncio.Lock()
+        self._resync = False
 
     # ---- conditions
     def enabled(self) -> bool:
@@ -83,14 +88,28 @@ class VolumeBridge:
         if self.enabled():
             asyncio.ensure_future(self._sync_after_grace())
 
+    def settle(self):
+        """Playback is starting here: what the app reports in the next seconds is its stored
+        volume, not the listener's hand."""
+        self._active_t = time.time()
+
+    async def _resync_soon(self):
+        await asyncio.sleep(1.0)
+        self._resync = False
+        await self.sync_from_amp(force=True)
+
     def on_volume_changed(self, v):
         if not isinstance(v, (int, float)) or not self.enabled():
             return
         v = int(round(v))
         if self._sent and abs(v - self._sent[0]) <= 1 and time.time() - self._sent[1] < ECHO_S:
             return  # our own change
-        if time.time() - self._active_t < GRACE_S:
-            return  # Spotify restoring its stored device volume; _sync_after_grace fixes it
+        if time.time() - self._active_t < SETTLE_S:
+            # the app restoring its stored device volume: the amplifier stays, the slider goes back
+            if not self._resync:
+                self._resync = True
+                asyncio.ensure_future(self._resync_soon())
+            return
         asyncio.ensure_future(self._move_amp(v))
 
     # ---- actions
@@ -154,7 +173,7 @@ class VolumeBridge:
     async def amp_loop(self):
         while True:
             try:
-                if self.enabled() and self._active() and time.time() - self._active_t > GRACE_S:
+                if self.enabled() and self._active() and time.time() - self._active_t > SETTLE_S:
                     await self.sync_from_amp()
             except Exception:
                 log.exception("volume bridge poll")

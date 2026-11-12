@@ -138,6 +138,26 @@ class VolumeBridgeTest(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(0.05)
         self.assertEqual(self.hub.amp.sets, [])
 
+    async def test_starting_playback_never_raises_the_amplifier(self):
+        """The amplifier at 1 dB late at night; the app has 53 % stored and reports it a few
+        seconds after playback starts. The amplifier stays; the slider is put back."""
+        self.hub.amp.volume_db = 1.0
+        self.vb.settle()                        # playback starts
+        self.vb._active_t -= 4.0                # ... and the report comes four seconds later
+        self.hub.source.vol = 53
+        self.vb.on_volume_changed(53)
+        await asyncio.sleep(1.2)
+        self.assertEqual(self.hub.amp.sets, [])
+        self.assertEqual(self.hub.amp.volume_db, 1.0)
+        self.assertEqual(self.hub.source.moved, [2])   # 1 dB of 40
+
+    async def test_a_move_after_things_settled_is_a_move(self):
+        self.vb.settle()
+        self.vb._active_t -= 8.0
+        self.vb.on_volume_changed(55)
+        await asyncio.sleep(0.05)
+        self.assertEqual(self.hub.amp.sets, [22.0])
+
     async def test_the_bridge_does_not_answer_its_own_change(self):
         await self.vb._set_spotify(40)
         self.vb.on_volume_changed(40)           # the echo of what we just set
