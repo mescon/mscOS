@@ -45,6 +45,10 @@ export default function page(api) {
       .about .from { font-size: .8125rem; color: var(--engraved); margin-top: 14px; }
       .about .from a { color: inherit; text-underline-offset: 3px; margin-right: 14px; }
       .about .from a:hover { color: var(--ink); }
+      .about article { scroll-margin-top: 14px; }
+      /* the title, the artist and the album above lead to their cards */
+      [data-about] { cursor: pointer; }
+      [data-about]:hover { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
     </style>
   </section>`);
   const cols = box.querySelector("#about-cols");
@@ -96,6 +100,32 @@ export default function page(api) {
       if (src) art.style.backgroundImage = `url(${JSON.stringify(src)})`; else art.remove();
     }
     measure();
+    links();
+  }
+  // The title, the artist and the album at the top of Listen lead to their cards, opened.
+  const LINK = { track: "#np-title", artist: "#np-artist", album: "#np-album" };
+  function links() {
+    for (const [kind, sel] of Object.entries(LINK)) {
+      const el = $(sel);
+      if (!el) continue;
+      if (cols.isConnected && !box.hidden && cols.querySelector(`article[data-part="${kind}"]`)) {
+        el.dataset.about = kind; el.tabIndex = 0; el.setAttribute("role", "link");
+      } else if (el.dataset.about) {
+        delete el.dataset.about; el.removeAttribute("tabindex"); el.removeAttribute("role");
+      }
+    }
+  }
+  function go(kind) {
+    const a = cols.isConnected && cols.querySelector(`article[data-part="${kind}"]`);
+    if (!a) return;
+    setOpen(a, true, false);   // at its full height at once, so the scroll ends where the card begins
+    a.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+  }
+  for (const [kind, sel] of Object.entries(LINK)) {
+    const el = $(sel);
+    if (!el) continue;
+    el.addEventListener("click", () => { if (el.dataset.about) go(kind); });
+    el.addEventListener("keydown", (e) => { if (e.key === "Enter" && el.dataset.about) go(kind); });
   }
   cols.addEventListener("click", (e) => {
     const a = e.target.closest("article"); if (!a) return;
@@ -123,7 +153,7 @@ export default function page(api) {
       if (k === key) draw(d);
     } catch {   // the device did not answer: once more in a while, not at every redraw
       if (k !== key) return;
-      box.hidden = true;
+      box.hidden = true; links();
       timer = setTimeout(() => { if (k === key) key = ""; }, 30000);
     }
   }
@@ -134,7 +164,7 @@ export default function page(api) {
       const k = ok ? [t.artist, t.album, t.title].join("\u0001") : "";
       if (k === key) return;
       key = k; clearTimeout(timer);
-      if (!ok) { box.hidden = true; cols.innerHTML = ""; return; }
+      if (!ok) { box.hidden = true; cols.innerHTML = ""; links(); return; }
       box.classList.add("stale");
       timer = setTimeout(() => ask({ title: t.title, artist: t.artist, album: t.album || "", artist_uri: t.artist_uri || "" }, k), 1200);  // not for every skipped track
     },
