@@ -879,3 +879,13 @@ html { -webkit-tap-highlight-color: transparent; }
 .view.active { animation: view-in .24s cubic-bezier(.3, .7, .2, 1); }
 .dock-cover img, .m-albums img, .m-tracks img, .rm-list img, .m-hero img { background: var(--plate); }
 @media (prefers-reduced-motion: reduce) { .view.active { animation: none; } }
+
+/* ============================================================ film grain
+   A fine, still grain over the page's ground (under the text and the controls), so that the
+   flat colour and the blurred sleeve look a little less digital. Drawn by the browser from
+   noise; no picture is fetched. */
+/* (mid-grey specks, plainly laid over: they lighten a dark ground and darken a light one) */
+body::before { content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .16;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 .5  0 0 0 1.4 -.25'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 220px 220px; }
+@media (prefers-contrast: more) { body::before { display: none; } }

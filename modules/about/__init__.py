@@ -98,54 +98,69 @@ class About(Plugin):
             self.busy[path] = asyncio.create_task(run())
         return await asyncio.shield(self.busy[path])
 
-    async def about(self, artist: str, album: str, title: str, lang: str, spotify_artist: str = "") -> dict:
+    async def about(self, artist: str, album: str, title: str, lang: str, spotify_artist: str = "", part: str = "") -> dict:
+        """The notes for one card (part: "artist", "album" or "track"), or for all three. The
+        page asks for each by itself, so that each shows the moment it is ready; whichever way,
+        the three are worked on at the same time."""
         if self.http is None:
             self.http = ClientSession(timeout=ClientTimeout(total=15))
         langs = tuple(dict.fromkeys((lang, "en")))
         token = self.hub.secret("about_discogs_token") or ""
         lfm = self.hub.secret("about_lastfm_key") or ""
         src = "l" if lfm else ""   # with a Last.fm key the answers hold more: kept apart from those without
-        out = {"artist": None, "album": None, "track": None}
+        first = re.split(r", | / ", artist)[0]   # "A, B" and "A / B" are several artists on one track
+        out: dict = {}
+
+        async def who():
+            return await lookup.find_artist(self.http, artist, album, title, spotify_artist) \
+                or (await lookup.find_artist(self.http, first, album, title) if first != artist else "")
+
+        async def get_artist(mbid):
+            return await self._one(self._file("artist" + src, lang, mbid), lambda: lookup.artist(self.http, mbid, langs, token, lfm)) if mbid else None
+
+        async def get_album(mbid):
+            if not mbid or not album:
+                return None
+            return await self._one(self._file("album" + src, lang, mbid, album), lambda: lookup.album(self.http, mbid, first, album, langs, token, lfm))
+
+        async def get_track():
+            return await self._one(self._file("track" + src, lang, first, title), lambda: lookup.track(self.http, first, title, langs, lfm)) if title else None
+
         try:
-            async def who():
-                # "A, B" is several artists on one track: the first of them, when the whole is nobody's name
-                first = re.split(r", | / ", artist)[0]
-                return await lookup.find_artist(self.http, artist, album, title, spotify_artist) \
-                    or (await lookup.find_artist(self.http, first, album, title) if first != artist else "")
             # Which artist: by the player's id for it when there is one, else by the name together
             # with the album (several artists share a name; an album tells them apart).
-            mbid = await self._one(self._file("who", spotify_artist) if spotify_artist else self._file("who", artist, album), who)
-            a = out["artist"] = await self._one(self._file("artist" + src, lang, mbid), lambda: lookup.artist(self.http, mbid, langs, token, lfm)) if mbid else None
-            jobs = {}
-            if a and album:
-                jobs["album"] = self._one(self._file("album" + src, lang, mbid, album), lambda: lookup.album(self.http, a["mbid"], a["name"], album, langs, token, lfm))
-            if title:
-                jobs["track"] = self._one(self._file("track" + src, lang, artist, title), lambda: lookup.track(self.http, a["name"] if a else artist, title, langs, lfm))
-            for k, v in zip(jobs, await asyncio.gather(*jobs.values(), return_exceptions=True)):
+            need_who = part in ("", "artist", "album")
+            mbid = await self._one(self._file("who", spotify_artist) if spotify_artist else self._file("who", artist, album), who) if need_who else ""
+            jobs = {k: f for k, f in (("artist", lambda: get_artist(mbid)), ("album", lambda: get_album(mbid)), ("track", get_track)) if part in ("", k)}
+            for k, v in zip(jobs, await asyncio.gather(*(f() for f in jobs.values()), return_exceptions=True)):
                 if isinstance(v, lookup.Unavailable):
                     out["unavailable"] = True
+                    out[k] = None
                 elif isinstance(v, Exception):
                     log.warning("%s: %r", k, v)
+                    out[k] = None
                 else:
                     out[k] = v
         except lookup.Unavailable:
             out["unavailable"] = True
-        # a title track's search can land on the album's own article: that text is said once, as the album's
-        al, tr = out["album"], out["track"]
-        if al and tr:
-            theirs = {t["url"] for t in al.get("texts", [])}
-            tr["texts"] = [t for t in tr.get("texts", []) if t["url"] not in theirs]
-            if (tr.get("review") or {}).get("url") in theirs:
-                tr.pop("review", None)
-        # who plays on this track: MusicBrainz credits each recording of the album's release
-        if al:
-            al = out["album"] = dict(al)
+        # who plays on this track: MusicBrainz credits each recording of the album's release.
+        # It comes with the album, for the track's card.
+        if out.get("album"):
+            al = out["album"] = dict(out["album"])
             mine = (al.pop("track_credits", None) or {}).get(lookup._fold(lookup.plain(title)))
             if mine and title:
-                tr = out["track"] = dict(tr or {"name": lookup.plain(title), "texts": [], "facts": [], "links": []})
-                tr["credits"] = mine["credits"]
-        if tr is not None and not (tr.get("texts") or tr.get("credits") or tr.get("review")):
-            out["track"] = None
+                out["track_credits"] = mine["credits"]
+        if part == "":   # all three at once: put together here as the page does it for itself
+            al, tr = out.get("album"), out.get("track")
+            if al and tr:
+                theirs = {t["url"] for t in al.get("texts", [])}
+                tr = out["track"] = {**tr, "texts": [t for t in tr.get("texts", []) if t["url"] not in theirs]}
+            if out.get("track_credits"):
+                tr = out["track"] = {**(tr or {"name": lookup.plain(title), "texts": [], "facts": [], "links": []}), "credits": out.pop("track_credits")}
+            if tr is not None and not (tr.get("texts") or tr.get("credits") or tr.get("review")):
+                out["track"] = None
+            for k in ("artist", "album", "track"):
+                out.setdefault(k, None)
         return out
 
     async def lyrics(self, artist: str, title: str, album: str, duration_ms: int) -> dict:
@@ -167,7 +182,10 @@ class About(Plugin):
                 raise web.HTTPBadRequest()
             if not artist or lang not in ("sv", "en"):
                 raise web.HTTPBadRequest()
-            return web.json_response(await self.about(artist, album, title, lang, m.group(1) if m else ""))
+            part = str(b.get("part") or "")
+            if part not in ("", "artist", "album", "track"):
+                raise web.HTTPBadRequest()
+            return web.json_response(await self.about(artist, album, title, lang, m.group(1) if m else "", part))
 
         @routes.post("/api/about/lyrics")
         async def lyrics(request):

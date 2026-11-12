@@ -215,29 +215,31 @@ export default function page(api) {
     for (const a of cols.children) if (a.classList.contains("open")) a.style.height = "";   // (measured again below)
     measure(); links();
   }
-  function draw(d) {
+  // One card gets its answer: it takes the place of the waiting card (or of what was there),
+  // unless it already shows this very answer. Nothing known of it: its card goes.
+  function put(kind, data) {
     const cover = $("#np-cover"), sleeve = cover && !cover.hidden && cover.src ? cover.src : "";
     // the pictures the device found come from Wikimedia: nothing else is put on the page
     const wiki = (u) => (/^https:\/\/(upload\.wikimedia\.org|commons\.wikimedia\.org\/wiki\/Special:FilePath)\/[^"'()\s]+$/.test(u || "") ? u : "");
-    const pic = { track: wiki(d.track?.image) || sleeve, album: sleeve, artist: wiki(d.artist?.image) };
-    // Card by card: one that already shows this very answer is left alone, the others are put in
-    // the place of what was there (the waiting card, or the last track's).
-    let before = null;
-    for (const kind of ["track", "album", "artist"]) {
-      const old = cols.querySelector(`article[data-part="${kind}"]`), sig = JSON.stringify(d[kind] || null);
-      if (old && !old.classList.contains("wait") && old.dataset.sig === sig) { before = old; continue; }
+    const pic = kind === "artist" ? wiki(data?.image) : kind === "track" ? wiki(data?.image) || sleeve : sleeve;
+    const old = cols.querySelector(`article[data-part="${kind}"]`), sig = JSON.stringify(data || null);
+    if (!(old && !old.classList.contains("wait") && old.dataset.sig === sig)) {
       const t = document.createElement("template");
-      t.innerHTML = part(kind, d[kind]);
+      t.innerHTML = part(kind, data);
       const fresh = t.content.firstElementChild;
-      if (!fresh) { old?.remove(); continue; }   // nothing is known of it: its card goes
-      fresh.dataset.sig = sig;
-      const art = fresh.querySelector(".art");
-      if (pic[kind]) art.style.backgroundImage = `url(${JSON.stringify(pic[kind])})`; else art.remove();
-      if (old) old.replaceWith(fresh); else if (before) before.after(fresh); else cols.prepend(fresh);
-      before = fresh;
+      if (!fresh) old?.remove();
+      else {
+        fresh.dataset.sig = sig;
+        const art = fresh.querySelector(".art");
+        if (pic) art.style.backgroundImage = `url(${JSON.stringify(pic)})`; else art.remove();
+        if (old) old.replaceWith(fresh);
+        else {   // in its place among the three
+          const order = ["track", "album", "artist"], after = order.slice(0, order.indexOf(kind)).reverse().map((k) => cols.querySelector(`article[data-part="${k}"]`)).find(Boolean);
+          if (after) after.after(fresh); else cols.prepend(fresh);
+        }
+      }
     }
     box.hidden = !cols.children.length;
-    box.classList.remove("stale");
     measure();
     links();
   }
@@ -376,15 +378,37 @@ export default function page(api) {
       if (lyr.classList.contains("full")) { const c = $("#np-cover"); lyr.querySelector(".ly-bg").style.backgroundImage = c && !c.hidden && c.src ? `url(${JSON.stringify(c.src)})` : ""; }
     } catch { if (k === key) { words = null; lyr.hidden = true; } }
   }
+  // Each card is asked for by itself and shows the moment its answer is there: the artist's
+  // is quick, the album's takes longest (it brings who plays on the track, for the track's card).
   async function ask(t, k) {
     askWords(t, k);
-    try {
-      const r = await fetch("/api/about", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...t, lang: api.lang() }) });
-      if (!r.ok) throw new Error(r.status);
-      const d = await r.json();
-      if (k === key) draw(d);
-    } catch {   // the device did not answer: once more in a while, not at every redraw
+    const got = {};        // what has come: artist, album, track (null = nothing known), credits
+    const one = async (kind) => {
+      try {
+        const r = await fetch("/api/about", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...t, lang: api.lang(), part: kind }) });
+        if (!r.ok) throw new Error(r.status);
+        return await r.json();
+      } catch { return null; }   // the device did not answer for this one
+    };
+    const track = () => {
+      // the track's own text, less what the album's card already says, with who plays on it
+      if (!("track" in got)) return;
+      const theirs = new Set(((got.album || {}).texts || []).map((x) => x.url));
+      let tr = got.track ? { ...got.track, texts: (got.track.texts || []).filter((x) => !theirs.has(x.url)) } : null;
+      if (got.credits) tr = { ...(tr || { name: t.title, texts: [], facts: [], links: [] }), credits: got.credits };
+      const has = tr && ((tr.texts || []).length || tr.credits || tr.review);
+      if (has) put("track", tr); else if ("album" in got) put("track", null);   // (until the album has answered, credits may still come)
+    };
+    const failed = [];
+    await Promise.all(["artist", "album", "track"].map(async (kind) => {
+      const d = await one(kind);
       if (k !== key) return;
+      if (!d) failed.push(kind);
+      if (kind === "artist") put("artist", d ? d.artist : null);
+      else if (kind === "album") { got.album = d ? d.album : null; if (d && d.track_credits) got.credits = d.track_credits; put("album", got.album); track(); }
+      else { got.track = d ? d.track : null; track(); }
+    }));
+    if (k === key && failed.length === 3) {   // nothing answered: once more in a while, not at every redraw
       cols.innerHTML = ""; box.hidden = true; links();
       timer = setTimeout(() => { if (k === key) key = ""; }, 30000);
     }
@@ -399,7 +423,7 @@ export default function page(api) {
       if (!ok) { box.hidden = true; cols.innerHTML = ""; links(); words = null; lyr.hidden = true; return; }
       if (wordsFor !== k) { words = null; lyr.hidden = true; }   // another track: its words are not these
       drawWaiting(t);
-      timer = setTimeout(() => ask({ title: t.title, artist: t.artist, album: t.album || "", artist_uri: t.artist_uri || "" }, k), 1200);  // not for every skipped track
+      timer = setTimeout(() => ask({ title: t.title, artist: t.artist, album: t.album || "", artist_uri: t.artist_uri || "" }, k), 400);  // (a breath: not for every track skipped past)
     },
   };
 }

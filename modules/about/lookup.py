@@ -91,7 +91,7 @@ async def _mb(http, path: str, **params):
     """MusicBrainz asks for at most one request a second."""
     global _mb_last
     async with _mb_lock:
-        wait = _mb_last + 1.1 - time.monotonic()
+        wait = _mb_last + 1.0 - time.monotonic()
         if wait > 0:
             await asyncio.sleep(wait)
         for attempt in range(3):
@@ -346,34 +346,48 @@ async def release_credits(http, rg: dict) -> tuple[dict, dict]:
     return (whole if whole["people"] or whole["roles"] else {}), tracks
 
 
+async def _article(http, qid: str, langs: tuple[str, ...]) -> dict | None:
+    """The entry's Wikipedia article in the first of langs that has one."""
+    wt = await wiki_titles(http, [qid], langs) if qid else {}
+    return await wiki_article(http, *wt[qid]) if wt else None
+
+
+async def _nothing():
+    return None
+
+
 async def artist(http, mbid: str, langs: tuple[str, ...], token: str = "", lastfm_key: str = "") -> dict | None:
-    """What is known about the artist with this MusicBrainz id."""
+    """What is known about the artist with this MusicBrainz id. The sources are asked at the
+    same time: each takes a second or so, and one after another that adds up."""
     full = await _mb(http, f"artist/{mbid}", inc="url-rels+genres")
     if not full.get("id"):
         return None
     name, rels = full.get("name", ""), _rels(full)
-    wt = await wiki_titles(http, [rels["wikidata"]], langs) if "wikidata" in rels else {}
-    art = await wiki_article(http, *wt[rels["wikidata"]]) if wt else None
-    out = {"name": name, "mbid": full["id"], "links": []}
+    qid, group = rels.get("wikidata", ""), full.get("type") == "Group"
+
+    async def lf():
+        return await lastfm(http, lastfm_key, "artist.getinfo", "artist", langs[0], mbid=mbid) \
+            or await lastfm(http, lastfm_key, "artist.getinfo", "artist", langs[0], artist=name)
+
+    art, lfm, picture, more, dg = await asyncio.gather(
+        _article(http, qid, langs), lf(),
+        wikidata_image(http, qid) if qid else _nothing(),
+        wikidata_facts(http, qid, langs[0], {**({"P527": "members"} if group else {}), "P166": "awards"}, 6) if qid else _nothing(),
+        discogs(http, rels["discogs"], token) if "discogs" in rels else _nothing())
+    out = {"name": name, "mbid": full["id"], "links": [{"name": "Wikipedia", "url": art["url"]}] if art else []}
     texts = [_text("Wikipedia", art["intro"], art["lang"], art["url"])] if art else []
-    if lf := await lastfm(http, lastfm_key, "artist.getinfo", "artist", langs[0], mbid=mbid) or \
-            await lastfm(http, lastfm_key, "artist.getinfo", "artist", langs[0], artist=name):
-        texts.append(_text("Last.fm", lf["text"], lf["lang"], lf["url"]))
-    if art:
-        out["links"].append({"name": "Wikipedia", "url": art["url"]})
-    out["image"] = (art or {}).get("image") or (await wikidata_image(http, rels["wikidata"]) if "wikidata" in rels else "")
+    if lfm:
+        texts.append(_text("Last.fm", lfm["text"], lfm["lang"], lfm["url"]))
+    out["image"] = (art or {}).get("image") or picture or ""
     span, area = full.get("life-span") or {}, (full.get("area") or {}).get("name")
-    group = full.get("type") == "Group"
     out["facts"] = [f for f in (
         ["from", area] if area else None,
         ["active" if group else "born", span["begin"][:4]] if span.get("begin") else None,
-        ["genre", ", ".join(_genres(full))] if _genres(full) else None) if f]
-    if "wikidata" in rels:
-        out["facts"] += await wikidata_facts(http, rels["wikidata"], langs[0], {**({"P527": "members"} if group else {}), "P166": "awards"}, 6)
+        ["genre", ", ".join(_genres(full))] if _genres(full) else None) if f] + (more or [])
     if "discogs" in rels:
         url = f"https://www.discogs.com/{rels['discogs']}"
         out["links"].append({"name": "Discogs", "url": url})
-        if (dg := await discogs(http, rels["discogs"], token)) and dg.get("profile"):
+        if dg and dg.get("profile"):
             texts.append(_text("Discogs", discogs_text(dg["profile"]), "en", url))
     out["links"] += [l for l in out_links(full) if l["name"] not in {x["name"] for x in out["links"]}]
     out["links"].append({"name": "MusicBrainz", "url": f"https://musicbrainz.org/artist/{full['id']}"})
@@ -391,27 +405,40 @@ async def album(http, mbid: str, artist_name: str, title: str, langs: tuple[str,
     if not full.get("id"):
         return None
     rels = _rels(full)
-    wt = await wiki_titles(http, [rels["wikidata"]], langs) if "wikidata" in rels else {}
-    art = await wiki_article(http, *wt[rels["wikidata"]]) if wt else None
+    qid = rels.get("wikidata", "")
+
+    async def article():
+        """The article, and what the critics said: from it, or from the English one, where reviews are mostly written up."""
+        art = await _article(http, qid, langs)
+        rec = reception(art["sections"]) if art else ""
+        if rec:
+            return art, {"text": rec, "lang": art["lang"], "url": art["url"]}
+        if art and art["lang"] != "en" and (ea := await _article(http, qid, ("en",))) and (rec := reception(ea["sections"])):
+            return art, {"text": rec, "lang": "en", "url": ea["url"]}
+        return art, None
+
+    async def from_discogs():
+        if "discogs" not in rels:
+            return {}, None
+        dg = await discogs(http, rels["discogs"], token) or {}
+        return dg, (await discogs(http, f"release/{dg['main_release']}", token) if dg.get("main_release") else None)
+
+    (art, review), lfm, (dg, rel), awards, (credits, track_credits) = await asyncio.gather(
+        article(), lastfm(http, lastfm_key, "album.getinfo", "album", langs[0], artist=artist_name, album=full.get("title", title)),
+        from_discogs(), wikidata_facts(http, qid, langs[0], {"P166": "awards"}, 4) if qid else _nothing(),
+        release_credits(http, full))
     out = {"name": full.get("title", title), "links": [{"name": "Wikipedia", "url": art["url"]}] if art else []}
     texts = [_text("Wikipedia", art["intro"], art["lang"], art["url"])] if art else []
-    if lf := await lastfm(http, lastfm_key, "album.getinfo", "album", langs[0], artist=artist_name, album=out["name"]):
-        texts.append(_text("Last.fm", lf["text"], lf["lang"], lf["url"]))
-    rec = reception(art["sections"]) if art else ""
-    if not rec and art and art["lang"] != "en" and (en := await wiki_titles(http, [rels["wikidata"]], ("en",))):
-        # the reviews are mostly written up in the English article
-        if (ea := await wiki_article(http, *en[rels["wikidata"]])) and (rec := reception(ea["sections"])):
-            out["review"] = {"text": rec, "lang": "en", "url": ea["url"]}
-    elif rec:
-        out["review"] = {"text": rec, "lang": art["lang"], "url": art["url"]}
+    if lfm:
+        texts.append(_text("Last.fm", lfm["text"], lfm["lang"], lfm["url"]))
+    if review:
+        out["review"] = review
     facts = [["released", full["first-release-date"][:4]]] if full.get("first-release-date") else []
     genres = _genres(full)
     if "discogs" in rels:
         url = f"https://www.discogs.com/{rels['discogs']}"
         out["links"].append({"name": "Discogs", "url": url})
-        dg = await discogs(http, rels["discogs"], token) or {}
         genres = (dg.get("styles") or dg.get("genres") or genres)[:4]
-        rel = await discogs(http, f"release/{dg['main_release']}", token) if dg.get("main_release") else None
         if rel:
             if rel.get("labels"):
                 facts.append(["label", rel["labels"][0].get("name", "")])
@@ -422,10 +449,8 @@ async def album(http, mbid: str, artist_name: str, title: str, langs: tuple[str,
                 texts.append(_text("Discogs", discogs_text(rel["notes"]), "en", url, 800))
     if genres:
         facts.append(["genre", ", ".join(genres)])
-    if "wikidata" in rels:
-        facts += await wikidata_facts(http, rels["wikidata"], langs[0], {"P166": "awards"}, 4)
-    out["facts"] = facts
-    out["credits"], out["track_credits"] = await release_credits(http, full)
+    out["facts"] = facts + (awards or [])
+    out["credits"], out["track_credits"] = credits, track_credits
     out["links"] += [l for l in out_links(full) if l["name"] not in {x["name"] for x in out["links"]}]
     out["links"].append({"name": "MusicBrainz", "url": f"https://musicbrainz.org/release-group/{full['id']}"})
     out["texts"] = [t for t in texts if t]
@@ -434,9 +459,10 @@ async def album(http, mbid: str, artist_name: str, title: str, langs: tuple[str,
 
 async def track(http, artist_name: str, title: str, langs: tuple[str, ...], lastfm_key: str = "") -> dict | None:
     """The song's own article and write-up. (Its credits come with the album: album()["track_credits"].)"""
-    a = await wiki_song(http, artist_name, plain(title), langs)
+    a, lf = await asyncio.gather(wiki_song(http, artist_name, plain(title), langs),
+                                 lastfm(http, lastfm_key, "track.getinfo", "track", langs[0], artist=artist_name, track=plain(title)))
     texts = [_text("Wikipedia", a["intro"], a["lang"], a["url"], 900)] if a else []
-    if lf := await lastfm(http, lastfm_key, "track.getinfo", "track", langs[0], artist=artist_name, track=plain(title)):
+    if lf:
         texts.append(_text("Last.fm", lf["text"], lf["lang"], lf["url"], 900))
     texts = [t for t in texts if t]
     if not texts:
