@@ -1,6 +1,6 @@
 {
  "format": 1,
- "serial": 41,
+ "serial": 42,
  "modules": [
   {
    "id": "about",
@@ -269,7 +269,7 @@
   },
   {
    "id": "roon",
-   "version": "1.3.0",
+   "version": "1.4.0",
    "kind": "source",
    "name": {
     "sv": "Roon Bridge",
@@ -292,7 +292,12 @@
     },
     {
      "path": "module.json",
-     "sha256": "1be44112a7a15a7929a92f6a04940308602e5273b894af8d1f3e0b1e8ef6a7e5",
+     "sha256": "a9d7fa71da7e0e87e7d3517831d751925bc502a6af90aa9f222c1b2af39eb0fe",
+     "exec": false
+    },
+    {
+     "path": "page.js",
+     "sha256": "71f3b063d34d6f82594d0405917f2435c5a7f815737a49ecf5d82c1fffdcd262",
      "exec": false
     },
     {
@@ -321,6 +326,11 @@
      "exec": false
     },
     {
+     "path": "i18n/en.json",
+     "sha256": "da0742b6da3bed65c4e34071f33fc43e8bd80c656581c5633c3b5f87e1c606c0",
+     "exec": false
+    },
+    {
      "path": "roonbridge.service.d/10-dotnet-startup.conf",
      "sha256": "95ea2f73592706ad9353ad1cf3f9ae36861463e84963e6f79715636cb1d92617",
      "exec": false
@@ -329,7 +339,7 @@
   },
   {
    "id": "spotify",
-   "version": "1.8.0",
+   "version": "1.9.0",
    "kind": "source",
    "name": {
     "sv": "Spotify Lossless (Soloist)",
@@ -342,7 +352,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "c3b4796da71441be76eee50eb1d42c6c2dd8bbe13cee6a01d6a7e93ed9b369a1",
+     "sha256": "fa7e8f296cebaa45c20aa587394dbb94152c2c8fa25d82cf4cd4f6e9aef89073",
      "exec": false
     },
     {
@@ -352,12 +362,12 @@
     },
     {
      "path": "module.json",
-     "sha256": "0152fa4e303c629a9028cf316918209fc6d3dc533675dc23a1b258f704846b5c",
+     "sha256": "625277742f0c845fdec8da35b783e762817c31a6561645db7f1736a9699c38fc",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "d2492cd419a1179170223c8446112eef6724d71fbeca267e18ae9426f2aaa7ef",
+     "sha256": "456bf10c92ebd82c24dd71b748203973a95ed322c1e74dd1aeab74ac5630b06e",
      "exec": false
     },
     {
@@ -397,12 +407,12 @@
     },
     {
      "path": "webapi.py",
-     "sha256": "a049522655ec61b4c442c1694711e3db7b4baae1372981041715a40363d669a6",
+     "sha256": "4e90d63d18f857755e2a49a411542f73dd71219710292b2a729810cdc6fe8911",
      "exec": false
     },
     {
      "path": "i18n/en.json",
-     "sha256": "6d3f48b5b6170312009bb68c0ce5a9dbeb6e7c792118850c7132b3fb8dd84ae6",
+     "sha256": "ef88356c0534c0001c95bf1cf79f3a9c8485fdad76da2496e403902c60622171",
      "exec": false
     }
    ]

@@ -148,6 +148,8 @@
  "Lyssna": "Listen",
  "Ingång och ström": "Input and power",
  "Styrning": "Controls",
+ "Visa artisten under Musik": "Show the artist under Music",
+ "Visa albumet under Musik": "Show the album under Music",
  "Spotify godtog inte appens Client ID och Client secret. Kontrollera dem under Moduler, Spotify Lossless.": "Spotify did not accept the app's Client ID and Client secret. Check them under Modules, Spotify Lossless.",
  "Spotify tar inte emot fler frågor just nu. Försök igen om en stund.": "Spotify takes no more questions right now. Try again in a while.",
  "Spotify svarar inte.": "Spotify does not answer.",

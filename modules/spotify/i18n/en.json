@@ -120,5 +120,12 @@
  "Spotify svarar inte.": "Spotify does not answer.",
  "Spellistor": "Playlists",
  "{0} låtar": "{0} tracks",
- "Spotify låter inte den här sortens app se vilka låtar en spellista innehåller, bara spela den. Låtarna visas under Härnäst när listan spelar.": "Spotify does not let an app of this kind see which tracks a playlist holds, only play it. The tracks show under Up next while the list plays."
+ "Spotify låter inte den här sortens app se vilka låtar en spellista innehåller, bara spela den. Låtarna visas under Härnäst när listan spelar.": "Spotify does not let an app of this kind see which tracks a playlist holds, only play it. The tracks show under Up next while the list plays.",
+ "{0} milj.": "{0} million",
+ "{0} tusen": "{0} thousand",
+ "{0} lyssnare": "{0} listeners",
+ "Mest lyssnat": "Most listened to",
+ "Efter antal lyssnare i hela världen, enligt Last.fm.": "By the number of listeners all over the world, according to Last.fm.",
+ "I den ordning Spotify listar artistens låtar.": "In the order Spotify lists the artist's tracks.",
+ "Album, i utgivningsordning": "Albums, in the order they came out"
 }

@@ -138,6 +138,7 @@ export default function page(api) {
         .m-hero h3 { margin: 4px 0 2px; font-size: clamp(1.5rem, 4vw, 2.25rem); line-height: 1.1; overflow-wrap: anywhere; }
         .m-hero .by { margin: 0 0 14px; color: var(--engraved); }
         .m-hero .btn { margin-top: 12px; }
+        .music .m-src { margin: 8px 0 0; font-size: .8125rem; color: var(--engraved); }
         .music .m-about { max-width: 62ch; margin: 0 0 6px; font-size: .9375rem; line-height: 1.5; }
       </style>
     </section>`);
@@ -163,8 +164,10 @@ export default function page(api) {
     `<li><button ${M.search ? `data-album="${esc(a.id || idOf(a.uri))}"` : `data-play="${esc(a.uri)}"`} data-name="${esc(a.name)}">${img(a.cover)}<b>${esc(a.name)}</b><span>${esc([a.artist, a.year].filter(Boolean).join(" · "))}</span></button></li>`).join("")}</ul>`;
   const artistList = (artists) => `<ul class="m-artists">${artists.map((a) =>
     `<li><button ${M.search ? `data-artist="${esc(a.id || idOf(a.uri))}"` : `data-play="${esc(a.uri)}"`} data-name="${esc(a.name)}">${a.cover ? img(a.cover) : ""}${esc(a.name)}</button></li>`).join("")}</ul>`;
+  // how many listen to a track, in words: "1,8 milj.", "650 tusen"
+  const many = (n) => (n >= 1e6 ? tr`${api.dec(n / 1e6, 1)} milj.` : n >= 1e3 ? tr`${Math.round(n / 1e3)} tusen` : String(n));
   const trackList = (tracks, numbered) => `<ol class="m-tracks">${tracks.map((t) =>
-    `<li><button class="go" data-play="${esc(t.uri)}" data-name="${esc(t.name)}">${numbered ? `<span class="n">${esc(t.n ?? "")}</span>` : img(t.cover)}<span><b>${esc(t.name)}</b><span>${esc([t.artist, numbered ? "" : t.album].filter(Boolean).join(" · "))}</span></span></button>
+    `<li><button class="go" data-play="${esc(t.uri)}" data-name="${esc(t.name)}">${numbered ? `<span class="n">${esc(t.n ?? "")}</span>` : img(t.cover)}<span><b>${esc(t.name)}</b><span>${esc([t.listeners ? "" : t.artist, numbered ? "" : t.album, t.listeners ? tr`${many(t.listeners)} lyssnare` : ""].filter(Boolean).join(" · "))}</span></span></button>
        ${t.duration_ms ? `<span class="len">${esc(api.fmtTime(t.duration_ms))}</span>` : ""}<button class="q" data-queue="${esc(t.uri)}" data-name="${esc(t.name)}">${esc(tr("Kö"))}</button></li>`).join("")}</ol>`;
   const playlistList = (lists) => `<ul class="m-albums">${lists.map((p) =>
     `<li><button data-playlist="${esc(p.id || idOf(p.uri))}" data-name="${esc(p.name)}">${img(p.cover)}<b>${esc(p.name)}</b><span>${esc([p.owner, p.count != null ? tr`${p.count} låtar` : ""].filter(Boolean).join(" · "))}</span></button></li>`).join("")}</ul>`;
@@ -215,7 +218,11 @@ export default function page(api) {
       return back + hero + (d.about ? `<p class="m-about">${esc(d.about)}</p>` : "")
         + `<p class="none">${esc(tr("Spotify låter inte den här sortens app se vilka låtar en spellista innehåller, bara spela den. Låtarna visas under Härnäst när listan spelar."))}</p>`;
     }
-    return back + hero + (pg.kind === "album" ? trackList(d.tracks, true) : (d.albums.length ? `<h3>${esc(tr("Album"))}</h3>${albumList(d.albums)}` : ""));
+    if (pg.kind === "album") return back + hero + trackList(d.tracks, true);
+    // an artist: the best-known tracks first (a quick way to the hits), then the albums as they came out
+    return back + hero
+      + ((d.top || []).length ? `<h3>${esc(tr("Mest lyssnat"))}</h3>${trackList(d.top)}<p class="m-src">${esc(d.top_from === "lastfm" ? tr("Efter antal lyssnare i hela världen, enligt Last.fm.") : tr("I den ordning Spotify listar artistens låtar."))}</p>` : "")
+      + (d.albums.length ? `<h3>${esc(tr("Album, i utgivningsordning"))}</h3>${albumList(d.albums)}` : "");
   }
   async function openPage(kind, id) {
     page = { kind, id, data: null }; drawMusic(); music.scrollIntoView({ block: "start" });
@@ -449,6 +456,13 @@ export default function page(api) {
       $("#vol-val").textContent = vol ?? "";
       $("#test-other").hidden = cur; $("#test-ctl").hidden = !cur;
       $("#auto-verify").checked = !!S.settings?.auto_verify;
+    },
+    // from Listen: the album or the artist that plays, opened here
+    find(kind) {
+      const it = M.playback.item; if (!it) return;
+      const e = kind === "album" ? deco(it).parent?.entity : deco(it).creators?.[0]?.entity;
+      if (M.search && e?.uri) { $("#sp-find").value = ""; openPage(kind, idOf(e.uri)); }
+      else { $("#sp-find").value = nameOf(e) || ""; find(); }
     },
     // a view was chosen: the Music view shows what has been played up to now
     view(id) { if (id === "v-music" && current()) loadMusic(true); },

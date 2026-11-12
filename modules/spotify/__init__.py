@@ -104,7 +104,8 @@ class Spotify(SourcePlugin):
     def web(self):
         """Spotify's Web API (search), with the listener's own app credentials."""
         if not hasattr(self, "_web"):
-            self._web = webapi.WebApi(lambda: (self.hub.secret("spotify_client_id") or "", self.hub.secret("spotify_client_secret") or ""))
+            self._web = webapi.WebApi(lambda: (self.hub.secret("spotify_client_id") or "", self.hub.secret("spotify_client_secret") or ""),
+                                      lambda: self.hub.secret("about_lastfm_key") or "")
         return self._web
 
     def summary(self) -> dict:

@@ -860,3 +860,13 @@ html { -webkit-tap-highlight-color: transparent; }
 @keyframes busy-turn { to { transform: rotate(360deg); } }
 @keyframes busy-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .busy { animation: none; } .busy-ring { animation-duration: 2.4s; } }
+
+/* Listen: a small looking-glass beside the artist and beside the album, to the same in Music */
+.np-line { display: flex; align-items: center; gap: 4px; margin-top: 6px; }
+.np-line .np-artist { margin-top: 0; min-width: 0; }
+.np-meta { justify-content: flex-start; gap: 4px; }
+.np-meta .np-album { flex: 0 1 auto; }
+.np-meta .np-format { margin-left: auto; padding-left: 10px; }
+.np-find { appearance: none; flex: none; width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: var(--engraved); cursor: pointer; }
+.np-find:hover { color: var(--ink); background: var(--hair); }
+.np-find svg { width: 16px; height: 16px; }

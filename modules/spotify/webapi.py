@@ -63,8 +63,9 @@ def artist_row(a: dict) -> dict:
 
 
 class WebApi:
-    def __init__(self, credentials):
+    def __init__(self, credentials, lastfm_key=lambda: ""):
         self.credentials = credentials      # () -> (client id, client secret)
+        self.lastfm_key = lastfm_key        # () -> the listener's Last.fm key, when there is one
         self.http: ClientSession | None = None
         self.token, self.until = "", 0.0
         self.kept: dict[str, tuple[float, dict]] = {}   # answers of the last minutes: typing asks the same again and again
@@ -148,6 +149,43 @@ class WebApi:
         d = await self.get(f"artists/{artist_id}")
         if not d.get("uri"):
             return None
-        al = await self.get(f"artists/{artist_id}/albums", include_groups="album,single", limit=10)
-        return {**artist_row(d), "cover": image(d.get("images"), 320),
-                "albums": [album_row(a) for a in (al.get("items") or []) if a.get("uri")]}
+        albums, seen = [], set()
+        for offset in range(0, 60, 10):         # ten at a time is what Spotify gives
+            al = await self.get(f"artists/{artist_id}/albums", include_groups="album", limit=10, offset=offset)
+            for a in al.get("items") or []:
+                key = (a.get("name", "").casefold(), (a.get("release_date") or "")[:4])
+                if a.get("uri") and key not in seen:    # the same album listed for several markets
+                    seen.add(key)
+                    albums.append(album_row(a))
+            if offset + 10 >= (al.get("total") or 0):
+                break
+        albums.sort(key=lambda a: a["year"] or "9999")   # in the order they came out
+        return {**artist_row(d), "cover": image(d.get("images"), 320), "albums": albums, **(await self.top_tracks(d.get("name", "")))}
+
+    async def top_tracks(self, name: str) -> dict:
+        """The artist's best-known tracks: {"top": [track rows], "top_from": "lastfm" | "spotify"}.
+        Last.fm counts listeners all over the world (with the listener's own key); without it,
+        Spotify's own order of the artist's tracks, which follows how much they are played."""
+        if not name:
+            return {"top": [], "top_from": ""}
+        key = self.lastfm_key()
+        if key:
+            try:
+                async with self.http.get("https://ws.audioscrobbler.com/2.0/", params={
+                        "method": "artist.gettoptracks", "artist": name, "api_key": key, "format": "json", "limit": 5, "autocorrect": 1}) as r:
+                    d = await r.json(content_type=None) if r.status == 200 else {}
+            except (OSError, asyncio.TimeoutError, ValueError):
+                d = {}
+            top = []
+            for t in ((d.get("toptracks") or {}).get("track") or [])[:5]:
+                title = str(t.get("name") or "")
+                hit = await self.get("search", q=f'track:"{title}" artist:"{name}"', type="track", limit=3)
+                rows = [x for x in ((hit.get("tracks") or {}).get("items") or []) if x.get("uri")]
+                row = next((x for x in rows if name.casefold() in names(x.get("artists")).casefold()), None)
+                if row:
+                    top.append({**track_row(row), "listeners": int(t["listeners"]) if str(t.get("listeners", "")).isdigit() else None})
+            if top:
+                return {"top": top, "top_from": "lastfm"}
+        d = await self.get("search", q=f'artist:"{name}"', type="track", limit=5)
+        rows = [x for x in ((d.get("tracks") or {}).get("items") or []) if x.get("uri") and name.casefold() in names(x.get("artists")).casefold()]
+        return {"top": [track_row(x) for x in rows[:5]], "top_from": "spotify" if rows else ""}

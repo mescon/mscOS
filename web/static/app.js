@@ -162,6 +162,7 @@ let inbox = Promise.resolve();
 const PAGES = {}, PAGE_V = {};
 const VIEW = () => PAGES[srcId()] || {};          // the current source's own view, if it brings one
 const pagesDo = (hook, ...a) => Object.values(PAGES).forEach((p) => { try { p[hook]?.(...a); } catch (e) { console.error(e); } });
+const nowTrack = () => VIEW().track?.() ?? (S.now?.title ? { title: S.now.title, artist: S.now.artist || "", album: S.now.album || "" } : null);
 function pageApi(id) {
   return { $, $$, S, tr, esc, dec, khz, fmtWord, fmtTime, clock, stamp, post, toast, fv, loc, MARK,
     outName, srcId, srcState,
@@ -169,7 +170,7 @@ function pageApi(id) {
     // where in the track the music is, how long the track is (milliseconds), and whether it plays
     position: () => posNow(), duration: () => durOf(), playing: () => isPlaying(),
     // what is playing, whichever source plays it: {title, artist, album} or null
-    track: () => VIEW().track?.() ?? (S.now?.title ? { title: S.now.title, artist: S.now.artist || "", album: S.now.album || "" } : null),
+    track: () => nowTrack(),
     render: () => { renderPlay(); renderSignal(); renderSysHead(); },
     // put markup of the module's own on the page: "notice", "play" and "about" (Listen), "signal" (Signal), "music" (Music)
     slot(where, html) {
@@ -235,6 +236,10 @@ function fitListen() {
 addEventListener("resize", fitListen);
 function stageLayout() {
   requestAnimationFrame(fitListen);
+  // the buttons that lead from the artist and the album to the same in Music: where the
+  // source's module can look them up
+  const t = VIEW().find ? nowTrack() : null;
+  $$(".np-find").forEach((b) => { b.hidden = !t || !t[b.dataset.find]; });
   const col = document.querySelector(".console-col");
   const empty = ![...$$("#v-play .console-col [data-page-of]")].some((el) => !el.hidden);
   // Controls: the amplifier's input and power, and the modules' own cards. No tab when there are none.
@@ -1035,6 +1040,12 @@ $("#ml-up").addEventListener("click", () => ampStep(1));
 $("#ml-vol").addEventListener("change", (e) => amp({ volume_db: +e.target.value }));
 $("#ml-src").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) amp({ input: b.dataset.src }); });
 
+$$(".np-find").forEach((b) => b.addEventListener("click", () => {
+  const t = nowTrack(), find = VIEW().find;
+  if (!t || !find) return;
+  showView("v-music"); history.replaceState(null, "", "#v-music"); window.scrollTo(0, 0);
+  find(b.dataset.find, t);
+}));
 // ------------------------------------------------------------------ source switch
 // The veil over the page while something slow is done on the device; "" lifts it.
 function busy(text) {
