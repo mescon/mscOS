@@ -14,15 +14,19 @@ export default function page(api) {
         border-radius: 3px; background: var(--plate); transition: height .32s cubic-bezier(.3, .7, .2, 1), opacity .3s; }
       @media (prefers-reduced-motion: reduce) { .about article { transition: none; } }
       .about.stale article[data-part="track"] { opacity: .4; }
-      /* the album's own sleeve behind its card: blurred, and fading out downwards */
+      /* a picture behind each card, blurred and fading out downwards: the sleeve for the album and
+         the song, the artist's portrait for the artist */
       .about .art { position: absolute; inset: -24px -24px auto; height: 250px; z-index: -1; background-size: cover; background-position: center;
-        filter: blur(14px) saturate(1.15); opacity: .85;
+      }
+      .about article[data-part="artist"] .art { background-position: center 22%; }
+      .about .art {
+        filter: blur(14px) saturate(1.2); opacity: .9;
         -webkit-mask-image: linear-gradient(to bottom, #000 12%, transparent 96%); mask-image: linear-gradient(to bottom, #000 12%, transparent 96%); }
-      .about .art::after { content: ""; position: absolute; inset: 0; background: color-mix(in srgb, var(--plate) 42%, transparent); }
+      .about .art::after { content: ""; position: absolute; inset: 0; background: color-mix(in srgb, var(--plate) 56%, transparent); }
       .about .head { appearance: none; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 2px 12px; width: 100%;
         padding: 18px 20px 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
       .about article.fits .head { cursor: default; }
-      .about .part { grid-column: 1 / -1; font-size: .8125rem; letter-spacing: .04em; color: var(--engraved); }
+      .about .part { grid-column: 1 / -1; font-size: .8125rem; letter-spacing: .04em; color: var(--ink); opacity: .72; }
       .about h3 { font-family: var(--serif); font-weight: 500; font-size: 1.5rem; line-height: 1.15; overflow-wrap: anywhere; }
       .about .chev { width: 18px; height: 18px; margin-top: 6px; color: var(--engraved); transition: transform .3s; }
       .about article.open .chev { transform: rotate(180deg); }
@@ -56,7 +60,7 @@ export default function page(api) {
     const links = [...(d.links || [])];
     if (d.review?.url && !links.some((l) => l.url === d.review.url)) links.push({ name: "Wikipedia (en)", url: d.review.url });
     return `<article data-part="${kind}">
-      ${kind === "album" ? `<div class="art" aria-hidden="true"></div>` : ""}
+      <div class="art" aria-hidden="true"></div>
       <button class="head" aria-expanded="false" aria-controls="about-${kind}">
         <span class="part">${esc(PART[kind])}</span><h3>${esc(d.name || "")}</h3>
         <svg class="chev" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9.5 6 6 6-6"/></svg>
@@ -83,8 +87,14 @@ export default function page(api) {
     cols.innerHTML = part("track", d.track) + part("album", d.album) + part("artist", d.artist);
     box.hidden = !cols.children.length;
     box.classList.remove("stale");
-    const art = cols.querySelector(".art"), cover = $("#np-cover");
-    if (art) { if (cover && !cover.hidden && cover.src) art.style.backgroundImage = `url(${JSON.stringify(cover.src)})`; else art.remove(); }
+    const cover = $("#np-cover"), sleeve = cover && !cover.hidden && cover.src ? cover.src : "";
+    // the pictures the device found come from Wikimedia: nothing else is put on the page
+    const wiki = (u) => (/^https:\/\/(upload\.wikimedia\.org|commons\.wikimedia\.org\/wiki\/Special:FilePath)\/[^"'()\s]+$/.test(u || "") ? u : "");
+    const pic = { track: wiki(d.track?.image) || sleeve, album: sleeve, artist: wiki(d.artist?.image) };
+    for (const a of cols.children) {
+      const art = a.querySelector(".art"), src = pic[a.dataset.part];
+      if (src) art.style.backgroundImage = `url(${JSON.stringify(src)})`; else art.remove();
+    }
     for (const a of cols.children) {
       a.classList.toggle("fits", full(a) <= CLOSED);   // all of it shows: nothing to open
       if (open.has(a.dataset.part)) setOpen(a, true, false);

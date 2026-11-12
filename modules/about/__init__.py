@@ -44,7 +44,7 @@ class About(Plugin):
     # ---- kept answers
     def _file(self, kind: str, *names: str) -> str:
         key = "\0".join(" ".join(n.casefold().split()) for n in names)
-        return os.path.join(self.dir, f"{kind}-{hashlib.sha1(key.encode()).hexdigest()[:20]}.json")
+        return os.path.join(self.dir, f"{kind}3-{hashlib.sha1(key.encode()).hexdigest()[:20]}.json")   # 2: with pictures
 
     def _kept(self, path: str):
         """(found, value): found is False when nothing usable is kept."""

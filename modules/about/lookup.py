@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import re
 import time
+from urllib.parse import quote
 
 UA = "mscOS-about/1.0 (+https://github.com/mescon/mscOS)"
 MB = "https://musicbrainz.org/ws/2"
@@ -136,9 +137,19 @@ async def wiki_titles(http, qids: list[str], langs: tuple[str, ...]) -> dict[str
     return out
 
 
+async def wikidata_image(http, qid: str) -> str:
+    """The picture Wikidata has of it (on Wikimedia Commons, so free to show), or ""."""
+    d = await _json(http, "https://www.wikidata.org/w/api.php", {"action": "wbgetclaims", "entity": qid, "property": "P18", "format": "json"})
+    for c in ((d or {}).get("claims") or {}).get("P18", []):
+        name = ((c.get("mainsnak") or {}).get("datavalue") or {}).get("value")
+        if isinstance(name, str) and name:
+            return "https://commons.wikimedia.org/wiki/Special:FilePath/" + quote(name.replace(" ", "_")) + "?width=640"
+    return ""
+
+
 async def wiki_article(http, lang: str, title: str) -> dict | None:
     d = await _json(http, f"https://{lang}.wikipedia.org/w/api.php", {
-        "action": "query", "prop": "extracts|pageprops", "ppprop": "disambiguation", "explaintext": 1, "exsectionformat": "wiki",
+        "action": "query", "prop": "extracts|pageprops|pageimages", "ppprop": "disambiguation", "piprop": "thumbnail", "pithumbsize": 640, "explaintext": 1, "exsectionformat": "wiki",
         "redirects": 1, "titles": title, "format": "json", "formatversion": 2})
     page = (((d or {}).get("query") or {}).get("pages") or [{}])[0]
     if not page.get("extract") or "disambiguation" in (page.get("pageprops") or {}):
@@ -147,6 +158,7 @@ async def wiki_article(http, lang: str, title: str) -> dict | None:
     # "This article is about the album. For the …, see …": a note to the reader, not the text
     intro = re.sub(r"^(Denna artikel handlar om|För andra betydelser|Den här artikeln handlar om)[^\n]*\n+", "", intro)
     return {"lang": lang, "title": page.get("title", title), "intro": intro, "sections": secs,
+            "image": (page.get("thumbnail") or {}).get("source", ""),   # the article's own picture, when it is a free one
             "url": f"https://{lang}.wikipedia.org/wiki/" + page.get("title", title).replace(" ", "_")}
 
 
@@ -166,7 +178,10 @@ async def wiki_song(http, artist: str, title: str, langs: tuple[str, ...]) -> di
 
 
 def _entry(a: dict | None, limit: int = 900) -> dict:
-    return {"text": clip(a["intro"], limit), "lang": a["lang"], "links": [{"name": "Wikipedia", "url": a["url"]}]} if a else {"text": "", "links": []}
+    if not a:
+        return {"text": "", "links": []}
+    return {"text": clip(a["intro"], limit), "lang": a["lang"], "links": [{"name": "Wikipedia", "url": a["url"]}],
+            **({"image": a["image"]} if a.get("image") else {})}
 
 
 async def discogs(http, path: str, token: str = ""):
@@ -186,6 +201,8 @@ async def artist(http, name: str, langs: tuple[str, ...], token: str = "") -> di
     wt = await wiki_titles(http, [rels["wikidata"]], langs) if "wikidata" in rels else {}
     art = await wiki_article(http, *wt[rels["wikidata"]]) if wt else None
     out = {"name": full.get("name", name), "mbid": full["id"], **_entry(art)}
+    if not out.get("image") and "wikidata" in rels and (img := await wikidata_image(http, rels["wikidata"])):
+        out["image"] = img   # many articles on bands show a logo that is not free: Wikidata's portrait instead
     span, area = full.get("life-span") or {}, (full.get("area") or {}).get("name")
     out["facts"] = [f for f in (
         ["from", area] if area else None,

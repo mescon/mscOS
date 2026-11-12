@@ -189,7 +189,7 @@ function renderNames() {
 // Nothing beside the sleeve (no amplifier module, no cards, no queue): the text takes that place.
 function stageLayout() {
   const col = document.querySelector(".console-col");
-  const empty = $("#amp").hidden && ![...$$("#v-play .console-col [data-page-of]")].some((el) => !el.hidden);
+  const empty = ![...$$("#v-play .console-col [data-page-of]")].some((el) => !el.hidden);
   // Controls: the amplifier's input and power, and the modules' own cards. No tab when there are none.
   const ctl = !$("#f-amp").hidden || $("#panels").children.length > 0;
   $("#tab-ctl").hidden = !ctl;
@@ -887,6 +887,8 @@ function renderAmp() {
   $("#ml-step").hidden = !m.reachable || m.power === false;
   $("#amp").classList.toggle("live", !!m.reachable && m.power !== false);
   $("#amp").classList.toggle("off", m.power === false);
+  // on and nothing to tell: the strip is the level alone (the input is named under Controls)
+  $("#amp").classList.toggle("quiet", !!m.reachable && m.power !== false && !m.note && !m.muted);
   fv("amp", !m.reachable ? "" : m.power === false ? "Standby" : (inp?.label || ""));
   $("#ml-power").textContent = m.power === false ? tr("Slå på") : "Standby";
   $("#ml-mute").setAttribute("aria-pressed", !!m.muted);
@@ -898,7 +900,6 @@ function renderAmp() {
     if (m.volume_db != null) vol.value = Math.min(m.volume_db, max);
     $("#ml-vol-v").textContent = m.volume_db != null ? dec(m.volume_db) : "–";
   }
-  $("#dial-arc").setAttribute("stroke-dasharray", `${m.volume_db != null ? Math.min(m.volume_db, max) / max * 100 : 0} 100`);
   $("#amp").classList.toggle("over", over);
   $("#ml-limit").textContent = over
     ? tr`Volymen är ställd med fjärrkontrollen över panelens gräns på ${dec(max)} dB. Panelen kan bara sänka den.`
@@ -920,7 +921,6 @@ $("#ml-power").addEventListener("click", () => {
 $("#ml-mute").addEventListener("click", () => amp({ mute: !AMP?.muted }));
 $("#ml-vol").addEventListener("input", (e) => {
   $("#ml-vol-v").textContent = dec(+e.target.value);
-  $("#dial-arc").setAttribute("stroke-dasharray", `${+e.target.value / +e.target.max * 100} 100`);
 });
 $("#dk-down").addEventListener("click", () => ampStep(-1));
 $("#dk-up").addEventListener("click", () => ampStep(1));
