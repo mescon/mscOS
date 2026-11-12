@@ -738,3 +738,12 @@ body.in-setup .tabs, body.in-setup .masthead { display: none; }
 
 /* until the page knows whether this is a new installation, nothing of the panel flashes by */
 html.booting .shell, html.booting .tabs, html.booting .dock { visibility: hidden; }
+
+/* a module's options: one rhythm for fields, switches and their help texts */
+.mod-opts { gap: 4px; }
+.mod-opts > label:not(.toggle) { margin-top: 14px; }
+.mod-opts > label:not(.toggle):first-child { margin-top: 4px; }
+.mod-opts .toggle { min-height: 32px; margin-top: 12px; padding: 0; }
+.mod-opts .fine { margin-top: 2px; }
+.mod-body > .spec { margin-bottom: 6px; }
+.mod-body > .row { margin: 12px 0 8px; }
