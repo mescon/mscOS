@@ -40,7 +40,13 @@
     <div class="ident-name"><h1 class="wordmark">mscOS</h1><span class="link-led" id="conn" role="img" aria-label="Ingen kontakt med enheten"></span><span class="by"><span class="maker" role="img" aria-label="vivajAcoustics"><span class="vivaj" aria-hidden="true"><i>v</i><i>i</i><i>v</i><i>a</i><i>j</i></span><span class="acoustics" aria-hidden="true">Acoustics</span></span></span></div>
     <p><span id="dev-name"></span> <span id="dev-sub">ansluter…</span></p>
   </div>
-  <div class="source" role="radiogroup" aria-label="Källa" id="source">
+  <!-- the source: its name, and the others in a list that opens under it -->
+  <div class="src-pick" id="src-pick" hidden>
+    <button class="src-btn" id="source-btn" aria-haspopup="true" aria-expanded="false" aria-controls="source">
+      <i aria-hidden="true"></i><span id="source-cur"></span>
+      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9.5 6 6 6-6"/></svg>
+    </button>
+    <div class="source" role="radiogroup" aria-label="Källa" id="source" hidden></div>
   </div>
   <p class="vh" id="source-note" aria-live="polite"></p>
   <!-- the amplifier's level: a slim strip, in reach from every view -->

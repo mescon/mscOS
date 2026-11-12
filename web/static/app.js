@@ -265,9 +265,10 @@ function renderSource() {
   if (seg.dataset.sig !== sig) {  // one button per enabled source; no switch for a single one
     seg.dataset.sig = sig;
     seg.innerHTML = list.map((s) => `<button role="radio" data-v="${esc(s.id)}" title="${esc(loc(s.name))}"><i aria-hidden="true"></i>${esc(s.label)}</button>`).join("");
-    seg.hidden = list.length < 2;
-    seg.classList.toggle("many", list.length > 2);  // a row of its own on a phone
+    $("#src-pick").hidden = !list.length;
+    $("#source-btn").disabled = list.length < 2;   // one source: its name, nothing to choose
   }
+  $("#source-cur").textContent = SRC()?.label || "";
   $$("#source button").forEach((b) => {
     b.setAttribute("aria-checked", b.dataset.v === cur);
     b.disabled = srcState(b.dataset.v).installed === false;
@@ -940,9 +941,26 @@ $("#ml-vol").addEventListener("change", (e) => amp({ volume_db: +e.target.value 
 $("#ml-src").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) amp({ input: b.dataset.src }); });
 
 // ------------------------------------------------------------------ source switch
+// the list of sources opens under the current one's name
+function sourceMenu(open) {
+  $("#source").hidden = !open;
+  $("#source-btn").setAttribute("aria-expanded", String(open));
+  if (open) ($("#source button[aria-checked='true']") || $("#source button"))?.focus();
+}
+$("#source-btn").addEventListener("click", () => sourceMenu($("#source").hidden));
+document.addEventListener("click", (e) => { if (!$("#source").hidden && !e.target.closest("#src-pick")) sourceMenu(false); });
+$("#src-pick").addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("#source").hidden) { sourceMenu(false); $("#source-btn").focus(); return; }
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  const bs = [...$$("#source button:not(:disabled)")], i = bs.indexOf(document.activeElement);
+  if ($("#source").hidden || !bs.length) return;
+  e.preventDefault(); bs[(i + (e.key === "ArrowDown" ? 1 : -1) + bs.length) % bs.length].focus();
+});
 $("#source").addEventListener("click", async (e) => {
-  const b = e.target.closest("button"); if (!b || b.getAttribute("aria-checked") === "true") return;
-  const src = b.dataset.v, seg = $("#source");
+  const b = e.target.closest("button"); if (!b) return;
+  sourceMenu(false); $("#source-btn").focus();
+  if (b.getAttribute("aria-checked") === "true") return;
+  const src = b.dataset.v, seg = $("#src-pick");
   seg.classList.add("busy");
   const to = sources().find((s) => s.id === src);
   toast(tr`Byter källa till ${loc(to?.name) || src}…`);

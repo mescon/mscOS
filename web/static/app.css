@@ -776,3 +776,22 @@ html.booting .shell, html.booting .tabs, html.booting .dock { visibility: hidden
   .masthead .amp { flex: 0 1 250px; order: 0; margin-left: auto; }
   .masthead .source { flex: none; }
 }
+
+/* ============================================================ the source: a name that opens a list */
+.src-pick { position: relative; flex: none; max-width: 100%; }
+.src-pick.busy { opacity: .5; pointer-events: none; }
+.src-btn { appearance: none; cursor: pointer; display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 0 10px 0 14px;
+  border: 1px solid var(--hair); border-radius: 3px; background: var(--plate); box-shadow: inset 0 1px 0 var(--hair-hi);
+  font: inherit; font-size: .875rem; letter-spacing: .03em; color: var(--ink); white-space: nowrap; }
+.src-btn i { width: 5px; height: 5px; border-radius: 50%; background: var(--red); box-shadow: 0 0 6px var(--red-glow); }
+.src-btn svg { width: 16px; height: 16px; color: var(--engraved); transition: transform .2s; }
+.src-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+.src-btn:hover { border-color: var(--btn-line); }
+.src-btn:disabled { cursor: default; }
+.src-btn:disabled svg { display: none; }
+.src-btn:disabled { padding-right: 14px; }
+.src-pick .source { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; min-width: 100%; flex-direction: column; overflow: visible;
+  box-shadow: inset 0 1px 0 var(--hair-hi), 0 18px 40px -18px rgba(0, 0, 0, .55); }
+.src-pick .source[hidden] { display: none; }
+.src-pick .source button { min-height: 44px; padding: 0 16px 0 12px; font-size: .875rem; }
+@media (min-width: 1024px) { .src-pick .source { left: auto; right: 0; } }
