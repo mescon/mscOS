@@ -96,6 +96,31 @@ document.addEventListener("click", (e) => {
 showView(LEGACY[(location.hash || "#v-play").slice(1)] || (location.hash || "#v-play").slice(1));
 // remember which rows are open; a chart drawn while its row was closed is redrawn at full width
 const foldKey = (d) => `fold:${d.dataset.k}`;
+// Every fold-out opens and closes with a short, soft movement. One listener for all of them,
+// also those a module draws later. A <details> opens at once by itself, so the press is taken
+// over: opened first and grown, or shrunk first and closed. Its "toggle" event still tells
+// the rest of the page.
+const FOLD_MS = 200;
+document.addEventListener("click", (e) => {
+  const sum = e.target.closest("details > summary"); if (!sum || e.defaultPrevented) return;
+  const d = sum.parentElement, parts = [...d.children].filter((el) => el !== sum);
+  if (parts.length !== 1 || matchMedia("(prefers-reduced-motion: reduce)").matches || !parts[0].animate) return;  // as the browser does it
+  e.preventDefault();
+  if (d.dataset.moving) return;
+  const body = parts[0], opening = !d.open;
+  if (opening) d.open = true;
+  const h = body.offsetHeight, cs = getComputedStyle(body);
+  const shut = { height: "0px", paddingTop: "0px", paddingBottom: "0px", opacity: 0 };
+  const wide = { height: `${h}px`, paddingTop: cs.paddingTop, paddingBottom: cs.paddingBottom, opacity: 1 };
+  d.dataset.moving = "1";
+  body.style.overflow = "hidden"; body.style.boxSizing = "border-box";
+  const a = body.animate(opening ? [shut, wide] : [wide, shut], { duration: FOLD_MS, easing: "cubic-bezier(.3, .7, .2, 1)" });
+  a.onfinish = a.oncancel = () => {
+    body.style.overflow = ""; body.style.boxSizing = "";
+    delete d.dataset.moving;
+    if (!opening) d.open = false;
+  };
+});
 function wireFold(d) {
   try { if (localStorage.getItem(foldKey(d)) === "1") d.open = true; } catch {}
   d.addEventListener("toggle", () => {

@@ -24,6 +24,10 @@ export default function page(api) {
       .ly-now .prev, .ly-now .next { font-size: 1.0625rem; color: var(--engraved); opacity: .6; min-height: 1.3em; }
       .ly-now .cur { font-size: 1.625rem; font-weight: 500; white-space: normal; min-height: 1.25em; }
       .lyrics.open .ly-now { display: none; }
+      @keyframes ly-in { from { opacity: 0; transform: translateY(-6px); } }
+      .lyrics.open .ly-all { animation: ly-in .2s cubic-bezier(.3, .7, .2, 1); }
+      .lyrics:not(.open) .ly-now { animation: ly-in .2s cubic-bezier(.3, .7, .2, 1); }
+      @media (prefers-reduced-motion: reduce) { .lyrics .ly-all, .lyrics .ly-now { animation: none !important; } }
       .ly-all { list-style: none; margin: 8px 0 0; padding: 0 20px; max-height: min(60vh, 520px); overflow-y: auto; overscroll-behavior: contain; scroll-behavior: smooth; }
       @media (prefers-reduced-motion: reduce) { .ly-all { scroll-behavior: auto; } }
       .ly-all li { padding: 5px 0; font-family: var(--serif); font-size: 1.1875rem; line-height: 1.3; color: var(--engraved); transition: color .25s; }
@@ -41,7 +45,7 @@ export default function page(api) {
       .about-cols { display: grid; gap: 14px; align-items: start; }
       @media (min-width: 980px) { .about-cols { grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 18px; } }
       .about article { position: relative; isolation: isolate; height: ${CLOSED}px; overflow: hidden; border: 1px solid var(--hair);
-        border-radius: 3px; background: var(--plate); transition: height .32s cubic-bezier(.3, .7, .2, 1), opacity .3s; }
+        border-radius: 3px; background: var(--plate); transition: height .2s cubic-bezier(.3, .7, .2, 1), opacity .3s; }
       @media (prefers-reduced-motion: reduce) { .about article { transition: none; } }
       .about.stale article[data-part="track"] { opacity: .4; }
       /* a picture behind each card, blurred and fading out downwards: the sleeve for the album and
