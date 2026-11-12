@@ -742,41 +742,23 @@ html.booting .shell, html.booting .tabs, html.booting .dock { visibility: hidden
 .mod-body > .spec { margin-bottom: 6px; }
 .mod-body > .row { margin: 12px 0 8px; }
 
-/* ============================================================ the amplifier's level: one small button
-   With the level, red like the hardware's own; the slider opens in a box above it. It sits in the
-   "playing now" bar, and beside the transport while Listen is shown. */
-.amp { position: relative; flex: none; padding: 0; overflow: visible; border-radius: 0; background: none; box-shadow: none; color: var(--ink); }
-.amp::before { content: none; }
-.amp[hidden] { display: none; }
-/* in Listen: on the transport's own row, to the right of the buttons */
-.t-row { display: flex; align-items: center; gap: 10px; }
-.t-row .transport { flex: 1 1 auto; min-width: 0; margin-left: 0; margin-right: 0; gap: 6px; }
-.t-row .transport button { flex: none; }   /* round stays round when the row is narrow */
-.vol-slot { flex: none; display: flex; margin: 8px 0 0 auto; }
-/* a phone: the five buttons a size smaller, so the level fits beside them */
-@media (max-width: 479px) {
-  .t-row { gap: 6px; }
-  .t-row .transport { gap: 4px; justify-content: flex-start; }
-  .t-row .t-aux { width: 36px; height: 36px; }
-  .t-row .t-skip { width: 44px; height: 44px; }
-  .t-row .t-main { width: 60px; height: 60px; }
-}
-@media (max-width: 479px) { .vol-slot .vol-btn { padding: 0 8px; gap: 5px; } .vol-slot .vol-btn svg { width: 18px; height: 18px; } }
-.vol-slot:empty { display: none; }
-.vol-btn { appearance: none; cursor: pointer; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px 0 10px;
-  border: 1px solid var(--hair); border-radius: 3px; background: var(--plate); box-shadow: inset 0 1px 0 var(--hair-hi); color: var(--engraved); font: inherit; }
-.vol-btn:hover, .vol-btn[aria-expanded="true"] { border-color: var(--btn-line); color: var(--ink); }
-.vol-btn svg { width: 20px; height: 20px; }
-.vol-btn .amp-vol b { font-size: 1.125rem; font-weight: 300; }
-.vol-btn .amp-vol small { margin-left: 4px; color: var(--engraved); font-size: .6875rem; }
-.dock .vol-btn { background: none; box-shadow: none; border-color: rgba(207, 204, 196, .28); color: var(--g-dim); }
-.dock .vol-btn:hover, .dock .vol-btn[aria-expanded="true"] { border-color: var(--g-ink); color: var(--g-ink); }
-.dock .vol-btn .amp-vol small { color: var(--g-dim); }
-.vol-pop { position: absolute; z-index: 30; bottom: calc(100% + 10px); right: 0; width: min(320px, calc(100vw - 2 * var(--gutter))); padding: 10px 12px 12px;
+/* ============================================================ the amplifier's level: an entry in the menu
+   The speaker and the level, red like the hardware's own. Pressing it opens the slider: above
+   the tab bar on a phone, beside the rail on a wide screen. */
+.tabs .amp { position: relative; display: flex; padding: 0; overflow: visible; border-radius: 0; background: none; box-shadow: none; color: var(--ink); }
+.tabs .amp::before { content: none; }
+.tabs .amp[hidden] { display: none; }
+.vol-btn { appearance: none; cursor: pointer; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  padding: 0; border: 0; background: none; font: inherit; font-size: .6875rem; letter-spacing: .04em; color: var(--engraved); transition: color .2s; }
+.vol-btn:hover, .vol-btn[aria-expanded="true"] { color: var(--ink); }
+.vol-btn:active { background: var(--hair); }
+.vol-btn svg { width: 22px; height: 22px; }
+.vol-btn .amp-vol { white-space: nowrap; line-height: inherit; }
+.vol-btn .amp-vol b { font-size: .75rem; font-weight: 400; letter-spacing: 0; text-shadow: none; }
+.vol-btn .amp-vol small { margin-left: 2px; font-size: .625rem; color: var(--engraved); }
+.vol-pop { position: absolute; z-index: 30; bottom: calc(100% + 10px); right: 8px; width: min(320px, calc(100vw - 16px)); padding: 10px 12px 12px;
   border: 1px solid var(--hair); border-radius: 3px; background: var(--plate); color: var(--ink);
   box-shadow: inset 0 1px 0 var(--hair-hi), 0 -14px 40px -18px rgba(0, 0, 0, .6); }
-/* in Listen it opens downwards, clear of the transport buttons above it */
-.vol-slot .vol-pop { bottom: auto; top: calc(100% + 10px); box-shadow: inset 0 1px 0 var(--hair-hi), 0 18px 40px -18px rgba(0, 0, 0, .6); }
 .vol-pop[hidden] { display: none; }
 .vol-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0 4px; }
 .vol-pop #ml-step:not([hidden]) { display: contents; }
@@ -792,10 +774,29 @@ html.booting .shell, html.booting .tabs, html.booting .dock { visibility: hidden
 .vol-pop input.line::-moz-range-progress { background: var(--ink); }
 .vol-pop input.line::-webkit-slider-thumb { background: var(--chassis); border-color: var(--ink); }
 .vol-pop input.line::-moz-range-thumb { background: var(--chassis); border-color: var(--ink); }
-.vol-pop .amp-state, .vol-pop #ml-limit { margin: 6px 4px 0; font-size: .75rem; color: var(--engraved); }
+.vol-pop .amp-state, .vol-pop #ml-limit { margin: 6px 4px 0; font-size: .75rem; color: var(--engraved); text-align: left; -webkit-line-clamp: 2; }
 .vol-pop #ml-limit { display: none; }
 .amp.over #ml-limit { display: block; color: var(--amber); }
 .vol-pop :focus-visible { outline-color: var(--ink); }
+@media (min-width: 1024px) {
+  /* in the rail: a row like the others, under them; the slider opens to its right */
+  .tabs .amp { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hair); }
+  .vol-btn { flex-direction: row; justify-content: flex-start; gap: 14px; min-height: 46px; padding: 0 14px; font-size: .9375rem; border-radius: 3px; }
+  .vol-btn .amp-vol b { font-size: .9375rem; }
+  .vol-btn .amp-vol small { font-size: .75rem; margin-left: 4px; }
+  .vol-pop { bottom: 0; right: auto; left: calc(100% + 22px); width: 320px; box-shadow: inset 0 1px 0 var(--hair-hi), 14px 0 40px -18px rgba(0, 0, 0, .6); }
+}
+
+/* ============================================================ Modules, a page under System */
+.sys-link { display: flex; align-items: center; gap: 10px; min-height: 56px; color: var(--ink); text-decoration: none; }
+.sys-link > span:first-child { flex: 1; }
+.sys-link .fv { color: var(--engraved); font-size: .875rem; }
+.sys-link .badge { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); }
+.sys-link svg { width: 18px; height: 18px; color: var(--engraved); }
+.sys-link:hover svg { color: var(--ink); }
+.back { display: inline-flex; align-items: center; gap: 4px; min-height: 36px; margin: 0 0 4px -6px; font-size: .875rem; color: var(--engraved); text-decoration: none; }
+.back:hover { color: var(--ink); }
+.back svg { width: 18px; height: 18px; }
 
 /* the source switch, under Controls: one lamp per source, wrapping to more rows when they are many */
 #f-source .source { flex-wrap: wrap; overflow: visible; width: fit-content; }

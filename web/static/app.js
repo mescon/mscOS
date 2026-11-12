@@ -73,15 +73,15 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) wave
 
 // ------------------------------------------------------------------ views
 const LEGACY = { "v-dac": "v-signal", "v-arcam": "v-play", "system": "v-sys" };
+// the dot on System's tab: something needs attention there, or a module has an update
+const sysBadge = () => { $("#nav-sys").hidden = !$("#nav-sys").dataset.issues && $("#nav-mods").hidden; };
 function showView(id) {
   id = LEGACY[id] || id;
   if (!$(`#${id}.view`)) id = "v-play";
   $$(".view").forEach((v) => v.classList.toggle("active", v.id === id));
-  $$(".tabs a").forEach((a) => { const on = a.getAttribute("href") === `#${id}`; a.classList.toggle("on", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+  const tab = id === "v-mods" ? "v-sys" : id;   // Modules is a page under System
+  $$(".tabs a").forEach((a) => { const on = a.getAttribute("href") === `#${tab}`; a.classList.toggle("on", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   document.body.dataset.view = id;
-  // the one level control: beside the transport in Listen, in the "playing now" bar elsewhere
-  const amp = $("#amp"), home = id === "v-play" ? $("#vol-slot") : $("#dock");
-  if (amp && home && amp.parentElement !== home) { $("#vol-pop").hidden = true; $("#vol-btn").setAttribute("aria-expanded", "false"); home.append(amp); }
   if (id === "v-signal") { loadOpts(); loadDac(); requestAnimationFrame(() => { renderSpark(); if (S.dacd?.clock_avg) renderClockChart(S.dacd.clock_avg.series || []); }); }
   if (id === "v-mods") loadMods();
   if (id === "v-signal") waveSet(WAVE.on);
@@ -474,7 +474,7 @@ function renderSysHead() {
   const t = $("#sys-title");
   t.textContent = issues.length ? tr("Behöver uppmärksamhet") : tr("Allt i ordning");
   t.classList.toggle("warn", issues.length > 0);
-  $("#nav-sys").hidden = !issues.length;
+  $("#nav-sys").dataset.issues = issues.length ? "1" : ""; sysBadge();
   $("#sys-sum").textContent = issues.length
     ? issues.join(", ").replace(/^./, (c) => c.toUpperCase()) + "."
     : tr`${sname} igång${m.reachable ? tr(", förstärkaren ansluten") : ""}${S.settings?.alerts ? tr(", larm till telefonen på") : ""}. Drifttid ${fmtUptime(sys.uptime_s || 0)}.`;
@@ -998,7 +998,7 @@ $("#theme").addEventListener("click", (e) => {
 
 // ---- modules: grouped by kind, each with its state, version and settings in one card
 const KINDS = { source: tr("Källor"), amp: tr("Förstärkare"), device: tr("Utrustning"), notify: tr("Larm till telefonen"), integration: tr("Integrationer") };
-const KIND_HELP = { source: tr("En källa i taget äger DAC:en. Du byter överst i panelen."), amp: tr("Volym och ingångar över nätverket. En förstärkare åt gången."),
+const KIND_HELP = { source: tr("En källa i taget äger DAC:en. Du byter under Styrning."), amp: tr("Volym och ingångar över nätverket. En förstärkare åt gången."),
   device: "", notify: tr("Vad som larmas om väljer du under Profil."), integration: "" };
 const lang = () => (document.documentElement.lang || "sv").slice(0, 2);
 const loc = (o) => (o && (o[lang()] || o.en || o.sv)) || "";
@@ -1060,6 +1060,8 @@ function renderMods() {
   $("#mods-sum").textContent = tr`${on} av ${MODS.plugins.length} moduler är på.` + " "
     + (ups ? (ups === 1 ? tr("En uppdatering finns.") : tr`${ups} uppdateringar finns.`) : MODS.checked ? tr`Inga uppdateringar, kontrollerat ${clock(MODS.checked)}.` : "");
   const badge = $("#nav-mods"); badge.hidden = !ups && !MODS.restart_needed;
+  fv("mods", tr`${on} av ${MODS.plugins.length} på`);
+  sysBadge();
 }
 // A module's own settings (declared by the module), saved one at a time as they change.
 function modOptions(p) {
