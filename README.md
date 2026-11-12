@@ -47,7 +47,8 @@ Debian 13 or Armbian system, install the packages instead.
 | Panel in Swedish and English | complete |
 | A new installation from the packages | installs in an empty Debian 13 container; the guide and every view checked there |
 | Modules of your own, the module catalogue | installing, updating and removing verified on the SOtM against a test catalogue |
-| Alerts through ntfy, updating mscOS from the panel | written; **not yet tested against a real ntfy topic or a published release** |
+| Alerts through ntfy | a test alert delivered to a real ntfy topic from a new installation |
+| Updating mscOS from the panel | written; **not yet tested against a published release** |
 
 Planned: UPnP/OpenHome (Qobuz and Tidal through a control app), Squeezelite, AirPlay.
 Tidal Connect and Qobuz Connect are only offered to certified manufacturers and are not

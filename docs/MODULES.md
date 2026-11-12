@@ -8,11 +8,13 @@ belongs to a particular setup is a module, turned on under **Modules**:
 | `source` | a player that owns the DAC, one at a time | `spotify` (Soloist, Lossless), `librespot` (go-librespot), `roon`, `naa` |
 | `amp` | an amplifier or other volume control; at most one | `levinson` (Mark Levinson Nº585/585.5) |
 | `device` | board or DAC extras | `cm6632a` (native DSD) |
+| `notify` | a way to deliver alerts to a phone | `ntfy` |
 | `integration` | outside systems and scenes | `homeassistant`, `arcam`, `tvmode` |
 
-A module is a Python package in `web/backend/plugins/<id>/` whose `__init__.py` defines a
-class derived from `Plugin` (or `SourcePlugin`, `AmpPlugin`) and names it in `PLUGIN`. The
-base classes in `web/backend/plugins/__init__.py` document every hook, and the modules themselves are in [`modules/`](../modules); in short:
+A module is a directory [`modules/<id>/`](../modules): a `module.json` (id, version, kind,
+name, description) and a Python package whose `__init__.py` defines a class derived from
+`Plugin` (or `SourcePlugin`, `AmpPlugin`) and names it in `PLUGIN`. The base classes in
+`web/backend/plugins/__init__.py` document every hook; in short:
 
 ```python
 from plugins import Plugin
@@ -60,13 +62,35 @@ device from its publisher, and the panel runs that script when the user presses 
 starts the chosen source.
 
 A source that knows what it plays implements `now_playing()` and calls
-`hub.source_changed(self)` when that changes (see `librespot`).
+`hub.source_changed(self)` when that changes (see `librespot`). One that can be controlled
+lists what it takes in `transport` (toggle, play, pause, next, prev, seek, shuffle, repeat)
+and does it in `command()`: the panel's buttons then work for it. One whose app has a
+volume slider implements `slider()` and `set_slider()`, and the volume bridge makes that
+slider the amplifier's remote control.
+
+The core knows nothing about any one player. What a source needs done regularly or at
+certain moments it gets through hooks: `tick()` every five seconds, `check_health()` for
+its own alerts, `play_began()`, `lost_dac()`, `status_fields()` for the status the panel
+shows, `optimization_rows()` for its own measures in the optimization list, and
+`save_state()` for small state kept across restarts. `spotify` uses all of them.
 
 ## Amplifiers
 
 An `AmpPlugin` gives the core a volume in dB: `ready()`, `volume_db`, `read_volume()`,
 `set_volume()`, `quantize()`. With one enabled, the Spotify volume slider drives the
 amplifier while the stream stays at full scale, so the samples are never recalculated.
+
+The panel's volume dial, input list, power and mute are drawn from `amp_state()` and act
+through `amp_action()`: an amplifier module needs no page of its own (see `levinson`).
+Two safety rules are the bridge's, not the module's: one move of the slider raises the
+amplifier by 6 dB at most, and for some seconds after the device is selected or playback
+starts the slider follows the amplifier, never the other way.
+
+## Tests
+
+`tools/test.sh` runs the tests in a container: every module's manifest and texts, the
+catalogue, archives of modules from elsewhere, the volume bridge, and the HTTP API of a new
+installation. They need no device. Add a test with your module if it has logic worth one.
 
 ## Texts
 
@@ -83,6 +107,8 @@ A module needs no page of its own. The panel draws these from what the module re
 | `options` / `option_list()` | its settings in its card under Modules: `text`, `number`, `select`, `toggle`, `secret` |
 | `status()` | one line in its card: connected, not set up, ... |
 | `log()` | recent communication, folded, for troubleshooting |
+| `facts()` | rows of state in its card (service running, signed in, ...) |
+| `actions` and `action()` | buttons in its card (restart the player, look for a new version) |
 | `panel()` and `panel_action()` | a card of buttons, sliders and choices in the Listen view |
 | `amp_state()` and `amp_action()` (an `AmpPlugin`) | the volume dial, inputs, power and mute |
 | `now_playing()`, `transport` and `command()` (a `SourcePlugin`) | what plays, and the transport buttons |
