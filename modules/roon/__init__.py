@@ -29,6 +29,43 @@ class Roon(SourcePlugin):
         lines = collect.read("/opt/RoonBridge/VERSION").splitlines()
         return (lines[1].split(" production")[0].strip() if len(lines) > 1 else "") or None
 
+    NAME_FILE = "/etc/mscos/roon-name"
+    DROPIN = "/etc/systemd/system/roonbridge.service.d/30-name.conf"
+
+    @staticmethod
+    def _put(path: str, text: str) -> bool:
+        """Write the file when it differs. True when it was written."""
+        import collect
+        if collect.read(path) == text:
+            return False
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path + ".new", "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(path + ".new", path)
+        return True
+
+    async def write_name(self) -> bool:
+        """Roon heads the device with the machine's host name: roon-start gives Roon Bridge
+        the device's name on the network instead. True when the name changed."""
+        import collect
+        starter = os.path.join(self.module_dir, "roon-start")
+        unit = f"[Service]\nExecStart=\nExecStart=/usr/bin/python3 {starter}\n"
+        if self._put(self.DROPIN, unit):
+            await collect.run(["systemctl", "daemon-reload"], timeout=30)
+        return self._put(self.NAME_FILE, self.hub.names()["network"] + "\n")
+
+    async def start(self) -> str:
+        try:
+            await self.write_name()
+        except OSError as e:
+            return str(e)
+        return await super().start()
+
+    async def names_changed(self) -> None:
+        import collect
+        if await self.installed() and await self.write_name() and await self.active():
+            await collect.run(["systemctl", "restart", *self.system_units], timeout=60)
+
     async def installed(self) -> bool:
         return os.path.exists("/opt/RoonBridge/start.sh") and os.path.exists("/etc/systemd/system/roonbridge.service")
 

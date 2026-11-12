@@ -1,0 +1,20 @@
+#!/usr/bin/python3
+"""Start Roon Bridge under the device's name on the network. Roon shows the machine's host
+name as the device's heading; here Roon Bridge gets a host name of its own (a private UTS
+namespace), so the device's real host name stays what it is."""
+import os
+import sys
+
+START = "/opt/RoonBridge/start.sh"
+try:
+    with open("/etc/mscos/roon-name", encoding="utf-8") as f:
+        name = " ".join(f.read().split())
+    # Roon cuts the name at the first full stop (as a domain): a one dot leader looks the same
+    raw = name.replace(".", "․").encode()[:64].decode(errors="ignore").encode()
+    if raw:
+        import socket
+        os.unshare(os.CLONE_NEWUTS)
+        socket.sethostname(raw)
+except Exception as e:  # the name is a nicety: Roon Bridge starts without it
+    print(f"roon-start: keeping the host name ({e})", file=sys.stderr)
+os.execv(START, [START])

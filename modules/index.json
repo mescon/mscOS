@@ -1,6 +1,6 @@
 {
  "format": 1,
- "serial": 2,
+ "serial": 3,
  "modules": [
   {
    "id": "arcam",
@@ -204,7 +204,7 @@
   },
   {
    "id": "roon",
-   "version": "1.0.0",
+   "version": "1.1.0",
    "kind": "source",
    "name": {
     "sv": "Roon Bridge",
@@ -217,7 +217,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "781698e4107b8915f1295a72fc994e880c9d3ba6054770082042b5674e1cc442",
+     "sha256": "b1bc2f5a35b05a161e9cb0cdd5727515028eb5cbaf1fe43a217430f817cff5c5",
      "exec": false
     },
     {
@@ -227,7 +227,7 @@
     },
     {
      "path": "module.json",
-     "sha256": "a3deb7345aa560b931e4d7cc366f51a137e6a8f70f78905c029545167e496964",
+     "sha256": "e6ed766c93d0f605269502be56ccca4e2b7d26c310b34566995d683c10a8a7e1",
      "exec": false
     },
     {
@@ -239,6 +239,11 @@
      "path": "raat-cpu.service",
      "sha256": "9e25ff91083c26a80ef6a56dd82776c988ed1ff2827c04abd59bd8361748910a",
      "exec": false
+    },
+    {
+     "path": "roon-start",
+     "sha256": "1dda375e794bf3cd5f208ca78133c140decfb290b3cb6fd2b43afada7ba05a2b",
+     "exec": true
     },
     {
      "path": "roonbridge.service",
