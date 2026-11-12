@@ -567,13 +567,12 @@ class Hub:
 
     # ---- playback on this device: modules react (the amplifier wakes and selects its input)
     def _set_playing(self, playing: bool):
-        if playing and not self._was_playing:
-            self.vol.settle()  # the app may now push its stored volume: not a move of the slider
         if playing and not self._was_playing and self.source:
             self.source.play_began()
         # A real start, not a track change: Soloist pauses for a moment between tracks, and
         # re-selecting the input then makes the amplifier relock (audible glitch).
         if playing and not self._was_playing and time.time() - self._idle_since > 30:
+            self.vol.settle()  # the app may now push its stored volume: not a move of the slider
             self.play_started()
         if not playing and self._was_playing:
             self._idle_since = time.time()
