@@ -311,8 +311,9 @@ function renderPlay() {
       $("#np-title").textContent = now.title || s.label;
       $("#np-artist").textContent = now.artist || "";
       $("#np-album").textContent = now.album || "";
-      fe.hidden = !now.codec;
-      fe.textContent = now.codec ? `${CODEC[now.codec] || now.codec}${now.bitrate ? `, ${now.bitrate} kbit/s` : ""}` : "";
+      const sent = !s.pipewire && d.state === "RUNNING" ? sigWord(d.hw_params?.format, parseInt(d.hw_params?.rate) || 44100) : "";
+      fe.hidden = !now.codec && !sent;
+      fe.textContent = sent || (now.codec ? `${CODEC[now.codec] || now.codec}${now.bitrate ? `, ${now.bitrate} kbit/s` : ""}` : "");
       fe.classList.remove("warn");
       if (now.image) { if (cover.src !== now.image) cover.src = now.image; cover.hidden = false; $("#cover-empty").hidden = true; }
       else { cover.hidden = true; $("#cover-empty").hidden = false; }

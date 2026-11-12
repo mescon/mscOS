@@ -52,6 +52,7 @@ Debian 13 or Armbian system, install the packages instead.
 | Raspberry Pi 4/5 | the image (`image/build.sh rpi`) builds and its contents are checked (packages, kernel with the DSD driver, board profile, first-boot setup); **not yet started on a device** |
 | Other arm64 boards with UEFI | the image (`image/build.sh arm64`) builds and its contents are checked; the board profile is chosen at first boot. **Not yet started on a device** |
 | Spotify Lossless (Soloist), Roon Bridge | in daily use on the SOtM |
+| Roon: what plays, and the panel's buttons (Roon's extension API) | the client is tested against a stand-in server; on the SOtM it finds the Roon server and asks to be let in. **Not yet seen approved and showing a track** |
 | Spotify Connect (go-librespot) | playback, transport, and the Spotify slider driving the amplifier verified on the SOtM |
 | HQPlayer NAA | install, start and source switching verified on the SOtM; **playback not yet tested** |
 | UPnP renderer | the module's code verified against MPD and upmpdcli in a container (a track sent as an app would, with a null output); **not yet played through a DAC** |

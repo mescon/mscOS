@@ -1,6 +1,6 @@
 {
  "format": 1,
- "serial": 16,
+ "serial": 19,
  "modules": [
   {
    "id": "about",
@@ -244,7 +244,7 @@
   },
   {
    "id": "roon",
-   "version": "1.1.0",
+   "version": "1.2.0",
    "kind": "source",
    "name": {
     "sv": "Roon Bridge",
@@ -257,7 +257,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "b1bc2f5a35b05a161e9cb0cdd5727515028eb5cbaf1fe43a217430f817cff5c5",
+     "sha256": "8283e24fad34747b48739cfa0e1cf7a9ae298c048620c24b89c6537a7062888f",
      "exec": false
     },
     {
@@ -267,7 +267,7 @@
     },
     {
      "path": "module.json",
-     "sha256": "e6ed766c93d0f605269502be56ccca4e2b7d26c310b34566995d683c10a8a7e1",
+     "sha256": "46c409d5c43a858b6d4af9fc377f1e0deb9d99061a333de79dab5a87a3b0f084",
      "exec": false
     },
     {
@@ -284,6 +284,11 @@
      "path": "roon-start",
      "sha256": "1dda375e794bf3cd5f208ca78133c140decfb290b3cb6fd2b43afada7ba05a2b",
      "exec": true
+    },
+    {
+     "path": "roonapi.py",
+     "sha256": "0bb31da92ff5b24264c7476b1d006554b351377e494496148628fd8ff8e3d6b7",
+     "exec": false
     },
     {
      "path": "roonbridge.service",
