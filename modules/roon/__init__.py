@@ -260,7 +260,7 @@ class Roon(SourcePlugin):
             url = f"http://{self.server['host']}:{self.server['port']}/api/image/{key}"
             try:
                 async with self.http.get(url, params={"scale": "fit", "width": 640, "height": 640, "format": "image/jpeg"}) as r:
-                    data = await r.content.read(4 * 1024 * 1024 + 1)
+                    data = await collect.read_capped(r, 4 * 1024 * 1024)   # all of it: a part of a picture is a picture cut off
                     ctype = r.headers.get("Content-Type", "")
                     ctype = ctype.split(";")[0].strip().lower()
                     if r.status != 200 or len(data) > 4 * 1024 * 1024 or ctype not in ("image/jpeg", "image/png", "image/webp"):

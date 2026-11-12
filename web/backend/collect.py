@@ -87,6 +87,18 @@ async def audio_uid() -> int:
 STATE_DIR = os.environ.get("MSCOS_STATE") or os.environ.get("SOTM_STATE") or "/var/lib/mscos"
 
 
+async def read_capped(resp, cap: int) -> bytes:
+    """The whole body of an HTTP answer, and at most one byte more than `cap` (which says
+    "too large"). Not `resp.content.read(n)`: that returns what has arrived so far, which
+    for anything but a small answer is only its beginning."""
+    out = bytearray()
+    async for chunk in resp.content.iter_chunked(65536):
+        out += chunk
+        if len(out) > cap:
+            break
+    return bytes(out[:cap + 1])
+
+
 def read(path: str, default: str = "") -> str:
     try:
         with open(path) as f:

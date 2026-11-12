@@ -1141,13 +1141,13 @@ async def fetch_catalogue(http) -> list[dict]:
     async with http.get(url) as r:
         if r.status != 200:
             raise OSError(f"HTTP {r.status}")
-        raw = await r.content.read(2_000_000)
+        raw = await collect.read_capped(r, 2_000_000)
     # The catalogue names every file of every module with its checksum, and modules run as root:
     # it must carry the project's signature (tools/sign.sh; the keys come with mscOS). The device's
     # owner can allow an unsigned one of their own with MSCOS_ALLOW_UNSIGNED=1.
     if env("ALLOW_UNSIGNED") != "1":
         async with http.get(url + ".sig") as r:
-            sig = await r.content.read(4096) if r.status == 200 else b""
+            sig = await collect.read_capped(r, 4096) if r.status == 200 else b""
         if not sig or not await asyncio.to_thread(signed_by_project, raw, sig):
             raise PermissionError("unsigned")
     d = json.loads(raw)
@@ -1225,7 +1225,7 @@ async def plugins_install(request):
                     if not re.fullmatch(r"[\w.-]+(/[\w.-]+)*", path) or ".." in path.split("/"):
                         raise ValueError("path")
                     async with http.get(f"{base}/{m['id']}/{path}") as r:
-                        data = await r.content.read(extmods.MAX_BYTES + 1) if r.status == 200 else None
+                        data = await collect.read_capped(r, extmods.MAX_BYTES) if r.status == 200 else None
                     if data is None or hashlib.sha256(data).hexdigest() != want:
                         raise ValueError(f"{path}: sha256")
                     total += len(data)
@@ -1250,7 +1250,7 @@ async def plugins_install(request):
             async with http.get(url) as r:
                 m = extmods.check_manifest(json.loads(await r.text()), remote=True)
             async with http.get(m["archive"]) as r:
-                data = await r.content.read(extmods.MAX_BYTES + 1)
+                data = await collect.read_capped(r, extmods.MAX_BYTES)
         await asyncio.to_thread(extmods.unpack, data, m["sha256"], m["id"], url, m["version"])
     except ValueError as e:
         raise web.HTTPBadRequest(text=T("Modulen kunde inte installeras: {why}", why=e))
