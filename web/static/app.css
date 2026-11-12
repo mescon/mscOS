@@ -870,3 +870,12 @@ html { -webkit-tap-highlight-color: transparent; }
 .np-find { appearance: none; flex: none; width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: var(--engraved); cursor: pointer; }
 .np-find:hover { color: var(--ink); background: var(--hair); }
 .np-find svg { width: 16px; height: 16px; }
+
+/* ============================================================ soft changes
+   The sleeve that was showing fades out over the new one; a view comes in with a short fade. */
+.cover .cover-old { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.cover img { background: var(--glass); }
+@keyframes view-in { from { opacity: 0; transform: translateY(6px); } }
+.view.active { animation: view-in .24s cubic-bezier(.3, .7, .2, 1); }
+.dock-cover img, .m-albums img, .m-tracks img, .rm-list img, .m-hero img { background: var(--plate); }
+@media (prefers-reduced-motion: reduce) { .view.active { animation: none; } }

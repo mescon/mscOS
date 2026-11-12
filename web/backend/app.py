@@ -1593,7 +1593,9 @@ async def require_login(request, handler):
 @web.middleware
 async def cache_headers(request, handler):
     resp = await handler(request)
-    if request.path.startswith("/api/"):
+    if request.path.startswith("/api/roon/image/"):
+        resp.headers["Cache-Control"] = "private, max-age=604800, immutable"   # a picture under its own key: never another
+    elif request.path.startswith("/api/"):
         resp.headers["Cache-Control"] = "no-store"
     elif not request.path.startswith("/fonts/"):
         # Always revalidate the app shell so updates show up immediately (tiny files, LAN).

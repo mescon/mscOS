@@ -339,6 +339,33 @@ function transportState(playing, shuffle, repeat) {
   $("#b-repeat-1").hidden = repeat !== "track";
   $("#b-repeat").dataset.mode = repeat;
 }
+// The sleeve changes softly. The new picture is fetched first, out of sight; when it is there,
+// the one that showed stays on top for a moment and fades away over it. Never an empty square
+// in between, and never the same picture fetched again (which was a blink at every update).
+let coverWant = null;
+function setCover(url) {
+  const img = $("#np-cover"), empty = $("#cover-empty");
+  const abs = url ? new URL(url, location.href).href : "";
+  if (abs === coverWant) return;
+  coverWant = abs;
+  const fade = (to) => {
+    if (!img.hidden && img.getAttribute("src") && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const old = img.cloneNode(); old.removeAttribute("id"); old.className = "cover-old"; old.alt = "";
+      img.parentElement.querySelectorAll(".cover-old").forEach((x) => x.remove());
+      img.after(old);
+      old.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 420, easing: "ease-out" }).onfinish = () => old.remove();
+    }
+    to();
+    renderDock();
+  };
+  if (!abs) { fade(() => { img.hidden = true; img.removeAttribute("src"); empty.hidden = false; }); return; }
+  const pre = new Image();
+  pre.onload = pre.onerror = () => {
+    if (coverWant !== abs) return;          // another track since
+    fade(() => { img.src = abs; img.hidden = false; empty.hidden = true; });
+  };
+  pre.src = abs;
+}
 function renderPlay() {
   renderSource();
   const can = SRC()?.transport || [];
@@ -353,13 +380,13 @@ function renderPlay() {
     if (!s) {  // no source module is on
       $("#np-title").textContent = tr("Ingen källa");
       $("#np-artist").textContent = tr("Slå på en källa under Moduler.");
-      $("#np-album").textContent = ""; fe.hidden = true; cover.hidden = true; $("#cover-empty").hidden = false;
+      $("#np-album").textContent = ""; fe.hidden = true; setCover("");
       return;
     }
     if (stt.installed === false) {
       $("#np-title").textContent = s.label;
       $("#np-artist").textContent = tr`${loc(s.name)} är inte installerat. Installera det under Moduler.`;
-      $("#np-album").textContent = ""; fe.hidden = true; cover.hidden = true; $("#cover-empty").hidden = false;
+      $("#np-album").textContent = ""; fe.hidden = true; setCover("");
       return;
     }
     if (now) {  // the source tells what plays (librespot)
@@ -370,8 +397,7 @@ function renderPlay() {
       fe.hidden = !now.codec && !sent;
       fe.textContent = sent || (now.codec ? `${CODEC[now.codec] || now.codec}${now.bitrate ? `, ${now.bitrate} kbit/s` : ""}` : "");
       fe.classList.remove("warn");
-      if (now.image) { if (cover.src !== now.image) cover.src = now.image; cover.hidden = false; $("#cover-empty").hidden = true; }
-      else { cover.hidden = true; $("#cover-empty").hidden = false; }
+      setCover(now.image || "");
       transportState(!!now.playing, !!now.shuffle, now.repeat || "off");
       tickProgress();
       return;
@@ -381,7 +407,7 @@ function renderPlay() {
     $("#np-title").textContent = running ? tr`Spelar via ${s.label}` : s.label;
     $("#np-artist").textContent = running ? tr`${sigWord(d.hw_params?.format, parseInt(d.hw_params?.rate) || 44100)} till ${outName()}` : srcHint(s);
     $("#np-album").textContent = ""; fe.hidden = true;
-    cover.hidden = true; $("#cover-empty").hidden = false;
+    setCover("");
     return;
   }
   // the source's own page code says what plays
@@ -391,8 +417,7 @@ function renderPlay() {
   $("#np-album").textContent = m.album || "";
   fe.hidden = !m.format; fe.textContent = m.format?.text || "";
   fe.classList.remove("warn"); fe.classList.toggle("lossy", !!m.format?.lossy); fe.classList.toggle("pending", !!m.format?.pending);
-  if (m.cover) { if (img.src !== m.cover) img.src = m.cover; img.hidden = false; } else img.hidden = true;
-  $("#cover-empty").hidden = !!m.cover;
+  setCover(m.cover || "");
   transportState(!!m.playing, !!m.shuffle, m.repeat || "off");
   tickProgress();
 }
