@@ -1,6 +1,6 @@
 {
  "format": 1,
- "serial": 11,
+ "serial": 12,
  "modules": [
   {
    "id": "about",
@@ -417,7 +417,7 @@
     },
     {
      "path": "install.sh",
-     "sha256": "f7ad6503e726422c787f85a552f838e7b286fd11312e3787bc14c02f86163d51",
+     "sha256": "ec922f109e3eab23fb67358ba952fdff81201ab9b51dd8812df7359e35564477",
      "exec": true
     },
     {

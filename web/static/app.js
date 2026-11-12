@@ -191,7 +191,7 @@ function stageLayout() {
   const col = document.querySelector(".console-col");
   const empty = ![...$$("#v-play .console-col [data-page-of]")].some((el) => !el.hidden);
   // Controls: the amplifier's input and power, and the modules' own cards. No tab when there are none.
-  const ctl = !$("#f-amp").hidden || $("#panels").children.length > 0;
+  const ctl = !$("#f-amp").hidden || !$("#f-source").hidden || $("#panels").children.length > 0;
   $("#tab-ctl").hidden = !ctl;
   if (!ctl && document.body.dataset.view === "v-ctl") showView("v-play");
   document.querySelector(".stage").classList.toggle("solo", empty);
@@ -265,10 +265,9 @@ function renderSource() {
   if (seg.dataset.sig !== sig) {  // one button per enabled source; no switch for a single one
     seg.dataset.sig = sig;
     seg.innerHTML = list.map((s) => `<button role="radio" data-v="${esc(s.id)}" title="${esc(loc(s.name))}"><i aria-hidden="true"></i>${esc(s.label)}</button>`).join("");
-    $("#src-pick").hidden = !list.length;
-    $("#source-btn").disabled = list.length < 2;   // one source: its name, nothing to choose
+    $("#f-source").hidden = list.length < 2;   // one source: nothing to choose
   }
-  $("#source-cur").textContent = SRC()?.label || "";
+  fv("source", SRC()?.label || "");
   $$("#source button").forEach((b) => {
     b.setAttribute("aria-checked", b.dataset.v === cur);
     b.disabled = srcState(b.dataset.v).installed === false;
@@ -913,6 +912,14 @@ function renderAmp() {
   src.querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", b.dataset.src === m.input));
   renderDock();
 }
+// the level's button opens the slider under it; a press elsewhere or Escape closes it
+function volPop(open) {
+  $("#vol-pop").hidden = !open;
+  $("#vol-btn").setAttribute("aria-expanded", String(open));
+}
+$("#vol-btn").addEventListener("click", () => volPop($("#vol-pop").hidden));
+document.addEventListener("click", (e) => { if (!$("#vol-pop").hidden && !e.target.closest("#amp")) volPop(false); });
+$("#amp").addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#vol-pop").hidden) { volPop(false); $("#vol-btn").focus(); } });
 const amp = (data) => post("/api/amp", data).then((r) => { AMP = r.amp; renderAmp(); }).catch(() => {});
 $("#ml-power").addEventListener("click", () => {
   const on = AMP?.power === false;
@@ -941,26 +948,9 @@ $("#ml-vol").addEventListener("change", (e) => amp({ volume_db: +e.target.value 
 $("#ml-src").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) amp({ input: b.dataset.src }); });
 
 // ------------------------------------------------------------------ source switch
-// the list of sources opens under the current one's name
-function sourceMenu(open) {
-  $("#source").hidden = !open;
-  $("#source-btn").setAttribute("aria-expanded", String(open));
-  if (open) ($("#source button[aria-checked='true']") || $("#source button"))?.focus();
-}
-$("#source-btn").addEventListener("click", () => sourceMenu($("#source").hidden));
-document.addEventListener("click", (e) => { if (!$("#source").hidden && !e.target.closest("#src-pick")) sourceMenu(false); });
-$("#src-pick").addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !$("#source").hidden) { sourceMenu(false); $("#source-btn").focus(); return; }
-  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-  const bs = [...$$("#source button:not(:disabled)")], i = bs.indexOf(document.activeElement);
-  if ($("#source").hidden || !bs.length) return;
-  e.preventDefault(); bs[(i + (e.key === "ArrowDown" ? 1 : -1) + bs.length) % bs.length].focus();
-});
 $("#source").addEventListener("click", async (e) => {
-  const b = e.target.closest("button"); if (!b) return;
-  sourceMenu(false); $("#source-btn").focus();
-  if (b.getAttribute("aria-checked") === "true") return;
-  const src = b.dataset.v, seg = $("#src-pick");
+  const b = e.target.closest("button"); if (!b || b.getAttribute("aria-checked") === "true") return;
+  const src = b.dataset.v, seg = $("#source");
   seg.classList.add("busy");
   const to = sources().find((s) => s.id === src);
   toast(tr`Byter källa till ${loc(to?.name) || src}…`);

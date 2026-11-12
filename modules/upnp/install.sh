@@ -6,8 +6,9 @@
 HERE=$(cd "$(dirname "$0")" && pwd)
 . "${MSCOS_COMMON:-$HERE/../common.sh}"
 SITE=https://www.lesbonscomptes.com
-# the author's "debian" repository has amd64 and armhf, the "raspbian" one arm64 (and armhf)
-case $ARCH in arm64) REPO=raspbian ;; *) REPO=debian ;; esac
+# the author's "debian" repository carries upmpdcli for amd64; the "raspbian" one for armhf
+# and arm64 (it serves plain Debian on ARM too, as its author notes)
+case $ARCH in amd64) REPO=debian ;; *) REPO=raspbian ;; esac
 CODENAME=$(. /etc/os-release && echo "${VERSION_CODENAME:-}")
 [ -n "$CODENAME" ] || { echo "Cannot tell which Debian release this is." >&2; exit 1; }
 
@@ -24,5 +25,6 @@ WAS=$(systemctl is-active upmpdcli.service 2>/dev/null || true)  # an update whi
 apt-get install -y -q --no-install-recommends mpd upmpdcli
 systemctl disable mpd.service mpd.socket upmpdcli.service 2>/dev/null || true
 if [ "$WAS" = active ]; then systemctl restart mpd.service upmpdcli.service
-else systemctl stop mpd.socket mpd.service upmpdcli.service 2>/dev/null || true; fi
+else systemctl stop mpd.socket mpd.service upmpdcli.service 2>/dev/null || true
+     systemctl reset-failed mpd.service upmpdcli.service 2>/dev/null || true; fi
 echo "UPnP renderer installed (upmpdcli $(dpkg-query -W -f '${Version}' upmpdcli)). Choose UPnP as the source in the panel."

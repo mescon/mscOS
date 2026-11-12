@@ -748,50 +748,38 @@ html.booting .shell, html.booting .tabs, html.booting .dock { visibility: hidden
 .mod-body > .row { margin: 12px 0 8px; }
 
 /* ============================================================ the amplifier's level in the masthead
-   A slim strip: minus, a line to drag, plus, and the level, red like the hardware's own. */
-.masthead .amp { flex: 1 1 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 0 4px;
-  padding: 0; overflow: visible; border-radius: 0; background: none; box-shadow: none; color: var(--ink); }
+   A small button with the level, red like the hardware's own; the slider opens in a box under it. */
+.masthead .amp { position: relative; flex: none; margin-left: auto; padding: 0; overflow: visible; border-radius: 0; background: none; box-shadow: none; color: var(--ink); }
 .masthead .amp::before { content: none; }
 .masthead .amp[hidden] { display: none; }
-.masthead #ml-step:not([hidden]) { display: contents; }
-.masthead #ml-down { order: 1; }
-.masthead #ml-ctl { order: 2; grid-column: 2; }
-.masthead #ml-up { order: 3; grid-column: 3; }
-.masthead .amp-vol { order: 4; grid-column: 4; min-width: 4.4em; text-align: right; }
-.masthead .amp-vol b { font-size: 1.375rem; font-weight: 300; }
-.masthead .amp-vol small { margin-left: 4px; color: var(--engraved); }
-.masthead .amp .step { width: 40px; height: 40px; border: 0; font-size: 1.25rem; color: var(--ink); }
-.masthead .amp .step:active { background: var(--hair); }
-.masthead .amp input.line { margin: 0; min-height: 40px; }
-.masthead .amp input.line::-webkit-slider-runnable-track { background: var(--btn-line); }
-.masthead .amp input.line::-moz-range-track { background: var(--btn-line); }
-.masthead .amp input.line::-moz-range-progress { background: var(--ink); }
-.masthead .amp input.line::-webkit-slider-thumb { background: var(--chassis); border-color: var(--ink); }
-.masthead .amp input.line::-moz-range-thumb { background: var(--chassis); border-color: var(--ink); }
-.masthead .amp-state, .masthead #ml-limit { order: 5; grid-column: 1 / -1; margin: 0; font-size: .75rem; color: var(--engraved); -webkit-line-clamp: 2; }
-.masthead .amp.quiet .amp-state, .masthead .amp:not(.over) #ml-limit { display: none; }
-.masthead .amp.over #ml-limit { color: var(--amber); }
+.vol-btn { appearance: none; cursor: pointer; display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px 0 10px;
+  border: 1px solid var(--hair); border-radius: 3px; background: var(--plate); box-shadow: inset 0 1px 0 var(--hair-hi); color: var(--engraved); font: inherit; }
+.vol-btn:hover, .vol-btn[aria-expanded="true"] { border-color: var(--btn-line); color: var(--ink); }
+.vol-btn svg { width: 20px; height: 20px; }
+.vol-btn .amp-vol b { font-size: 1.125rem; font-weight: 300; }
+.vol-btn .amp-vol small { margin-left: 4px; color: var(--engraved); font-size: .6875rem; }
+.vol-pop { position: absolute; z-index: 30; top: calc(100% + 8px); right: 0; width: min(320px, calc(100vw - 2 * var(--gutter))); padding: 10px 12px 12px;
+  border: 1px solid var(--hair); border-radius: 3px; background: var(--plate); box-shadow: inset 0 1px 0 var(--hair-hi), 0 18px 40px -18px rgba(0, 0, 0, .55); }
+.vol-pop[hidden] { display: none; }
+.vol-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0 4px; }
+.vol-pop #ml-step:not([hidden]) { display: contents; }
+.vol-pop #ml-down { order: 1; }
+.vol-pop #ml-ctl { order: 2; grid-column: 2; }
+.vol-pop #ml-up { order: 3; grid-column: 3; }
+.vol-pop .step { width: 40px; height: 40px; border: 0; font-size: 1.25rem; color: var(--ink); }
+.vol-pop .step:active { background: var(--hair); }
+.vol-pop input.line { margin: 0; min-height: 40px; }
+.vol-pop input.line::-webkit-slider-runnable-track { background: var(--btn-line); }
+.vol-pop input.line::-moz-range-track { background: var(--btn-line); }
+.vol-pop input.line::-moz-range-progress { background: var(--ink); }
+.vol-pop input.line::-webkit-slider-thumb { background: var(--chassis); border-color: var(--ink); }
+.vol-pop input.line::-moz-range-thumb { background: var(--chassis); border-color: var(--ink); }
+.vol-pop .amp-state, .vol-pop #ml-limit { margin: 6px 4px 0; font-size: .75rem; color: var(--engraved); }
+.vol-pop #ml-limit { display: none; }
+.masthead .amp.over #ml-limit { display: block; color: var(--amber); }
 .masthead .amp :focus-visible { outline-color: var(--ink); }
-@media (min-width: 1024px) {
-  .masthead .amp { flex: 0 1 250px; order: 0; margin-left: auto; }
-  .masthead .source { flex: none; }
-}
+/* a phone: the button sits on the name's row, to the right */
+@media (max-width: 639px) { .ident { flex: 1 1 0; } }
 
-/* ============================================================ the source: a name that opens a list */
-.src-pick { position: relative; flex: none; max-width: 100%; }
-.src-pick.busy { opacity: .5; pointer-events: none; }
-.src-btn { appearance: none; cursor: pointer; display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 0 10px 0 14px;
-  border: 1px solid var(--hair); border-radius: 3px; background: var(--plate); box-shadow: inset 0 1px 0 var(--hair-hi);
-  font: inherit; font-size: .875rem; letter-spacing: .03em; color: var(--ink); white-space: nowrap; }
-.src-btn i { width: 5px; height: 5px; border-radius: 50%; background: var(--red); box-shadow: 0 0 6px var(--red-glow); }
-.src-btn svg { width: 16px; height: 16px; color: var(--engraved); transition: transform .2s; }
-.src-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
-.src-btn:hover { border-color: var(--btn-line); }
-.src-btn:disabled { cursor: default; }
-.src-btn:disabled svg { display: none; }
-.src-btn:disabled { padding-right: 14px; }
-.src-pick .source { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; min-width: 100%; flex-direction: column; overflow: visible;
-  box-shadow: inset 0 1px 0 var(--hair-hi), 0 18px 40px -18px rgba(0, 0, 0, .55); }
-.src-pick .source[hidden] { display: none; }
-.src-pick .source button { min-height: 44px; padding: 0 16px 0 12px; font-size: .875rem; }
-@media (min-width: 1024px) { .src-pick .source { left: auto; right: 0; } }
+/* the source switch, under Controls: one lamp per source, wrapping to more rows when they are many */
+#f-source .source { flex-wrap: wrap; overflow: visible; width: fit-content; }

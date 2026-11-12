@@ -40,27 +40,26 @@
     <div class="ident-name"><h1 class="wordmark">mscOS</h1><span class="link-led" id="conn" role="img" aria-label="Ingen kontakt med enheten"></span><span class="by"><span class="maker" role="img" aria-label="vivajAcoustics"><span class="vivaj" aria-hidden="true"><i>v</i><i>i</i><i>v</i><i>a</i><i>j</i></span><span class="acoustics" aria-hidden="true">Acoustics</span></span></span></div>
     <p><span id="dev-name"></span> <span id="dev-sub">ansluter…</span></p>
   </div>
-  <!-- the source: its name, and the others in a list that opens under it -->
-  <div class="src-pick" id="src-pick" hidden>
-    <button class="src-btn" id="source-btn" aria-haspopup="true" aria-expanded="false" aria-controls="source">
-      <i aria-hidden="true"></i><span id="source-cur"></span>
-      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9.5 6 6 6-6"/></svg>
-    </button>
-    <div class="source" role="radiogroup" aria-label="Källa" id="source" hidden></div>
-  </div>
   <p class="vh" id="source-note" aria-live="polite"></p>
-  <!-- the amplifier's level: a slim strip, in reach from every view -->
+  <!-- the amplifier's level: a small button with the number; pressing it opens the slider -->
   <section class="amp" id="amp" aria-label="Förstärkaren">
-    <div class="amp-step" id="ml-step" hidden>
-      <button class="step" id="ml-down" aria-label="Sänk volymen">−</button>
-      <button class="step" id="ml-up" aria-label="Höj volymen">+</button>
+    <button class="vol-btn" id="vol-btn" aria-haspopup="true" aria-expanded="false" aria-controls="vol-pop" aria-label="Volym">
+      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18 6.5a7.8 7.8 0 0 1 0 11"/></svg>
+      <span class="amp-vol"><b id="ml-vol-v">–</b><small>dB</small></span>
+    </button>
+    <div class="vol-pop" id="vol-pop" hidden>
+      <div class="vol-row">
+        <div class="amp-step" id="ml-step" hidden>
+          <button class="step" id="ml-down" aria-label="Sänk volymen">−</button>
+          <button class="step" id="ml-up" aria-label="Höj volymen">+</button>
+        </div>
+        <div id="ml-ctl" hidden>
+          <input class="line" type="range" id="ml-vol" min="0" max="40" step="0.5" value="30" aria-label="Förstärkarens volym">
+        </div>
+      </div>
+      <p class="amp-state" id="ml-state">Söker förstärkaren i nätverket…</p>
+      <p class="fine" id="ml-limit"></p>
     </div>
-    <div id="ml-ctl" hidden>
-      <input class="line" type="range" id="ml-vol" min="0" max="40" step="0.5" value="30" aria-label="Förstärkarens volym">
-    </div>
-    <p class="amp-vol"><b id="ml-vol-v">–</b><small>dB</small></p>
-    <p class="amp-state" id="ml-state">Söker förstärkaren i nätverket…</p>
-    <p class="fine" id="ml-limit"></p>
   </section>
 </header>
 
@@ -136,6 +135,12 @@
   <section class="view" id="v-ctl" aria-labelledby="h-ctl">
     <h2 id="h-ctl" class="view-title">Styrning</h2>
     <div class="panels">
+    <details class="fold" id="f-source" data-k="source" open hidden>
+            <summary><span>Källa</span><span class="fv" id="fv-source"></span></summary>
+            <div class="fold-body">
+              <div class="source" role="radiogroup" aria-label="Källa" id="source"></div>
+            </div>
+          </details>
     <details class="fold" id="f-amp" data-k="amp">
             <summary><span>Ingång och ström</span><span class="fv" id="fv-amp"></span></summary>
             <div class="fold-body">
