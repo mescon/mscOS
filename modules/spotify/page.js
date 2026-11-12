@@ -153,6 +153,7 @@ export default function page(api) {
     const hit = (...f) => words.every((w) => f.some((x) => (x || "").toLowerCase().includes(w)));
     const albums = played.albums.filter((a) => hit(a.name, a.artist)), tracks = played.tracks.filter((t) => hit(t.name, t.artist, t.album)),
       artists = played.artists.filter((a) => hit(a.name));
+    if (played.off) { out.innerHTML = `<p class="none">${esc(tr("Att komma ihåg vad som spelats är avstängt under System, Moduler, Spotify Lossless. Klistra in en Spotify-länk ovan för att spela något."))}</p>`; return; }
     if (!played.tracks.length) { out.innerHTML = `<p class="none">${esc(tr("Här samlas det som spelas på enheten: album, låtar och artister, att spela igen. Starta något i Spotify-appen, eller klistra in en Spotify-länk ovan."))}</p>`; return; }
     if (!albums.length && !tracks.length && !artists.length) { out.innerHTML = link ? "" : `<p class="none">${esc(tr("Inget av det du spelat heter så. Att söka i hela Spotify kräver Spotifys webb-API, som inte är inkopplat än. Klistra in en Spotify-länk för att spela något nytt."))}</p>`; return; }
     const few = words.length ? 60 : 18;
@@ -351,7 +352,7 @@ export default function page(api) {
       if (m.type === "soloist") { soloistEvent(m.event); return true; }
       if (m.type === "quality") { M.quality = m.quality; api.render(); return true; }
       if (m.type === "job" && m.name === "audio-test") { testJob(m); return true; }
-      if (m.type === "history_cleared") { M.tests = []; renderVlog(); }
+      if (m.type === "history_cleared") { M.tests = []; renderVlog(); loadMusic(true); }
       return false;
     },
     // after every change: show the module's parts only where they apply
