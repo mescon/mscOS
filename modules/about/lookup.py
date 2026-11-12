@@ -220,6 +220,51 @@ async def find_artist(http, name: str, album_title: str = "", title: str = "", s
             and _fold(name) in {_fold(a.get("name")), *(_fold(x.get("name")) for x in a.get("aliases", []))}]
     return hits[0]["id"] if hits else ""
 
+
+SPOTIFY_ARTIST = re.compile(r"open\.spotify\.com/artist/([A-Za-z0-9]+)")
+_artist_docs: dict[str, dict] = {}     # the artists' entries fetched while finding out who it is
+
+
+async def _artist_doc(http, mbid: str) -> dict:
+    """The artist's entry with its links and genres. Kept for a while: finding out who the
+    artist is and writing the artist's card ask for the very same entry."""
+    if mbid not in _artist_docs:
+        d = await _mb(http, f"artist/{mbid}", inc="url-rels+genres")
+        if not d.get("id"):
+            return d
+        if len(_artist_docs) >= 32:
+            _artist_docs.pop(next(iter(_artist_docs)))
+        _artist_docs[mbid] = d
+    return _artist_docs[mbid]
+
+
+async def spot(http, name: str, album_title: str = "", title: str = "", spotify_id: str = "") -> dict:
+    """Who and what this is, in as few questions to MusicBrainz as it takes (it allows one a
+    second): {"artist": id, "release": id of a release of the album to read the rest from}.
+
+    One search for the album by this artist answers both. The player's own id for the artist
+    then settles it where several artists share the name: the artist's entry (needed for the
+    card anyway) lists its Spotify pages, and only when they are another artist's is
+    MusicBrainz asked by that id."""
+    found: dict = {}
+    if album_title:
+        d = await _mb(http, "release-group", query=f"releasegroup:{_q(plain(album_title))} AND artist:{_q(name)}", limit=5)
+        groups = sorted((g for g in d.get("release-groups", []) if g.get("score", 0) >= 85),
+                        key=lambda g: (_fold(g.get("title")) != _fold(plain(album_title)), -g.get("score", 0)))
+        for g in groups:
+            if mbid := _credited([g], name):
+                official = [r["id"] for r in g.get("releases", []) if r.get("status") == "Official" and r.get("id")]
+                found = {"artist": mbid, "release": official[0] if official else ""}
+                break
+    if found and spotify_id:
+        theirs = {m.group(1) for r in (await _artist_doc(http, found["artist"])).get("relations", [])
+                  if (m := SPOTIFY_ARTIST.search((r.get("url") or {}).get("resource", "")))}
+        if theirs and spotify_id not in theirs:
+            found = {}       # an artist of the same name with an album of the same title
+    if not found:
+        found = {"artist": await find_artist(http, name, "", title, spotify_id), "release": ""}
+    return found if found["artist"] else {}
+
 # ---- more than one source: each writes its own text, and the reader chooses
 LINK_HOSTS = (("allmusic.com", "AllMusic"), ("rateyourmusic.com", "Rate Your Music"), ("genius.com", "Genius"),
               ("last.fm", "Last.fm"), ("bandcamp.com", "Bandcamp"), ("secondhandsongs.com", "SecondHandSongs"),
@@ -332,7 +377,16 @@ async def release_credits(http, rg: dict) -> tuple[dict, dict]:
                   key=lambda r: r.get("date") or "9999")
     if not rels:
         return {}, {}
-    d = await _mb(http, f"release/{rels[0]['id']}", inc="artist-rels+recordings+recording-level-rels+work-rels+work-level-rels")
+    return _credits(await _mb(http, f"release/{rels[0]['id']}", inc=RELEASE_INC))
+
+
+RELEASE_INC = "artist-rels+recordings+recording-level-rels+work-rels+work-level-rels"
+# the same, with the album it is a release of: its links and genres come along in the one answer
+RELEASE_WITH_GROUP = RELEASE_INC + "+release-groups+release-group-level-rels+url-rels+genres"
+
+
+def _credits(d: dict) -> tuple[dict, dict]:
+    """(the album's credits, the tracks' credits by folded title) out of a release's entry."""
     tracks, everything = {}, list(d.get("relations", []))
     for m in d.get("media", []):
         for t in m.get("tracks", []):
@@ -359,7 +413,7 @@ async def _nothing():
 async def artist(http, mbid: str, langs: tuple[str, ...], token: str = "", lastfm_key: str = "") -> dict | None:
     """What is known about the artist with this MusicBrainz id. The sources are asked at the
     same time: each takes a second or so, and one after another that adds up."""
-    full = await _mb(http, f"artist/{mbid}", inc="url-rels+genres")
+    full = await _artist_doc(http, mbid)
     if not full.get("id"):
         return None
     name, rels = full.get("name", ""), _rels(full)
@@ -395,15 +449,30 @@ async def artist(http, mbid: str, langs: tuple[str, ...], token: str = "", lastf
     return out
 
 
-async def album(http, mbid: str, artist_name: str, title: str, langs: tuple[str, ...], token: str = "", lastfm_key: str = "") -> dict | None:
-    d = await _mb(http, "release-group", query=f"releasegroup:{_q(plain(title))} AND arid:{mbid}", limit=5)
-    hits = [g for g in (d or {}).get("release-groups", []) if g.get("score", 0) >= 85]
-    if not hits:
-        return None
-    hits.sort(key=lambda g: (_fold(g.get("title")) != _fold(plain(title)), -g.get("score", 0)))
-    full = await _mb(http, f"release-group/{hits[0]['id']}", inc="url-rels+genres+releases")
+async def album(http, mbid: str, artist_name: str, title: str, langs: tuple[str, ...], token: str = "", lastfm_key: str = "",
+                release: str = "") -> dict | None:
+    """What is known about the album. With a release of it already found (spot), one question
+    to MusicBrainz brings the album's links and genres and who plays on every track; without,
+    the album is searched for first."""
+    full, credited = {}, None
+    if release:
+        d = await _mb(http, f"release/{release}", inc=RELEASE_WITH_GROUP)
+        full = d.get("release-group") or {}
+        if full.get("id"):
+            credited = _credits(d)
     if not full.get("id"):
-        return None
+        d = await _mb(http, "release-group", query=f"releasegroup:{_q(plain(title))} AND arid:{mbid}", limit=5)
+        hits = [g for g in (d or {}).get("release-groups", []) if g.get("score", 0) >= 85]
+        if not hits:
+            return None
+        hits.sort(key=lambda g: (_fold(g.get("title")) != _fold(plain(title)), -g.get("score", 0)))
+        full = await _mb(http, f"release-group/{hits[0]['id']}", inc="url-rels+genres+releases")
+        if not full.get("id"):
+            return None
+
+    async def credits_of_it():
+        return credited if credited is not None else await release_credits(http, full)
+
     rels = _rels(full)
     qid = rels.get("wikidata", "")
 
@@ -426,7 +495,7 @@ async def album(http, mbid: str, artist_name: str, title: str, langs: tuple[str,
     (art, review), lfm, (dg, rel), awards, (credits, track_credits) = await asyncio.gather(
         article(), lastfm(http, lastfm_key, "album.getinfo", "album", langs[0], artist=artist_name, album=full.get("title", title)),
         from_discogs(), wikidata_facts(http, qid, langs[0], {"P166": "awards"}, 4) if qid else _nothing(),
-        release_credits(http, full))
+        credits_of_it())
     out = {"name": full.get("title", title), "links": [{"name": "Wikipedia", "url": art["url"]}] if art else []}
     texts = [_text("Wikipedia", art["intro"], art["lang"], art["url"])] if art else []
     if lfm:

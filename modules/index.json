@@ -1,10 +1,10 @@
 {
  "format": 1,
- "serial": 45,
+ "serial": 48,
  "modules": [
   {
    "id": "about",
-   "version": "1.4.0",
+   "version": "1.6.0",
    "kind": "integration",
    "name": {
     "sv": "Om musiken",
@@ -17,22 +17,22 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "800b8cb257c02dd3954688eff27c9d87d246ee1fa4bb9c5ae9eb72c9d1812be7",
+     "sha256": "52879ba0db30cb88420fb6739bd846e290222a44f5178446b2100d83ecdc2fdd",
      "exec": false
     },
     {
      "path": "lookup.py",
-     "sha256": "4ca6e577945830713f97e489cc2fc5c233e9de51ed6b437c45932675189ff88e",
+     "sha256": "2352af9b279944917eadc643fa05302d0133c8d84e54a744f181d3cb2e9eb0e7",
      "exec": false
     },
     {
      "path": "module.json",
-     "sha256": "6eb9a0c81213a771acffdb22c20195655a3c233ab2d0939589df316a52b23283",
+     "sha256": "ca8dfa067a4dc764569f3dbe63cf599ec9c81c8b93e174d0435f275b58a487a2",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "1c67b55a7d63b1e601d898af643dca36381a930a8778e4abb2cf2fa7a71c6890",
+     "sha256": "0eefdffd5fa8cded8046bc9287fb9b3f3c7e3463dd019d4956d6556b4bb9ddfd",
      "exec": false
     },
     {
@@ -269,7 +269,7 @@
   },
   {
    "id": "roon",
-   "version": "1.4.1",
+   "version": "1.5.0",
    "kind": "source",
    "name": {
     "sv": "Roon Bridge",
@@ -282,7 +282,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "9dbf6922f4a9fbd513fad97d16a3536ad1376543d77f41df0cf92e72c5e786f5",
+     "sha256": "b490e35ba0ae16e710af3cde573de32c4e3fae4083778a9cc42db18c5616a0d1",
      "exec": false
     },
     {
@@ -292,12 +292,12 @@
     },
     {
      "path": "module.json",
-     "sha256": "1fc54e214750026a5d8a27d597d865e4cbc2f4120f859a7b8c2c2daab5167ee2",
+     "sha256": "c188482ca9c83088a9e290c5ac55d221c171e4d80ea3f3bc6163f19ce8b6608f",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "71f3b063d34d6f82594d0405917f2435c5a7f815737a49ecf5d82c1fffdcd262",
+     "sha256": "e14f3a525e857419db31a48cdf4182295027260459d44ba372746e7dba2c346e",
      "exec": false
     },
     {
@@ -308,6 +308,11 @@
     {
      "path": "raat-cpu.service",
      "sha256": "9e25ff91083c26a80ef6a56dd82776c988ed1ff2827c04abd59bd8361748910a",
+     "exec": false
+    },
+    {
+     "path": "raat.py",
+     "sha256": "67043eb022386469d3dcd602517f2845399276a29964ddcc850486ba1d7ed6a8",
      "exec": false
     },
     {
@@ -327,7 +332,7 @@
     },
     {
      "path": "i18n/en.json",
-     "sha256": "da0742b6da3bed65c4e34071f33fc43e8bd80c656581c5633c3b5f87e1c606c0",
+     "sha256": "01bea13e29de53f0d46d973407dbdc937f3f83c30811204b69f52b9fe7290143",
      "exec": false
     },
     {
@@ -339,7 +344,7 @@
   },
   {
    "id": "spotify",
-   "version": "1.9.0",
+   "version": "1.10.0",
    "kind": "source",
    "name": {
     "sv": "Spotify Lossless (Soloist)",
@@ -362,12 +367,12 @@
     },
     {
      "path": "module.json",
-     "sha256": "625277742f0c845fdec8da35b783e762817c31a6561645db7f1736a9699c38fc",
+     "sha256": "94eb032445ebf17de1060ae3e78e471bce64104a26fc77bf30367d28d6f72b5b",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "456bf10c92ebd82c24dd71b748203973a95ed322c1e74dd1aeab74ac5630b06e",
+     "sha256": "0590fefed41f5456e92c5502f293a792c4d803725e8c1bab85ad8cea73b3906d",
      "exec": false
     },
     {

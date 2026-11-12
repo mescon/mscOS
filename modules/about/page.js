@@ -302,7 +302,7 @@ export default function page(api) {
   function lyDraw() {
     const w = words;
     lyr.hidden = !w || !!w.none;
-    if (lyr.hidden) { lyFull(false); return; }
+    if (lyr.hidden) { lySet(false); return; }
     const timed = w.synced.length > 0;
     const lines = timed ? w.synced.map((l) => l[1]) : (w.plain || "").split("\n");
     lyr.classList.toggle("plain", !timed);
@@ -338,7 +338,14 @@ export default function page(api) {
   addEventListener("resize", () => lyTick(true));
   // Full screen: this same part over the whole page, the sleeve behind it. (The browser's own
   // full screen too, where it is allowed; without it the part still covers the page.)
+  // Full screen has its own address (/listen/lyrics): the way back closes it.
+  const atWords = () => { const r = api.route(); return r.view === "v-play" && r.sub[0] === "lyrics"; };
   function lyFull(on) {
+    if (on && !atWords()) { api.go("v-play", ["lyrics"]); return; }
+    if (!on && atWords()) { api.back("v-play"); return; }
+    lySet(on);
+  }
+  function lySet(on) {
     if (lyr.classList.contains("full") === on) return;
     lyr.classList.toggle("full", on);
     lyr.querySelector("#ly-full").setAttribute("aria-pressed", String(on));
@@ -413,7 +420,13 @@ export default function page(api) {
       timer = setTimeout(() => { if (k === key) key = ""; }, 30000);
     }
   }
+  const wordsRoute = (view, sub) => {
+    const want = view === "v-play" && sub[0] === "lyrics";
+    if (want && lyr.hidden) { api.go("v-play", [], { replace: true }); return; }   // no words for this track
+    lySet(want);
+  };
   return {
+    route: wordsRoute,
     // called whenever the page is drawn: ask when the track is another one
     render() {
       const t = api.track(), ok = t && t.artist && t.title;

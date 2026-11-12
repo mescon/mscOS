@@ -224,7 +224,10 @@ export default function page(api) {
       + ((d.top || []).length ? `<h3>${esc(tr("Mest lyssnat"))}</h3>${trackList(d.top)}<p class="m-src">${esc(d.top_from === "lastfm" ? tr("Efter antal lyssnare i hela världen, enligt Last.fm.") : tr("I den ordning Spotify listar artistens låtar."))}</p>` : "")
       + (d.albums.length ? `<h3>${esc(tr("Album, i utgivningsordning"))}</h3>${albumList(d.albums)}` : "");
   }
-  async function openPage(kind, id) {
+  // An album, an artist or a playlist has its own address under Music: opening one is a step
+  // in the history, and the way back leads to where one was.
+  const openPage = (kind, id) => api.go("v-music", [kind, id]);
+  async function showPage(kind, id) {
     page = { kind, id, data: null }; drawMusic(); music.scrollIntoView({ block: "start" });
     const mine = page;
     try {
@@ -236,6 +239,7 @@ export default function page(api) {
   }
   function find() {
     const text = $("#sp-find").value.trim();
+    if (page) api.go("v-music", [], { replace: true });   // typing leaves the opened album: so does the address
     page = null; clearTimeout(findTimer); drawMusic();
     if (!M.search || spotifyUri(text) || text.length < 2) return;
     const n = ++findSeq;
@@ -262,7 +266,7 @@ export default function page(api) {
   $("#sp-find").addEventListener("input", find);
   music.addEventListener("click", (e) => {
     const b = e.target.closest("[data-play], [data-queue], [data-album], [data-artist], [data-playlist], [data-back]"); if (!b) return;
-    if (b.dataset.back) { page = null; drawMusic(); }
+    if (b.dataset.back) api.back("v-music");
     else if (b.dataset.album) openPage("album", b.dataset.album);
     else if (b.dataset.artist) openPage("artist", b.dataset.artist);
     else if (b.dataset.playlist) openPage("playlist", b.dataset.playlist);
@@ -466,6 +470,13 @@ export default function page(api) {
     },
     // a view was chosen: the Music view shows what has been played up to now
     view(id) { if (id === "v-music" && current()) loadMusic(true); },
+    // where the page is: /music/album/<id> and the like open that, /music alone closes it
+    route(view, sub) {
+      if (view !== "v-music" || !current()) return;
+      const [kind, id] = sub;
+      if (["album", "artist", "playlist"].includes(kind) && /^[A-Za-z0-9]{8,40}$/.test(id || "")) { if (!(page && page.kind === kind && page.id === id)) showPage(kind, id); }
+      else if (page) { page = null; drawMusic(); }
+    },
     // as the current source: the Listen view, the progress bar, the signal chain
     play, track, duration, position, chain, carry,
     playing: () => M.playback.status === "playing" && M.auth.is_active !== false,

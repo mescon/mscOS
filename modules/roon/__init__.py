@@ -23,7 +23,7 @@ import collect
 from i18n import T
 from plugins import SourcePlugin
 
-from . import roonapi
+from . import raat, roonapi
 
 log = logging.getLogger("roon")
 API_FILE = os.path.join(collect.STATE_DIR, "roon-api.json")   # the servers' tokens, root only
@@ -62,6 +62,19 @@ class Roon(SourcePlugin):
         self._auto = ""                        # the zone found to be this device's
         self._told = None                      # what the panel was last told (to tell it only of changes)
         self.http: ClientSession | None = None
+        self.raat = raat.Log()                 # what Roon Bridge's own log says of the stream
+
+    async def state(self) -> dict:
+        """For the Signal view: the stream as Roon Bridge set it up, the server it comes from
+        and the zone's volume in Roon (None: Roon leaves the volume alone)."""
+        z = self._zone() or {}
+        outs = z.get("outputs") or []
+        vol = (outs[0].get("volume") if outs and isinstance(outs[0], dict) else None) or None
+        core = self.api.core if self.api and self.api.registered else {}
+        return {"raat": await asyncio.to_thread(self.raat.latest), "version": await self.version() or "",
+                "server": {"name": str(core.get("display_name") or ""), "version": str(core.get("display_version") or "")},
+                "zone": str(z.get("display_name") or ""), "grouped": len(outs) > 1,
+                "volume": {k: vol.get(k) for k in ("type", "value", "min", "max", "is_muted")} if isinstance(vol, dict) else None}
 
     # ---- what the listener can set
     def option_list(self) -> list[dict]:

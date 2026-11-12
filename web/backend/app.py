@@ -559,9 +559,12 @@ class Hub:
         sink = next((v for k, v in top.items() if k.startswith("alsa_output.usb")), None)
         stream = next((v for k, v in top.items() if k == "spotify"), None)
         prev = self.last_err
-        playing = bool(stream and stream["state"] == "R")
+        # a source that opens the DAC itself goes past PipeWire: it plays when the DAC runs, and
+        # nothing on the device counts its dropouts (the point says so: "direct")
+        direct = bool(self.source and not self.source.pipewire)
+        playing = collect.dac_info().get("state") == "RUNNING" if direct else bool(stream and stream["state"] == "R")
         point = {"t": int(time.time()), "playing": playing,
-                 "dac": 0, "stream": 0}
+                 "dac": 0, "stream": 0, **({"direct": 1} if direct else {})}
         if sink and prev.get("sink") is not None and sink["err"] >= prev["sink"]:
             point["dac"] = sink["err"] - prev["sink"]
         if stream and prev.get("stream") is not None and stream["err"] >= prev["stream"]:
@@ -1495,7 +1498,9 @@ async def get_logs(request):
 
 # ---- static PWA
 @routes.get("/")
+@routes.get(r"/{view:listen|music|signal|control|system|profile}{rest:(/[^/]{1,200}){0,4}/?}")
 async def index(request):
+    """The page, at the root and at each view's own address (and what a module opens under it)."""
     return web.FileResponse(os.path.join(STATIC, "index.html"), headers={"Cache-Control": "no-cache"})
 
 

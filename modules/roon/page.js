@@ -3,7 +3,7 @@
 // and a search over all of it. Roon keeps the place in the lists; this page shows the list
 // it is given and says where to go next. Loaded while the module is on (docs/MODULES.md, "Page code").
 export default function page(api) {
-  const { $, tr, esc, toast } = api;
+  const { $, S, tr, esc, toast, dec, khz } = api;
   const ID = "roon";
   const current = () => api.srcId() === ID;
   const box = api.slot("music", `<section class="rmusic" id="roon-music" hidden>
@@ -41,6 +41,11 @@ export default function page(api) {
   let hier = "browse", shown = null, seq = 0, timer = 0, loaded = false;
 
   // One step in Roon's lists, and the list that is there after it.
+  // Roon keeps the place in its lists itself, as a depth. The address carries that depth
+  // (/music/roon/2), so that going back in the browser goes one list up in Roon. Forward again
+  // cannot be done: Roon has forgotten the list that was left.
+  const depthAt = () => { const r = api.route(); return r.view === "v-music" && r.sub[0] === "roon" ? Math.max(0, parseInt(r.sub[1]) || 0) : 0; };
+  const depthSub = (n) => (n > 0 ? ["roon", String(n)] : []);
   async function go(step) {
     const n = ++seq;
     let d;
@@ -50,7 +55,12 @@ export default function page(api) {
     } catch { d = { error: tr("Roon svarar inte.") }; }
     if (n !== seq) return;
     if (d.error) { shown = null; $("#rm-head").innerHTML = ""; $("#rm-list").innerHTML = `<p class="none">${esc(d.error)}</p>`; return; }
-    if (d.action === "list") { shown = d; draw(); return; }
+    if (d.action === "list") {
+      shown = d; draw();
+      const level = d.list?.level || 0;
+      if (current() && api.route().view === "v-music" && level !== depthAt()) api.go("v-music", depthSub(level), { replace: level < depthAt() });
+      return;
+    }
     // something was done (played, queued): Roon says so in its own words; the list is where it was, or moved
     if (d.message) toast(d.message);
     if (d.action !== "none") go({});
@@ -83,13 +93,82 @@ export default function page(api) {
   $("#rm-find").addEventListener("input", (e) => search(e.target.value));
   box.addEventListener("click", (e) => {
     const b = e.target.closest("[data-key], [data-back]"); if (!b) return;
-    if (b.dataset.back) go({ pop_levels: 1 }); else if (b.dataset.key) go({ item_key: b.dataset.key });
+    if (b.dataset.back) api.back("v-music", depthSub((shown?.list?.level || 1) - 1)); else if (b.dataset.key) go({ item_key: b.dataset.key });
   });
   const open = () => { if (!loaded) { loaded = true; hier = "browse"; go({ pop_all: true }); } };
 
+  // ---------------------------------------------------------------- the signal chain
+  // Roon's server decodes the music and sends it to Roon Bridge on this device, which hands
+  // it to the DAC. What is said here is what Roon Bridge's own log and the DAC say. What the
+  // server does to the samples before it sends them (DSP, volume levelling) only Roon knows.
+  const CODEC = { flac: "FLAC", pcm: "PCM", dsd: "DSD" };
+  function chain() {
+    const st = S.status, dac = st.dac || {}, me = api.srcState(), r = me.raat || {}, sv = me.server || {}, vol = me.volume;
+    const running = dac.state === "RUNNING", open = running && !!r.open && !!r.rate;
+    const rate = running ? parseInt(dac.hw_params?.rate) || null : null;
+    const dsd = r.type === "dsd";
+    const asked = !open ? "" : dsd ? tr`DSD${Math.round(r.rate / 44100)}, ${dec(r.rate / 1e6, 1)} MHz${r.subtype === "native" ? tr(", nativ") : r.subtype === "dop" ? ", DoP" : ""}`
+      : tr`${r.bits} bit, ${khz(r.rate)} kHz`;
+    const wire = CODEC[r.wire] || (r.wire || "").toUpperCase();
+    // Roon's own volume on this zone: a number means Roon scales the samples (or drives a device volume)
+    const scaled = !!vol && vol.value != null && vol.max != null && vol.value < vol.max;
+    // Music files and streams are 16 or 24 bit. When the server sends 32, it has most likely
+    // worked on the samples (DSP, volume levelling, its own volume): said as likely, not as known.
+    const worked = open && !dsd && r.bits === 32;
+    const frame = parseInt((/S(\d+)/.exec(r.hw_format || "") || [])[1]) || 0;
+    const issues = [];
+    if (open && scaled) issues.push(tr("Roons volym för zonen är inte på max"));
+    if (open && vol?.is_muted) issues.push(tr("zonen är tystad i Roon"));
+    if (me.grouped) issues.push(tr("zonen är grupperad med andra, Roon synkar dem"));
+    // the DAC is opened in what the stream is: another rate there would be a conversion on the device
+    const same = !open || !rate || dsd || rate === r.rate;
+    const buf = r.buffer || parseInt(dac.hw_params?.buffer_size) || 0;
+    const stages = [
+      { k: "server", name: sv.name || tr("Roon-servern"), tag: sv.version ? `Roon ${sv.version}` : "Roon",
+        state: !api.srcState().active ? "idle" : !sv.name ? "idle" : open ? "ok" : "idle",
+        facts: !sv.name ? tr("Inte ansluten till servern än") : open ? tr`Skickar ${asked}` : tr("Ansluten, väntar"),
+        note: !sv.name ? tr("Godkänn mscOS i Roon under Inställningar, Tillägg.")
+          : me.zone ? tr`Zonen ${me.zone}. Avkodning, DSP och volymutjämning sker i servern och syns i Roons egen signalväg.` : tr("Avkodning, DSP och volymutjämning sker i servern och syns i Roons egen signalväg.") },
+      { k: "raat", name: tr("Nätverket"), tag: "RAAT",
+        state: !me.active ? "bad" : open ? "ok" : "idle",
+        facts: open ? (wire === "FLAC" ? tr("FLAC, förlustfritt packat på vägen") : wire ? tr`${wire}, opackat` : tr("Förlustfritt")) : tr("Ingen ström just nu"),
+        note: tr("Roons eget protokoll. Enhetens klocka styr takten, servern följer den.") },
+      { k: "bridge", name: "Roon Bridge", tag: me.version || "",
+        state: !me.active ? "bad" : !same ? "bad" : open ? "ok" : "idle",
+        facts: !me.active ? tr("Roon Bridge kör inte") : open ? tr`Öppnar DAC:en ensam, ${r.hw_bits && frame > r.hw_bits && !dsd ? tr`${r.hw_bits} bit ljud i ${frame}-bitars ram, ${khz(rate)} kHz` : api.sigWord(dac.hw_params?.format, rate)}` : tr("Igång, väntar på Roon"),
+        note: !me.active ? tr("Byt källa igen eller starta om enheten")
+          : open ? [r.realtime ? tr("Realtidsprioritet.") : "", buf && rate ? tr`Buffert ${buf} sampel (${dec(buf / rate * 1000, 0)} ms).` : "", tr("Ingen mixer, ingen omsampling på enheten.")].filter(Boolean).join(" ")
+          : tr("Välj den här enheten som zon i Roon") },
+      api.usbStage(dac, running),
+      { k: "dac", name: api.outName(), tag: tr("DAC"), state: !dac.present ? "bad" : running ? "ok" : "idle",
+        facts: running ? api.sigWord(dac.hw_params.format, rate) : dac.present ? tr("Ansluten, vilar") : tr("Inte ansluten"),
+        note: running ? tr("Tar emot signalen direkt från Roon Bridge") : tr("Väntar på Roon") },
+    ];
+    let seal;
+    if (!me.active) seal = { head: tr("Roon Bridge kör inte"), sub: tr("Byt källa igen eller starta om enheten."), cls: "warn" };
+    else if (!open) seal = { head: tr("Redo för Roon"), sub: sv.name ? tr`Ansluten till ${sv.name}. Enheten lämnar DAC:en orörd tills Roon spelar.` : tr("Roon Bridge är igång och väntar på Roon."), cls: "" };
+    else if (issues.length) seal = { head: tr("Roon ändrar signalen"), cls: "warn",
+      sub: issues.join(", ").replace(/^./, (x) => x.toUpperCase()) + ". " + tr("Ställ zonens volym på fast nivå i Roon (Enhetsinställningar, Volymkontroll) för orört ljud.") };
+    else if (worked) seal = { head: tr("Orört på enheten"), cls: "",
+      sub: tr`Roon skickar 32 bit, mer än musikfiler innehåller. Det tyder på att servern bearbetar ljudet (DSP, volymutjämning eller Roons egen volym). Roons signalväg visar vad, och där stänger man av det för orört ljud. Roon Bridge lämnar det som kommer till DAC:en oförändrat.` };
+    else seal = { head: tr("Orört på enheten"), cls: "verified",
+      sub: tr`Roon skickar ${asked}${wire ? `, ${wire}` : ""}, och Roon Bridge lämnar det till DAC:en som det kom. Vad servern gjort före det (DSP, volymutjämning, omsampling) visar Roons egen signalväg.` };
+    return { stages, running, playing: open, rate, issues, dac, seal,
+      bits: open ? (dsd ? 1 : r.hw_bits || r.bits || "–") : null,
+      gain: !open ? null : vol && vol.type === "db" && vol.value != null ? dec(vol.value) : scaled ? "≠ 0" : worked ? "–" : dec(0) };
+  }
+
   return {
+    chain,
     render() { box.hidden = !current(); if (current() && document.body.dataset.view === "v-music") open(); },
     view(id) { if (id === "v-music" && current()) open(); },
+    // the listener went back (or the address says a depth): up that many lists in Roon
+    route(view, sub) {
+      if (view !== "v-music" || !current() || !shown) return;
+      const have = shown.list?.level || 0, want = depthAt();
+      if (want < have) go({ pop_levels: have - want });
+      else if (want > have) api.go("v-music", depthSub(have), { replace: true });
+    },
     // from Listen: the album or the artist that plays, looked up in Roon
     find(kind, t) {
       const text = kind === "album" ? [t.album, String(t.artist || "").split(" / ")[0]].filter(Boolean).join(" ") : String(t.artist || "").split(" / ")[0];

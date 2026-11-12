@@ -155,7 +155,18 @@ helpers (`$`, `$$`, `tr`, `esc`, `dec`, `khz`, `fmtWord`, `fmtTime`, `clock`, `s
 module's own markup on the page: `"notice"` and `"play"` beside the sleeve and `"about"` under it
 in the Listen view, `"signal"` in the Signal view, `"music"` in the Music view (which is shown
 while the current source's module has something there: finding and choosing music). A `view(id)`
-hook is called when a view is shown. The markup is removed when the module is
+hook is called when a view is shown.
+
+Every view has an address (`/listen`, `/music`, `/signal`, `/control`, `/system`, `/profile`),
+and what a module opens inside a view gets one under it: `api.go("v-music", ["album", id])` goes
+there as a step in the browser's history (`{replace: true}` as a third argument changes the
+address without a step), `api.back(view, sub)` goes one step back (or to the place given, when
+the listener came straight to this address), and `api.route()` says where the page is
+(`{view, sub}`). A `route(view, sub)` hook is called whenever the address changes, also by the
+browser's back and forward: the module shows what the address says. What stands in `sub` comes
+from the address bar, so it is checked before it is used. `usbStage(dac, running)` and
+`sigWord(format, rate)` are the panel's own USB stage and wording of a format, for a `chain()`
+of the module's own. The markup is removed when the module is
 switched off; a `<style>` element inside it carries the module's own styles. Everything that does not come from the module itself goes
 through `esc()` before it is put in markup.
 

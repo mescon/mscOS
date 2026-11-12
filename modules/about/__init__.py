@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 
 from aiohttp import ClientSession, ClientTimeout, web
@@ -22,6 +23,7 @@ from plugins import Plugin
 from . import lookup
 
 log = logging.getLogger("about")
+_KEEPING = threading.Lock()
 KEEP, KEEP_EMPTY, MOST = 60 * 86400, 2 * 86400, 600   # seconds found / not found is kept; files
 
 
@@ -71,16 +73,19 @@ class About(Plugin):
         return False, None
 
     def _keep(self, path: str, value) -> None:
-        try:
-            os.makedirs(self.dir, exist_ok=True)
-            with open(path + ".new", "w", encoding="utf-8") as f:
-                json.dump({"at": int(time.time()), "value": value}, f, ensure_ascii=False)
-            os.replace(path + ".new", path)
-            names = sorted((n for n in os.listdir(self.dir) if n.endswith(".json")), key=lambda n: os.path.getmtime(os.path.join(self.dir, n)))
-            for n in names[:-MOST]:
-                os.unlink(os.path.join(self.dir, n))
-        except OSError as e:
-            log.warning("keeping an answer: %s", e)
+        # One at a time: the cards are fetched side by side, and two clearings-out of the oldest
+        # files at once would each find the other's files gone.
+        with _KEEPING:
+            try:
+                os.makedirs(self.dir, exist_ok=True)
+                with open(path + ".new", "w", encoding="utf-8") as f:
+                    json.dump({"at": int(time.time()), "value": value}, f, ensure_ascii=False)
+                os.replace(path + ".new", path)
+                names = sorted((n for n in os.listdir(self.dir) if n.endswith(".json")), key=lambda n: os.path.getmtime(os.path.join(self.dir, n)))
+                for n in names[:-MOST]:
+                    os.unlink(os.path.join(self.dir, n))
+            except OSError as e:
+                log.warning("keeping an answer: %s", e)
 
     async def _one(self, path: str, ask):
         """The kept answer, or ask() and keep what it says. One question at a time per subject."""
@@ -112,8 +117,8 @@ class About(Plugin):
         out: dict = {}
 
         async def who():
-            return await lookup.find_artist(self.http, artist, album, title, spotify_artist) \
-                or (await lookup.find_artist(self.http, first, album, title) if first != artist else "")
+            return await lookup.spot(self.http, artist, album, title, spotify_artist) \
+                or (await lookup.spot(self.http, first, album, title) if first != artist else {})
 
         async def get_artist(mbid):
             return await self._one(self._file("artist" + src, lang, mbid), lambda: lookup.artist(self.http, mbid, langs, token, lfm)) if mbid else None
@@ -121,7 +126,8 @@ class About(Plugin):
         async def get_album(mbid):
             if not mbid or not album:
                 return None
-            return await self._one(self._file("album" + src, lang, mbid, album), lambda: lookup.album(self.http, mbid, first, album, langs, token, lfm))
+            return await self._one(self._file("album" + src, lang, mbid, album),
+                                   lambda: lookup.album(self.http, mbid, first, album, langs, token, lfm, (found or {}).get("release", "")))
 
         async def get_track():
             return await self._one(self._file("track" + src, lang, first, title), lambda: lookup.track(self.http, first, title, langs, lfm)) if title else None
@@ -130,7 +136,9 @@ class About(Plugin):
             # Which artist: by the player's id for it when there is one, else by the name together
             # with the album (several artists share a name; an album tells them apart).
             need_who = part in ("", "artist", "album")
-            mbid = await self._one(self._file("who", spotify_artist) if spotify_artist else self._file("who", artist, album), who) if need_who else ""
+            # One search says both who it is and which album: kept per artist and album.
+            found = await self._one(self._file("spot", spotify_artist or artist, album), who) if need_who else None
+            mbid = (found or {}).get("artist", "")
             jobs = {k: f for k, f in (("artist", lambda: get_artist(mbid)), ("album", lambda: get_album(mbid)), ("track", get_track)) if part in ("", k)}
             for k, v in zip(jobs, await asyncio.gather(*(f() for f in jobs.values()), return_exceptions=True)):
                 if isinstance(v, lookup.Unavailable):

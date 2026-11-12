@@ -125,3 +125,44 @@ class Extension(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(asked, ["core-1"], "the token is chosen by who the server says it is")
         self.assertIn(("COMPLETE", "Success", None), seen, "the server's ping is answered")
         self.assertIn(("COMPLETE", "InvalidRequest", None), seen, "a service we do not offer is refused")
+
+
+class BridgeLog(unittest.TestCase):
+    """What Roon Bridge's log says of the stream it plays (modules/roon/raat.py)."""
+
+    def setUp(self):
+        spec = importlib.util.spec_from_file_location("mscos_test_raat", os.path.join(ROOT, "modules", "roon", "raat.py"))
+        self.raat = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.raat)
+
+    HEAD = "11/12 23:26:25 Trace: [RAAT::Some DAC] "
+    SETUP = HEAD + '[lua@0x1] [192.0.2.7:41622]  GOT [82] {"request":"setup","format":{"sample_type":"pcm","sample_rate":96000,"bits_per_sample":24,"channels":2,"sample_subtype":"none"},"wire_codec":"flac"}'
+
+    def test_the_latest_stream(self):
+        text = "\n".join([
+            self.HEAD + '[lua@0x1] [192.0.2.7:41622]  GOT [70] {"request":"setup","format":{"sample_type":"dsd","sample_rate":2822400,"bits_per_sample":1,"channels":2,"sample_subtype":"native"},"wire_codec":"pcm"}',
+            self.HEAD + '[lua@0x1] [192.0.2.7:41622]  GOT [81] {"request":"teardown"}',
+            self.SETUP,
+            self.HEAD + "[ALSA] [hw:CARD=Audio,DEV=0] using hw pcmformat S32_LE bitspersample 24",
+            self.HEAD + "[ALSA] [hw:CARD=Audio,DEV=0] Initialized with 2 periods with 1920 frames/period and 3840 frames/buffer",
+            self.HEAD + "sched_setscheduler succeeded",
+            self.HEAD + '[lua@0x1] [192.0.2.7:41622]  GOT [84] {"request":"start","min_offset":1,"stream_sample":0}'])
+        got = self.raat.parse(text)
+        self.assertEqual((got["type"], got["rate"], got["bits"], got["wire"]), ("pcm", 96000, 24, "flac"))
+        self.assertEqual((got["hw_format"], got["hw_bits"], got["period"], got["buffer"]), ("S32_LE", 24, 1920, 3840))
+        self.assertTrue(got["realtime"] and got["open"])
+        self.assertEqual(got["at"], "11/12 23:26:25")
+
+    def test_a_stream_that_ended_and_a_log_without_one(self):
+        self.assertFalse(self.raat.parse(self.SETUP + "\n" + self.HEAD + '[lua@0x1] GOT [90] {"request":"end_stream"}')["open"])
+        self.assertEqual(self.raat.parse("11/12 22:00:00 Info: nothing of note\n"), {})
+
+    def test_what_the_log_says_is_not_taken_on_trust(self):
+        # a log line is text from another program: only numbers and plain words are passed on
+        line = self.HEAD + 'GOT [1] {"request":"setup","format":{"sample_type":"<b>pcm</b>","sample_rate":"44100","bits_per_sample":-5,"channels":2},"wire_codec":{"a":1}}'
+        got = self.raat.parse(line)
+        self.assertEqual((got["type"], got["rate"], got["bits"], got["wire"]), ("", None, None, ""))
+        self.assertEqual(self.raat.parse(self.HEAD + 'GOT [1] {"request":"setup", broken')["rate"], None)
+
+    def test_a_log_that_is_not_there(self):
+        self.assertEqual(self.raat.Log("/nonexistent/raat.txt").latest(), {})

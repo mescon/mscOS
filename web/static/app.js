@@ -80,7 +80,7 @@ function showView(id) {
   if (!$(`#${id}.view`)) id = "v-play";
   $$(".view").forEach((v) => v.classList.toggle("active", v.id === id));
   const tab = id === "v-mods" ? "v-sys" : id;   // Modules is a page under System
-  $$(".tabs a").forEach((a) => { const on = a.getAttribute("href") === `#${tab}`; a.classList.toggle("on", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+  $$(".tabs a").forEach((a) => { const on = a.getAttribute("href") === PATHS[tab]; a.classList.toggle("on", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   document.body.dataset.view = id;
   setTimeout(() => pagesDo("view", id));   // (after this file has run: the first view is shown before the modules' code exists)
   requestAnimationFrame(fitListen);
@@ -89,11 +89,51 @@ function showView(id) {
   if (id === "v-music") setTimeout(loadListened);
   if (id === "v-signal") waveSet(WAVE.on);
 }
+// ------------------------------------------------------------------ addresses and the way back
+// Every view has an address of its own (/music, /signal, ...), and what a module opens inside a
+// view has one under it (/music/album/<id>). Going somewhere is a step in the browser's
+// history, so its back and forward (and the phone's back) lead through the panel as one went.
+const PATHS = { "v-play": "/listen", "v-music": "/music", "v-signal": "/signal", "v-ctl": "/control", "v-sys": "/system", "v-mods": "/system/modules", "v-me": "/profile" };
+function routeOf(pathname) {
+  const segs = pathname.split("/").filter(Boolean).map((x) => { try { return decodeURIComponent(x); } catch { return ""; } });
+  if (!segs.length) return { view: "v-play", sub: [] };
+  if (segs[0] === "system" && segs[1] === "modules") return { view: "v-mods", sub: segs.slice(2) };
+  const view = Object.keys(PATHS).find((v) => PATHS[v] === `/${segs[0]}`);
+  return view ? { view, sub: segs.slice(1) } : null;
+}
+const routeNow = () => routeOf(location.pathname) || { view: "v-play", sub: [] };
+let histN = history.state?.n || 0;     // how many steps into the panel this entry is: 0 has nothing of ours behind it
+function applyRoute() {
+  const r = routeNow();
+  if (document.body.dataset.view !== r.view) showView(r.view);
+  setTimeout(() => pagesDo("route", r.view, r.sub));   // what a module shows inside the view
+}
+// Go to a view (and to something inside it). replace: instead of the entry that is there now.
+function go(view, sub = [], { replace = false } = {}) {
+  view = LEGACY[view] || view;
+  if (!PATHS[view] || !$(`#${view}.view`)) { view = "v-play"; sub = []; }
+  const path = [PATHS[view], ...sub.map((x) => encodeURIComponent(x))].join("/");
+  if (path !== location.pathname) {
+    if (replace) history.replaceState({ n: histN }, "", path);
+    else { history.pushState({ n: ++histN }, "", path); window.scrollTo(0, 0); }
+  }
+  applyRoute();
+}
+// One step back; when there is nothing of the panel's behind this entry, to the place given.
+function goBack(view, sub = []) { if (histN > 0) history.back(); else go(view, sub, { replace: true }); }
+addEventListener("popstate", (e) => { histN = e.state?.n || 0; applyRoute(); });
 document.addEventListener("click", (e) => {
-  const a = e.target.closest('a[href^="#v-"]'); if (!a) return;
-  e.preventDefault(); const id = a.getAttribute("href").slice(1); showView(id); history.replaceState(null, "", `#${id}`); window.scrollTo(0, 0);
+  const a = e.target.closest("a[href]");
+  if (!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || a.target || a.hasAttribute("download")) return;
+  const href = a.getAttribute("href"), r = href.startsWith("/") ? routeOf(href.split(/[?#]/)[0]) : null;
+  if (!r) return;
+  e.preventDefault(); go(r.view, r.sub); window.scrollTo(0, 0);
 });
-showView(LEGACY[(location.hash || "#v-play").slice(1)] || (location.hash || "#v-play").slice(1));
+{ // an address of the old kind (#v-music) leads to the new one
+  const h = location.hash.slice(1), v = LEGACY[h] || h;
+  if (PATHS[v]) history.replaceState({ n: histN }, "", PATHS[v]);
+}
+showView(routeNow().view);
 // remember which rows are open; a chart drawn while its row was closed is redrawn at full width
 const foldKey = (d) => `fold:${d.dataset.k}`;
 // Every fold-out opens and closes with a short, soft movement. One listener for all of them,
@@ -165,7 +205,10 @@ const pagesDo = (hook, ...a) => Object.values(PAGES).forEach((p) => { try { p[ho
 const nowTrack = () => VIEW().track?.() ?? (S.now?.title ? { title: S.now.title, artist: S.now.artist || "", album: S.now.album || "" } : null);
 function pageApi(id) {
   return { $, $$, S, tr, esc, dec, khz, fmtWord, fmtTime, clock, stamp, post, toast, fv, loc, MARK,
-    outName, srcId, srcState,
+    outName, srcId, srcState, sigWord, usbStage,
+    // to a view, and to something of the module's inside it: go("v-music", ["album", id]). The
+    // module's route(view, sub) is told where the page is, also when the listener goes back.
+    go, back: goBack, route: () => routeNow(),
     lang: () => LANG,
     // where in the track the music is, how long the track is (milliseconds), and whether it plays
     position: () => posNow(), duration: () => durOf(), playing: () => isPlaying(),
@@ -200,6 +243,7 @@ async function loadPages(list = []) {
       }
       const mod = await import(`/modules/${encodeURIComponent(p.id)}/page.js?v=${encodeURIComponent(p.v || "")}`);
       PAGES[p.id] = mod.default(pageApi(p.id)) || {};
+      { const r = routeNow(), pg = PAGES[p.id]; setTimeout(() => { try { pg.route?.(r.view, r.sub); } catch (e) { console.error(e); } }); }   // where the page is, for what it opens inside a view
     } catch (e) {  // the general views still work without it
       console.error(`module ${p.id}: page code not loaded`, e);
       $$(`[data-page-of="${CSS.escape(p.id)}"]`).forEach((el) => el.remove());
@@ -247,7 +291,7 @@ function stageLayout() {
   $("#tab-music").hidden = false;   // every source has the listening history there, some a way to choose music too
   const ctl = !$("#f-amp").hidden || !$("#f-source").hidden || $("#panels").children.length > 0;
   $("#tab-ctl").hidden = !ctl;
-  if (!ctl && document.body.dataset.view === "v-ctl") showView("v-play");
+  if (!ctl && document.body.dataset.view === "v-ctl") go("v-play", [], { replace: true });
   document.querySelector(".stage").classList.toggle("solo", empty);
   col.hidden = empty;
 }
@@ -461,25 +505,37 @@ scrub.addEventListener("keydown", (e) => {
 
 // ------------------------------------------------------------------ signal: the chain, readout, seal
 const CODEC = { vorbis: "Ogg Vorbis", flac: "FLAC", mp3: "MP3", aac: "AAC" };
+// The USB stage, the same whichever source plays: how the samples cross, and what crosses.
+function usbStage(dac, running) {
+  return { k: "usb", name: "USB", tag: dac.usb_speed === "high" ? "high speed" : dac.present ? "full speed" : "",
+    state: !dac.present ? "bad" : running ? "ok" : "idle",
+    facts: dac.present ? tr`Asynkron överföring, ${dac.usb_speed === "high" ? "USB 2.0" : "USB 1.1"}` : tr("Ingen DAC ansluten"),
+    note: dac.present ? tr("DAC:ns egen klocka styr takten.") + " " + (dac.usb_speed === "high" ? tr("Upp till 192 kHz och DSD64 via DoP.") : tr`Upp till ${khz(dac.max_rate || 48000)} kHz. Högre upplösningar räknas om av källan.`) : tr("Kontrollera USB-kabeln") };
+}
 function chainSource() {
   const st = S.status, dac = st.dac || {}, s = SRC() || { label: tr("Ingen källa"), name: {}, protocol: "", pipewire: true };
   const roon = { ...srcState(), label: s.label, name: loc(s.name) || s.label };
   const now = S.now, lossy = !!(now && now.codec && now.codec !== "flac");
   const running = s.pipewire ? !!(now && now.playing) : dac.state === "RUNNING";
   const rate = dac.state === "RUNNING" ? parseInt(dac.hw_params?.rate) || null : null;
+  const buf = parseInt(dac.hw_params?.buffer_size) || 0, bufWord = running && buf && rate ? " " + tr`Buffert ${buf} sampel (${dec(buf / rate * 1000, 0)} ms).` : "";
+  const pw = st.pipewire || {}, sink = pw.sink || {};
+  const hourAgo = Date.now() / 1000 - 3600, xrunHour = S.xruns.filter((x) => x.t > hourAgo).reduce((a, x) => a + (x.dac || 0), 0);
+  const unity = sink.volume == null || Math.abs(sink.volume - 1) < 1e-6;
   const stages = [
     { k: "roon", name: s.label, tag: s.protocol, state: !roon.active ? "bad" : running ? "ok" : "idle",
       facts: roon.installed === false ? tr`${roon.name} är inte installerat` : roon.active ? tr`${roon.name} är igång` : tr`${roon.name} kör inte`,
       note: roon.active ? (running ? (now?.codec ? `${CODEC[now.codec] || now.codec}${now.bitrate ? `, ${now.bitrate} kbit/s` : ""}` : tr("Spelar")) : srcHint(s)) : tr("Byt källa igen eller starta om enheten") },
-    { k: "usb", name: "USB", tag: dac.usb_speed === "high" ? "high speed" : dac.present ? "full speed" : "",
-      state: !dac.present ? "bad" : running ? "ok" : "idle",
-      facts: dac.present ? tr`Asynkron överföring, ${dac.usb_speed === "high" ? "USB 2.0" : "USB 1.1"}` : tr("Ingen DAC ansluten"),
-      note: dac.present ? (dac.usb_speed === "high" ? tr("Upp till 192 kHz och DSD64 via DoP.") : tr`Upp till ${khz(dac.max_rate || 48000)} kHz. Högre upplösningar räknas om av källan.`) : tr("Kontrollera USB-kabeln") },
+    s.pipewire && { k: "pipewire", name: "PipeWire", tag: "pro-audio",
+      state: !sink.name || !unity ? "bad" : running ? "ok" : "idle",
+      facts: sink.name ? `${fmtWord(sink.format || "S32LE")}, ${khz(sink.rate || 44100)} kHz${unity ? "" : ", " + tr`volym ${Math.round(sink.volume * 100)} %`}` : tr("Ingen utgång till DAC:en"),
+      note: tr`Buffert ${st.pw_top?.quantum || 1024} sampel, ${xrunHour ? tr`${xrunHour} avbrott vid DAC:en` : tr("inga avbrott vid DAC:en")} senaste timmen` },
+    usbStage(dac, running),
     { k: "dac", name: outName(), tag: tr("DAC"), state: !dac.present ? "bad" : running ? "ok" : "idle",
       facts: running ? sigWord(dac.hw_params.format, rate) : dac.present ? tr("Ansluten, vilar") : tr("Inte ansluten"),
-      note: running ? (s.pipewire ? tr`Tar emot signalen från ${roon.name} via PipeWire` : tr`Tar emot signalen direkt från ${roon.name}`) : tr`Väntar på ${s.label}` },
-  ];
-  return { stages, running, playing: running, rate, issues: [], dac, roon, lossy, direct: !s.pipewire };
+      note: running ? (s.pipewire ? tr`Tar emot signalen från ${roon.name} via PipeWire.` : tr`Tar emot signalen direkt från ${roon.name}.`) + bufWord : tr`Väntar på ${s.label}` },
+  ].filter(Boolean);
+  return { stages, running, playing: running, rate, issues: unity ? [] : [tr`PipeWire-volymen är ${Math.round(sink.volume * 100)} %`], dac, roon, lossy, direct: !s.pipewire };
 }
 // The chain as the current source's page code draws it, or the general one.
 const chain = () => (VIEW().chain ? VIEW().chain() : chainSource());
@@ -578,10 +634,11 @@ function renderSpark() {
   const red = css.getPropertyValue("--red").trim(), dim = css.getPropertyValue("--g-hair").trim();
   ctx.fillStyle = dim; ctx.fillRect(0, h - 1, w, 1);
   for (const f of [0.5]) ctx.fillRect(Math.round(w * f), 0, 1, h);
-  let total = 0, played = 0, streamMiss = 0;
+  let total = 0, played = 0, streamMiss = 0, direct = 0;
   const bw = Math.max(1, w / 2880);
   for (const p of pts) {
     const x = ((p.t - (now - span)) / span) * w, n = p.dac || 0, m = p.stream || 0;
+    if (p.playing && p.direct) direct++;
     if (p.playing) { played++; ctx.fillStyle = "rgba(207,204,196,.28)"; ctx.fillRect(x, h - 4, bw, 3); }
     if (m && !n) { streamMiss += m; ctx.fillStyle = "rgba(214,163,68,.55)"; ctx.fillRect(x, h - 14, Math.max(1.5, bw), 8); }
     if (n) { total += n; ctx.fillStyle = red; const bh = Math.min(h - 6, 8 + Math.log2(n + 1) * 10); ctx.fillRect(x, h - bh, Math.max(2, bw), bh); }
@@ -589,7 +646,11 @@ function renderSpark() {
   $("#spark-sum").textContent = played
     ? tr`${total ? tr`${total} avbrott vid DAC:en` : tr("Inga avbrott vid DAC:en")} under ${Math.round(played / 2)} minuters uppspelning.${streamMiss ? tr` Gula markeringar: strömmen missade ${streamMiss} cykler, oftast vid låtbyte eller volymändring, utan luckor i signalen.` : ""} Röda staplar är avbrott.`
     : tr("Ingen uppspelning registrerad senaste dygnet.");
-  fv("drop", played ? (total ? tr`${total} vid DAC:en` : tr("Inga")) : tr("Ingen uppspelning"), total > 0);
+  // what was played by a source that opens the DAC itself is not counted: say so, claim nothing
+  if (direct) $("#spark-sum").textContent = (direct === played
+    ? tr`${Math.round(played / 2)} minuters uppspelning.`
+    : $("#spark-sum").textContent) + " " + tr`Under ${Math.round(direct / 2)} av minuterna ägde källan DAC:en själv (Roon, HQPlayer, UPnP). Då går ljudet förbi PipeWire och enheten kan inte räkna avbrott.`;
+  fv("drop", !played ? tr("Ingen uppspelning") : total ? tr`${total} vid DAC:en` : direct === played ? tr("Räknas inte") : tr("Inga"), total > 0);
 }
 window.addEventListener("resize", renderSpark);
 
@@ -859,6 +920,13 @@ function renderDac() {
     const s = ck.series || [];
     const lo = s.length ? Math.min(...s.map((x) => x[1])) : null, hi = s.length ? Math.max(...s.map((x) => x[1])) : null;
     $("#ck-sum").textContent = tr`DAC:ns egen kristall styr takten, och streamern följer den via återkopplingen. Siffran är medelvärdet sedan strömmen till DAC:en startade, mätt mot streamerns kristall, och blir exaktare ju längre den går. Avvikelsen är skillnaden mellan två kristaller och påverkar inte ljudet.${s.length > 4 ? tr` Kurvan visar timmedel: ${ppmTxt(lo)} till ${ppmTxt(hi)} ppm.` : tr(" Kurvan visar timmedel när strömmen har gått en halvtimme.")}`;
+  } else if (fb.hz) {
+    // The stream is young (a source that opens the DAC anew for each track starts over every
+    // time): until the average is there, what the DAC itself reports through the feedback.
+    $("#ck-hz").textContent = fb.hz.toLocaleString("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    fv("clock", `${$("#ck-hz").textContent} Hz`);
+    $("#ck-ppm").innerHTML = `<b>${esc(ppmTxt(fb.ppm))} ppm</b> ${esc(tr`mot ${khz(fb.nominal)} kHz, DAC:ns egen återkoppling just nu (upplösning ${dec(fb.res_ppm, 1)} ppm)`)}`;
+    $("#ck-sum").textContent = tr("DAC:ns egen kristall styr takten, och streamern följer den via återkopplingen. Medelvärdet mot streamerns kristall kommer när strömmen till DAC:en har varit öppen en minut. En källa som öppnar DAC:en på nytt för varje låt (Roon, HQPlayer, UPnP) börjar om vid varje låtbyte.");
   } else {
     $("#ck-hz").textContent = "–";
     $("#ck-ppm").innerHTML = tr("Mäter, första värdet efter en minut");
@@ -1068,7 +1136,7 @@ $("#ml-src").addEventListener("click", (e) => { const b = e.target.closest("butt
 $$(".np-find").forEach((b) => b.addEventListener("click", () => {
   const t = nowTrack(), find = VIEW().find;
   if (!t || !find) return;
-  showView("v-music"); history.replaceState(null, "", "#v-music"); window.scrollTo(0, 0);
+  go("v-music");
   find(b.dataset.find, t);
 }));
 // ------------------------------------------------------------------ source switch
@@ -1105,9 +1173,9 @@ refreshAuth().then(() => maybeSetup({ access: S.access || {}, post, toast })).ca
 connect();
 try {  // after the first-start guide: straight to the modules, where the chosen players are installed
   const f = localStorage.getItem("open-fold");
-  if (f) { localStorage.removeItem("open-fold"); const d = document.getElementById(f); if (f === "f-mods") showView("v-mods"); else if (d) { showView(d.closest(".view").id); d.open = true; d.scrollIntoView(); } }
+  if (f) { localStorage.removeItem("open-fold"); const d = document.getElementById(f); if (f === "f-mods") go("v-mods", [], { replace: true }); else if (d) { go(d.closest(".view").id, [], { replace: true }); d.open = true; d.scrollIntoView(); } }
 } catch (e) {}
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 document.addEventListener("visibilitychange", () => { if (!document.hidden && ws && ws.readyState > 1) connect(); });
 
 // ---- appearance: follow the phone, or a fixed light/dark theme (per browser)
