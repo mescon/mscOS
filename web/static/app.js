@@ -418,6 +418,8 @@ function chainSource() {
 const chain = () => (VIEW().chain ? VIEW().chain() : chainSource());
 
 function renderSignal() {
+  // before the device has said how things are, nothing is claimed (not "no DAC" either)
+  if (S.status?.dac == null) return;
   const c = chain();
   // strip in the display
   const strip = $("#strip");

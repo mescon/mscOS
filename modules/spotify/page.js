@@ -70,7 +70,7 @@ export default function page(api) {
   // What this track really is, measured from the samples (null: not measured yet).
   function formatOf() {
     const q = trackQuality();
-    if (q && q.verdict === "bitperfect" && q.bits) return { text: `FLAC ${q.bits} bit, 44,1 kHz`, lossy: false };
+    if (q && q.verdict === "bitperfect" && q.bits) return { text: `FLAC ${q.bits} bit, ${khz(44100)} kHz`, lossy: false };
     if (q && q.verdict === "lossy_or_processed") return { text: tr("Förlustkomprimerat, inte Lossless"), lossy: true };
     return null;
   }
@@ -102,7 +102,8 @@ export default function page(api) {
         ? tr("Soloist är inte installerat. Installera det under Moduler.")
         : tr("Ange din Spotify-nyckel under Moduler, Spotify Lossless.") };
     }
-    const p = M.playback, it = p.item, playing = p.status === "playing", o = p.options || {};
+    // (buffering, between tracks or after a seek, is still playing as far as the button goes)
+    const p = M.playback, it = p.item, playing = p.status === "playing" || p.status === "buffering", o = p.options || {};
     const f = it && M.auth.is_active ? formatOf() : null;
     return {
       title: it ? nameOf(it) : tr("Inget spelas"),
@@ -146,13 +147,17 @@ export default function page(api) {
     const xrunHour = recent.reduce((a, x) => a + (x.dac || 0), 0);           // dropouts at the DAC
     const streamHour = recent.reduce((a, x) => a + (x.stream || 0), 0);      // Soloist stream counter
     const issues = [], resampling = !!(stream && stream.rate && sink.rate && stream.rate !== sink.rate);
-    if (volDigital) issues.push(tr`Spotify-volymen är ${vol} %`);
-    if (norm) issues.push(tr("volymnormalisering är på"));
-    if (!sinkUnity) issues.push(tr`PipeWire-volymen är ${Math.round(sink.volume * 100)} %`);
-    if (resampling) issues.push(tr("omsampling i PipeWire"));
+    const fixes = [];   // for each thing that changes the samples: how to get back to bit-perfect
+    if (volDigital) { issues.push(tr`Spotify-volymen är ${vol} %`); fixes.push(tr("Ställ volymen på 100 % i Spotify-appen och använd förstärkarens volym.")); }
+    if (norm) { issues.push(tr("volymnormalisering är på")); fixes.push(tr("Stäng av normaliseringen under System, Moduler, Spotify Lossless.")); }
+    if (!sinkUnity) { issues.push(tr`PipeWire-volymen är ${Math.round(sink.volume * 100)} %`); fixes.push(tr("Starta om enheten under System, så ställs den tillbaka.")); }
+    if (resampling) { issues.push(tr("omsampling i PipeWire")); fixes.push(tr("Starta om enheten under System, så låses takten igen.")); }
+    // what was measured on the track that plays now (nothing, until a few seconds into it)
+    const q = playing && M.quality && M.quality.uri === p.item?.uri ? M.quality : null;
+    const lossy = q?.verdict === "lossy_or_processed", exact = q?.verdict === "bitperfect";
     const stages = [
       { k: "spotify", name: "Spotify", tag: "Lossless",
-        state: M.auth.logged_in ? (playing ? "ok" : "idle") : "bad",
+        state: !M.auth.logged_in || lossy ? "bad" : playing ? "ok" : "idle",
         facts: (() => {
           const f = formatOf();
           if (f) return tr`${f.text} (uppmätt)`;
@@ -176,19 +181,26 @@ export default function page(api) {
         facts: running ? `${carry(dac.hw_params.format)}, ${khz(rate)} kHz` : dac.present ? tr("Ansluten, vilar") : tr("Inte ansluten"),
         note: running ? tr("Tar emot signalen") : tr("Väljer USB-ingången när musik spelar") },
     ];
-    // the seal: what the last verification proved, or what stands in its way
+    // The seal says what is known now, about the track that plays now: what was measured on it,
+    // or what stands in the way and how to put it right. An earlier verification is told as
+    // what it is, an earlier one, and never stands in for this track.
+    const earlier = t && t.verdict === "bitperfect" && !t.gaps.length ? tr` Senast verifierat sampel för sampel ${clock(t.t)}.` : "";
     let seal;
-    if (issues.length) seal = { head: tr("Signalen ändras"), sub: issues.join(", ").replace(/^./, (x) => x.toUpperCase()) + ".", cls: "warn" };
-    else if (t && t.verdict === "bitperfect" && !t.gaps.length) seal = { head: tr("Bitperfekt"), cls: "verified", sub: tr`Verifierat ${clock(t.t)}: ${t.bits} bit, ${dec(t.gain_db)} dB, inga avbrott` };
-    else if (t && t.verdict === "bitperfect") seal = { head: tr("Bitperfekt, med avbrott"), sub: tr`${t.gaps.length} avbrott i testet ${clock(t.t)}`, cls: "warn" };
-    else if (t && t.verdict === "scaled") seal = { head: tr("Skalat"), sub: tr`Senaste testet visade ${dec(t.gain_db)} dB`, cls: "warn" };
-    else if (!playing) seal = { head: tr("Redo"), sub: tr("Signalvägen är inställd för bitperfekt ljud."), cls: "" };
-    else seal = { head: tr("Orörd signalväg"), sub: tr("Inställt för bitperfekt. Verifiera under Signal."), cls: "" };
-    // idle: the display keeps showing the locked format, dimmed, like hardware in standby
-    const last = lt && lt.verdict === "bitperfect" ? lt : null;
+    if (issues.length) seal = { head: tr("Inte bitperfekt"), cls: "warn",
+      sub: issues.join(", ").replace(/^./, (x) => x.toUpperCase()) + ". " + fixes.join(" ") };
+    else if (!playing) seal = { head: tr("Redo"), sub: tr("Signalvägen är inställd för bitperfekt ljud.") + earlier, cls: "" };
+    else if (lossy) seal = { head: tr("Inte Lossless"), cls: "warn",
+      sub: tr("Den här låten kommer förlustkomprimerad från Spotify. Välj Lossless under Mediekvalitet i Spotify-appen. Finns låten inte i Lossless spelas den komprimerad ändå.") };
+    else if (exact && xrunHour) seal = { head: tr("Bitperfekt, med avbrott"), cls: "warn",
+      sub: tr`Den här låten mättes ${clock(q.t)}: ${q.bits} bit, inget ändrat. Men ${xrunHour} avbrott vid DAC:en senaste timmen.` };
+    else if (exact) seal = { head: tr("Bitperfekt"), cls: "verified",
+      sub: tr`Den här låten mättes ${clock(q.t)}: ${q.bits} bit, inget ändrat på vägen.` + earlier };
+    else seal = { head: tr("Mäter låten"), cls: "",
+      sub: tr("Låten mäts några sekunder in. Tills dess är inget bekräftat för just den här låten.") + earlier };
     return { stages, running, playing, rate, issues, dac, seal,
-      bits: t?.bits || last?.bits || null,
-      gain: issues.length ? "≠ 0" : t && t.gain_db != null ? dec(t.gain_db) : null };
+      // the readout: this track's own numbers once measured; nothing claimed before that
+      bits: !playing ? (lt && lt.verdict === "bitperfect" ? lt.bits : null) : exact ? q.bits : "–",
+      gain: issues.length ? "≠ 0" : !playing ? null : exact && q.gain_db != null ? dec(q.gain_db) : exact ? dec(0) : "–" };
   }
 
   // ---------------------------------------------------------------- verification

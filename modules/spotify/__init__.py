@@ -448,6 +448,12 @@ class Spotify(SourcePlugin):
             if v in ("silent", "too_short"):
                 log.info("track quality: %s, not recorded", v)
                 return
+            if v == "lossy_or_processed" and getattr(self, "_lossy_once", None) != uri:
+                # One look can be wrong (a dropout or a seek inside the six seconds breaks the
+                # pattern as lossy audio does): said only when a second look agrees.
+                self._lossy_once = uri
+                log.info("track quality: lossy at the first look, measuring once more")
+                return
             self.track_quality = {"uri": uri, "t": int(time.time()), "verdict": v, "bits": r.get("bits"),
                                   "gain_db": r.get("gain_db"), "rate": 44100}
             log.info("track quality: %s %s bit", v, r.get("bits"))

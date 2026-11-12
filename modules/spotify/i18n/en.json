@@ -75,5 +75,17 @@
  ", {0} avbrott": ", {0} dropouts",
  "Spelar in {0} s…": "Recording {0} s…",
  "Spotify-bygget går ut om {0} dagar": "The Spotify build expires in {0} days",
- "Spelar på en annan enhet. Välj {0} i Spotify-appen.": "Playing on another device. Choose {0} in the Spotify app."
+ "Spelar på en annan enhet. Välj {0} i Spotify-appen.": "Playing on another device. Choose {0} in the Spotify app.",
+ "Ställ volymen på 100 % i Spotify-appen och använd förstärkarens volym.": "Set the volume to 100 % in the Spotify app and use the amplifier's volume.",
+ "Stäng av normaliseringen under System, Moduler, Spotify Lossless.": "Switch normalization off under System, Modules, Spotify Lossless.",
+ "Starta om enheten under System, så ställs den tillbaka.": "Restart the device under System and it is set back.",
+ "Starta om enheten under System, så låses takten igen.": "Restart the device under System and the rate is locked again.",
+ " Senast verifierat sampel för sampel {0}.": " Last verified sample by sample {0}.",
+ "Inte bitperfekt": "Not bit-perfect",
+ "Inte Lossless": "Not Lossless",
+ "Den här låten kommer förlustkomprimerad från Spotify. Välj Lossless under Mediekvalitet i Spotify-appen. Finns låten inte i Lossless spelas den komprimerad ändå.": "This track comes lossy-compressed from Spotify. Choose Lossless under Media quality in the Spotify app. A track that is not available in Lossless plays compressed all the same.",
+ "Den här låten mättes {0}: {1} bit, inget ändrat. Men {2} avbrott vid DAC:en senaste timmen.": "This track was measured {0}: {1} bit, nothing changed. But {2} dropouts at the DAC in the last hour.",
+ "Den här låten mättes {0}: {1} bit, inget ändrat på vägen.": "This track was measured {0}: {1} bit, nothing changed on the way.",
+ "Mäter låten": "Measuring the track",
+ "Låten mäts några sekunder in. Tills dess är inget bekräftat för just den här låten.": "The track is measured a few seconds in. Until then nothing is confirmed for this very track."
 }
