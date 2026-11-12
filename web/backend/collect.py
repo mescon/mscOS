@@ -296,11 +296,16 @@ async def logs(source: str, lines: int = 200, errors_only: bool = False, player=
     uid = await audio_uid()
     if not all(re.fullmatch(r"[\w@.\-]+", u) for u in (*player[0], *player[1])):
         return ""
-    pl = (f"journalctl _UID={uid} " + " ".join(f"--user-unit {u}" for u in player[0])) if player[0] else \
+    def user_units(units) -> str:
+        # by journal field, as root: what the unit's processes wrote, and what the user's systemd
+        # said about it. (--user-unit matches the caller's own user, so it finds nothing here.)
+        return "journalctl " + " + ".join(f"_UID={uid} _SYSTEMD_USER_UNIT={u} + _UID={uid} USER_UNIT={u}" for u in units)
+
+    pl = user_units(player[0]) if player[0] else \
         ("journalctl " + " ".join(f"-u {u}" for u in player[1])) if player[1] else None
     q = {
         "player": pl, "soloist": pl,
-        "audio": f"journalctl _UID={uid} --user-unit pipewire.service --user-unit wireplumber.service",
+        "audio": user_units(("pipewire.service", "wireplumber.service")),
         "kernel": "journalctl -k -b",
         "web": "journalctl -u mscos-panel.service",
         "system": "journalctl -b",

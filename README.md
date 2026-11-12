@@ -44,7 +44,7 @@ Debian 13 or Armbian system, install the packages instead.
 | | State |
 |---|---|
 | SOtM sMS-200, sMS-200ultra (Allwinner A20) | in daily use, installed from a checkout; the image (`image/build.sh sotm`) builds and its contents are checked, but it has **not yet been started on a device** |
-| x86-64 PCs | the image builds and starts in a virtual machine (first boot, board profile, kernel arguments, the guide); **not yet tested on hardware or with a DAC** |
+| x86-64 PCs | the image builds and starts in a virtual machine: first boot, board profile, kernel arguments, the guide, and installing and starting a source from the panel; **not yet tested on hardware or with a DAC** |
 | Raspberry Pi 4/5 | the image (`image/build.sh rpi`) builds and its contents are checked (packages, kernel with the DSD driver, board profile, first-boot setup); **not yet started on a device** |
 | Other arm64 boards | the image target exists, **not yet built or tested** |
 | Spotify Lossless (Soloist), Roon Bridge | in daily use on the SOtM |

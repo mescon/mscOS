@@ -579,7 +579,8 @@ class Hub:
         self._was_playing = playing
 
     # ---- jobs: long-running commands with streamed output
-    async def run_job(self, name: str, cmd: list[str] | str, as_user=False):
+    async def run_job(self, name: str, cmd: list[str] | str, as_user=False, then=None):
+        """Run a command with its output streamed to the panel. then(rc): awaited when it ends."""
         if self.jobs.get(name, {}).get("running"):
             raise web.HTTPConflict(text=T("{name} pågår redan", name=name))
         job = {"name": name, "running": True, "output": "", "rc": None, "started": time.time()}
@@ -590,14 +591,23 @@ class Hub:
                 argv = ["bash", "-c", cmd]
             else:
                 argv = list(cmd)
-            p = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE,
-                                                     stderr=asyncio.subprocess.STDOUT,
-                                                     env={**os.environ, "DEBIAN_FRONTEND": "noninteractive"})
-            async for line in p.stdout:
-                text = line.decode(errors="replace")
-                job["output"] = (job["output"] + text)[-20000:]
-                await self.broadcast({"type": "job", "name": name, "line": text})
-            job["rc"] = await p.wait()
+            try:
+                p = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE,
+                                                         stderr=asyncio.subprocess.STDOUT,
+                                                         env={**os.environ, "DEBIAN_FRONTEND": "noninteractive"})
+                async for line in p.stdout:
+                    text = line.decode(errors="replace")
+                    job["output"] = (job["output"] + text)[-20000:]
+                    await self.broadcast({"type": "job", "name": name, "line": text})
+                job["rc"] = await p.wait()
+            except OSError as e:  # the program is missing: a failed job, not one that runs for ever
+                job["rc"] = 127
+                await self.broadcast({"type": "job", "name": name, "line": f"{e}\n"})
+            if then is not None:
+                try:
+                    await then(job["rc"])
+                except Exception:  # noqa: BLE001
+                    log.exception("after job %s", name)
             job["running"] = False
             await self.broadcast({"type": "job", "name": name, "done": True, "rc": job["rc"]})
             await self.refresh_status()
@@ -734,7 +744,14 @@ async def source_install(request):
     if overlay_active():
         raise web.HTTPConflict(text=T("Stäng av skrivskyddet först. Med skrivskyddat system försvinner installationen vid omstart."))
     # the shared helpers come with mscOS, also for a module installed beside it
-    await hub.run_job(f"install-{p.id}", ["env", f"MSCOS_COMMON={os.path.join(pluginlib._modules_dir(), 'common.sh')}", "bash", script])
+    async def start_it(rc):
+        # the source the device is set to has its player now: start it (a new installation)
+        if rc == 0 and hub.source is p and not await p.active():
+            async with hub.source_lock:
+                log.info("%s installed: starting it: %s", p.id, await hub.switch_source(p.id))
+
+    await hub.run_job(f"install-{p.id}", ["env", f"MSCOS_COMMON={os.path.join(pluginlib._modules_dir(), 'common.sh')}", "bash", script],
+                      then=start_it)
     return ok()
 
 
