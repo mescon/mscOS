@@ -373,6 +373,8 @@
  "{0}{1}: komprimerat ljud, inte Lossless.": "{0}{1}: compressed audio, not Lossless.",
  "{0} äger DAC:en: {1}.": "{0} owns the DAC: {1}.",
  "DSD{0}, {1} MHz, nativ": "DSD{0}, {1} MHz, native",
+ "DSD, nativ": "DSD, native",
+ "Används nu: {0}. DSD-strömmen skickas orörd, {1} enbitssampel i taget (i rådata heter formatet {2}, {3} kHz).": "In use now: {0}. The DSD stream is sent untouched, {1} one-bit samples at a time (the raw format name is {2}, {3} kHz).",
  "{0} spelar via PipeWire.": "{0} plays through PipeWire.",
  "Byter källa till {0}…": "Switching source to {0}…",
  "{0} är aktivt. {1}.": "{0} is active. {1}.",

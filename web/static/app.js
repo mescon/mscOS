@@ -21,7 +21,8 @@ const fmtWord = (f) => FMT[f] || f || "";
 // a source's page code may know better what a format carries (24 bit in a 32-bit container)
 const fmtCarry = (f) => VIEW().carry?.(f) ?? fmtWord(f);
 // Native DSD reaches ALSA as 8, 16 or 32 one-bit samples per frame: the DSD rate is the frame rate times that.
-const dsdOf = (f, rate) => { const m = /^DSD_U(8|16|32)/.exec(f || ""); if (!m || !rate) return null; const hz = rate * +m[1]; return { hz, x: Math.round(hz / 44100) }; };
+// DSD64 is 64 × 44.1 kHz; some DACs also take the 48 kHz family (64 × 48 kHz), named the same.
+const dsdOf = (f, rate) => { const m = /\bDSD_U(8|16|32)/.exec(f || ""); if (!m || !rate) return null; const hz = rate * +m[1]; return { hz, x: Math.round(hz / (hz % 44100 ? 48000 : 44100)) }; };
 // What the DAC is being sent, in words: "24 bit, 96,0 kHz" or "DSD64, 2,8 MHz, nativ".
 const sigWord = (f, rate) => { const d = dsdOf(f, rate); return d ? tr`DSD${d.x}, ${dec(d.hz / 1e6, 1)} MHz, nativ` : `${fmtWord(f)}, ${khz(rate)} kHz`; };
 const bitsOf = (fmt) => { const m = /S(\d+)/.exec(fmt || ""); return m ? (m[1] === "32" ? 32 : +m[1]) : null; };
@@ -779,9 +780,11 @@ function renderDac() {
   // formats
   const cur = st.hw_params || {}, rows = st.altsets || [];
   $("#dac-fmt").innerHTML = `<tr><th>${tr("Ordlängd")}</th><th>${tr("Frekvenser, kHz")}</th></tr>` + rows.map((a) =>
-    `<tr class="${a.format === cur.format ? "on" : ""}" title="${esc(a.format)}"><td>${esc(fmtWord(a.format))}${a.format === "S24_3LE" ? " (3 byte)" : ""}</td><td>${a.rates.map(khz).join(", ")}</td></tr>`).join("");
+    `<tr class="${a.format === cur.format ? "on" : ""}" title="${esc(a.format)}"><td>${esc(/\bDSD_/.test(a.format) ? tr("DSD, nativ") : fmtWord(a.format))}${a.format === "S24_3LE" ? " (3 byte)" : ""}</td><td>${a.rates.map((r) => { const x = dsdOf(a.format, r); return x ? `DSD${x.x} (${dec(x.hz / 1e6, 1)} MHz)` : khz(r); }).join(", ")}</td></tr>`).join("");
   const rate = parseInt(cur.rate), per = parseInt(cur.period_size), buf = parseInt(cur.buffer_size);
-  $("#dac-cur").textContent = rate ? tr`Används nu: ${fmtCarry(cur.format)}, ${khz(rate)} kHz, period ${per.toLocaleString("sv-SE")} sampel (${dec(per / rate * 1000)} ms), buffert ${buf.toLocaleString("sv-SE")} sampel (${Math.round(buf / rate * 1000)} ms). Varje sampel skickas som ett 32-bitars tal, och musikens bitar ligger orörda i det (i rådata heter formatet ${cur.format}).` : tr("Ingen ström öppen just nu.");
+  const dsd = dsdOf(cur.format, rate);
+  $("#dac-cur").textContent = dsd ? tr`Används nu: ${sigWord(cur.format, rate)}. DSD-strömmen skickas orörd, ${dsd.hz / rate} enbitssampel i taget (i rådata heter formatet ${cur.format}, ${khz(rate)} kHz).`
+    : rate ? tr`Används nu: ${fmtCarry(cur.format)}, ${khz(rate)} kHz, period ${per.toLocaleString("sv-SE")} sampel (${dec(per / rate * 1000)} ms), buffert ${buf.toLocaleString("sv-SE")} sampel (${Math.round(buf / rate * 1000)} ms). Varje sampel skickas som ett 32-bitars tal, och musikens bitar ligger orörda i det (i rådata heter formatet ${cur.format}).` : tr("Ingen ström öppen just nu.");
   renderUsbEvents(d.events || []);
   // raw, keep open state
   const raw = $("#dac-raw");

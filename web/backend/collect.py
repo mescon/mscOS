@@ -192,7 +192,7 @@ def dac_info() -> dict:
         m = re.search(r"^(.*) at (usb-\S+), (\w+) speed", head)
         altsets = []
         for blk in re.findall(r"Altset \d+\n(.*?)(?=\n\s*Interface|\n\s*Capture:|\Z)", stream, re.S):
-            fmt = re.search(r"Format: (\S+)", blk)
+            fmt = re.search(r"Format: (?:SPECIAL )?(\S+)", blk)
             rates = re.search(r"Rates: ([^\n]+)", blk)
             bits = re.search(r"Bits: (\d+)", blk)
             if fmt:
