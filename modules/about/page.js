@@ -136,7 +136,7 @@ export default function page(api) {
       key = k; clearTimeout(timer);
       if (!ok) { box.hidden = true; cols.innerHTML = ""; return; }
       box.classList.add("stale");
-      timer = setTimeout(() => ask({ title: t.title, artist: t.artist, album: t.album || "" }, k), 1200);  // not for every skipped track
+      timer = setTimeout(() => ask({ title: t.title, artist: t.artist, album: t.album || "", artist_uri: t.artist_uri || "" }, k), 1200);  // not for every skipped track
     },
   };
 }

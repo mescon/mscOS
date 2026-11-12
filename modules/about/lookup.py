@@ -75,9 +75,12 @@ def discogs_text(s: str) -> str:
     return re.sub(r"\[/?[a-z]+\]", "", s).strip()
 
 
-async def _json(http, url: str, params: dict | None = None, headers: dict | None = None):
+async def _json(http, url: str, params: dict | None = None, headers: dict | None = None, missing=None):
+    """The answer as JSON; None when there was none. A 404 gives `missing` (a plain "not there")."""
     try:
         async with http.get(url, params=params, headers={"User-Agent": UA, "Accept": "application/json", **(headers or {})}) as r:
+            if r.status == 404:
+                return missing
             return await r.json(content_type=None) if r.status == 200 else None
     except (OSError, ValueError, asyncio.TimeoutError):
         return None
@@ -92,7 +95,7 @@ async def _mb(http, path: str, **params):
             await asyncio.sleep(wait)
         for attempt in range(3):
             try:
-                if (d := await _json(http, f"{MB}/{path}", {"fmt": "json", **params})) is not None:
+                if (d := await _json(http, f"{MB}/{path}", {"fmt": "json", **params}, missing={})) is not None:
                     return d
             finally:
                 _mb_last = time.monotonic()
@@ -189,14 +192,47 @@ async def discogs(http, path: str, token: str = ""):
                        headers={"Authorization": f"Discogs token={token}"} if token else None)
 
 
-async def artist(http, name: str, langs: tuple[str, ...], token: str = "") -> dict | None:
-    """None: not found (or the databases did not answer)."""
+def _credited(hits: list[dict], name: str) -> str:
+    """The id of the artist credited under this name on the first good hit, or ""."""
+    for h in hits:
+        if h.get("score", 0) < 85:
+            continue
+        for c in h.get("artist-credit", []):
+            a = c.get("artist") or {}
+            if a.get("id") and _fold(name) in (_fold(c.get("name")), _fold(a.get("name"))):
+                return a["id"]
+    return ""
+
+
+async def find_artist(http, name: str, album_title: str = "", title: str = "", spotify_id: str = "") -> str:
+    """Which artist this is, as a MusicBrainz id ("" when not found). Several artists share a
+    name, so the name is asked about last: first the player's own id for the artist (MusicBrainz
+    links artists to their Spotify pages), then who made an album or a song of this title."""
+    if spotify_id:
+        d = await _mb(http, "url", resource=f"https://open.spotify.com/artist/{spotify_id}", inc="artist-rels")
+        for r in d.get("relations", []):
+            if (r.get("artist") or {}).get("id"):
+                return r["artist"]["id"]
+    if album_title:
+        d = await _mb(http, "release-group", query=f"releasegroup:{_q(plain(album_title))} AND artist:{_q(name)}", limit=5)
+        if mbid := _credited(d.get("release-groups", []), name):
+            return mbid
+    if title:
+        d = await _mb(http, "recording", query=f"recording:{_q(plain(title))} AND artist:{_q(name)}", limit=5)
+        if mbid := _credited(d.get("recordings", []), name):
+            return mbid
     d = await _mb(http, "artist", query=f"artist:{_q(name)}", limit=5)
-    hits = [a for a in (d or {}).get("artists", []) if a.get("score", 0) >= 90
+    hits = [a for a in d.get("artists", []) if a.get("score", 0) >= 90
             and _fold(name) in {_fold(a.get("name")), *(_fold(x.get("name")) for x in a.get("aliases", []))}]
-    if not hits:
+    return hits[0]["id"] if hits else ""
+
+
+async def artist(http, mbid: str, langs: tuple[str, ...], token: str = "") -> dict | None:
+    """What is known about the artist with this MusicBrainz id."""
+    full = await _mb(http, f"artist/{mbid}", inc="url-rels+genres")
+    if not full.get("id"):
         return None
-    full = await _mb(http, f"artist/{hits[0]['id']}", inc="url-rels+genres")
+    name = full.get("name", "")
     rels = _rels(full)
     wt = await wiki_titles(http, [rels["wikidata"]], langs) if "wikidata" in rels else {}
     art = await wiki_article(http, *wt[rels["wikidata"]]) if wt else None
@@ -223,6 +259,8 @@ async def album(http, mbid: str, artist_name: str, title: str, langs: tuple[str,
         return None
     hits.sort(key=lambda g: (_fold(g.get("title")) != _fold(plain(title)), -g.get("score", 0)))
     full = await _mb(http, f"release-group/{hits[0]['id']}", inc="url-rels+genres")
+    if not full.get("id"):
+        return None
     rels = _rels(full)
     wt = await wiki_titles(http, [rels["wikidata"]], langs) if "wikidata" in rels else {}
     art = await wiki_article(http, *wt[rels["wikidata"]]) if wt else None
@@ -275,7 +313,8 @@ if __name__ == "__main__":  # python3 lookup.py "Artist" "Album" "Song" [lang]
     async def main():
         langs = tuple(dict.fromkeys((*sys.argv[4:5], "en")))
         async with ClientSession(timeout=ClientTimeout(total=15)) as http:
-            a = await artist(http, sys.argv[1], langs)
+            mbid = await find_artist(http, sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[5] if len(sys.argv) > 5 else "")
+            a = await artist(http, mbid, langs) if mbid else None
             print(json.dumps({"artist": a, "album": await album(http, a["mbid"], sys.argv[1], sys.argv[2], langs) if a else None,
                               "track": await track(http, sys.argv[1], sys.argv[3], langs)}, ensure_ascii=False, indent=1))
     asyncio.run(main())

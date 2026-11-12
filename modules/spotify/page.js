@@ -114,7 +114,8 @@ export default function page(api) {
     };
   }
   // the names alone, for modules that look the music up
-  const track = () => { const it = M.playback.item; return it ? { title: nameOf(it), artist: artistsOf(it), album: nameOf(deco(it).parent?.entity) || "" } : null; };
+  const track = () => { const it = M.playback.item; return it ? { title: nameOf(it), artist: artistsOf(it), album: nameOf(deco(it).parent?.entity) || "",
+    artist_uri: deco(it).creators?.[0]?.entity?.uri || "" } : null; };
   const duration = () => deco(M.playback.item).playback?.duration_ms || 0;
   function position() {
     const p = M.playback, pos = p.position;

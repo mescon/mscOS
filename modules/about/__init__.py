@@ -11,6 +11,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import time
 
 from aiohttp import ClientSession, ClientTimeout, web
@@ -44,7 +45,7 @@ class About(Plugin):
     # ---- kept answers
     def _file(self, kind: str, *names: str) -> str:
         key = "\0".join(" ".join(n.casefold().split()) for n in names)
-        return os.path.join(self.dir, f"{kind}3-{hashlib.sha1(key.encode()).hexdigest()[:20]}.json")   # 2: with pictures
+        return os.path.join(self.dir, f"{kind}4-{hashlib.sha1(key.encode()).hexdigest()[:20]}.json")   # 2: with pictures
 
     def _kept(self, path: str):
         """(found, value): found is False when nothing usable is kept."""
@@ -85,22 +86,25 @@ class About(Plugin):
             self.busy[path] = asyncio.create_task(run())
         return await asyncio.shield(self.busy[path])
 
-    async def about(self, artist: str, album: str, title: str, lang: str) -> dict:
+    async def about(self, artist: str, album: str, title: str, lang: str, spotify_artist: str = "") -> dict:
         if self.http is None:
             self.http = ClientSession(timeout=ClientTimeout(total=15))
         langs = tuple(dict.fromkeys((lang, "en")))
         token = self.hub.secret("about_discogs_token") or ""
         out = {"artist": None, "album": None, "track": None}
         try:
-            async def find_artist():
+            async def who():
                 # "A, B" is several artists on one track: the first of them, when the whole is nobody's name
-                found = await lookup.artist(self.http, artist, langs, token)
                 first = artist.split(", ")[0]
-                return found or (await lookup.artist(self.http, first, langs, token) if first != artist else None)
-            a = out["artist"] = await self._one(self._file("artist", lang, artist), find_artist)
+                return await lookup.find_artist(self.http, artist, album, title, spotify_artist) \
+                    or (await lookup.find_artist(self.http, first, album, title) if first != artist else "")
+            # Which artist: by the player's id for it when there is one, else by the name together
+            # with the album (several artists share a name; an album tells them apart).
+            mbid = await self._one(self._file("who", spotify_artist) if spotify_artist else self._file("who", artist, album), who)
+            a = out["artist"] = await self._one(self._file("artist", lang, mbid), lambda: lookup.artist(self.http, mbid, langs, token)) if mbid else None
             jobs = {}
             if a and album:
-                jobs["album"] = self._one(self._file("album", lang, artist, album), lambda: lookup.album(self.http, a["mbid"], artist, album, langs, token))
+                jobs["album"] = self._one(self._file("album", lang, mbid, album), lambda: lookup.album(self.http, a["mbid"], artist, album, langs, token))
             if title:
                 jobs["track"] = self._one(self._file("track", lang, artist, title), lambda: lookup.track(self.http, a["name"] if a else artist, title, langs))
             for k, v in zip(jobs, await asyncio.gather(*jobs.values(), return_exceptions=True)):
@@ -112,6 +116,10 @@ class About(Plugin):
                     out[k] = v
         except lookup.Unavailable:
             out["unavailable"] = True
+        # a title track's search can land on the album's own article: say it once, as the album
+        first = lambda d: ((d or {}).get("links") or [{}])[0].get("url")
+        if out["track"] and out["album"] and first(out["track"]) == first(out["album"]):
+            out["track"] = None
         return out
 
     def routes(self, routes) -> None:
@@ -121,11 +129,13 @@ class About(Plugin):
                 b = await request.json()
                 artist, album, title = (" ".join(str(b.get(k) or "").split())[:200] for k in ("artist", "album", "title"))
                 lang = str(b.get("lang") or "en")
+                # the player's own id for the artist, when it has one ("spotify:artist:<id>")
+                m = re.fullmatch(r"spotify:artist:([A-Za-z0-9]{22})", str(b.get("artist_uri") or ""))
             except (ValueError, AttributeError):
                 raise web.HTTPBadRequest()
             if not artist or lang not in ("sv", "en"):
                 raise web.HTTPBadRequest()
-            return web.json_response(await self.about(artist, album, title, lang))
+            return web.json_response(await self.about(artist, album, title, lang, m.group(1) if m else ""))
 
 
 PLUGIN = About

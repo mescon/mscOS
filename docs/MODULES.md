@@ -140,7 +140,7 @@ export default function page(api) {
     // a source, while it is the chosen one, may replace the general views:
     play() { return { title, artist, album, cover, format: { text, lossy, pending }, playing, shuffle, repeat }; },
     position() {}, duration() {}, playing() {},   // milliseconds, milliseconds, true or false
-    track() { return { title, artist, album }; },  // the names alone, for modules that look the music up
+    track() { return { title, artist, album, artist_uri }; },  // for modules that look the music up; artist_uri when the player has one
     chain() { return { stages, running, playing, rate, issues, dac, seal: { head, sub, cls }, bits, gain }; },
     carry(format) {},   // what an ALSA format really carries, in words
   };
