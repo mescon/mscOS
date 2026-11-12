@@ -783,3 +783,7 @@ html.booting .shell, html.booting .tabs, html.booting .dock { visibility: hidden
 
 /* the source switch, under Controls: one lamp per source, wrapping to more rows when they are many */
 #f-source .source { flex-wrap: wrap; overflow: visible; width: fit-content; }
+
+/* A press on a phone: no blue flash from the browser; the tab shows the press in the page's own colours. */
+html { -webkit-tap-highlight-color: transparent; }
+.tabs a:active { color: var(--ink); background: var(--hair); }
