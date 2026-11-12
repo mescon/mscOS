@@ -153,7 +153,9 @@ helpers (`$`, `$$`, `tr`, `esc`, `dec`, `khz`, `fmtWord`, `fmtTime`, `clock`, `s
 `track()` (what is playing, whichever source plays it: `{title, artist, album}` or `null`),
 `render()` to draw the Listen and Signal views again, and `slot(where, html)`, which puts the
 module's own markup on the page: `"notice"` and `"play"` beside the sleeve and `"about"` under it
-in the Listen view, `"signal"` in the Signal view. The markup is removed when the module is
+in the Listen view, `"signal"` in the Signal view, `"music"` in the Music view (which is shown
+while the current source's module has something there: finding and choosing music). A `view(id)`
+hook is called when a view is shown. The markup is removed when the module is
 switched off; a `<style>` element inside it carries the module's own styles. Everything that does not come from the module itself goes
 through `esc()` before it is put in markup.
 

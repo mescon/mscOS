@@ -820,3 +820,9 @@ html { -webkit-tap-highlight-color: transparent; }
   .scrub { margin-top: 14px; }
   .transport { margin: 8px auto 2px; }
 }
+
+/* the level as a number, under the slider */
+.vol-num { display: flex; align-items: center; gap: 8px; margin: 8px 4px 0; font-size: .8125rem; color: var(--engraved); }
+.vol-num input { width: 5.2em; min-height: 40px; padding: 0 8px; border: 1px solid var(--btn-line); border-radius: 2px; background: transparent;
+  font: inherit; font-size: 1rem; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+.vol-num input:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }

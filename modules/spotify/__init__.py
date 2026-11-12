@@ -291,6 +291,7 @@ class Spotify(SourcePlugin):
         elif t == "track_changed":
             asyncio.ensure_future(self.measure_track_quality())
             self.playback["item"] = ev.get("item")
+            self.note_played(ev.get("item"))
         elif t == "playback_changed":
             self.playback["status"] = ev.get("status")
         elif t == "volume_changed":
@@ -392,6 +393,60 @@ class Spotify(SourcePlugin):
             log.info("Soloist back: active%s", ", playing" if playing else "")
         except Exception as e:  # noqa: BLE001
             log.warning("resume after restart: %s", e)
+
+    # ---- what has been played here: the albums, tracks and artists, to find and play again
+    HISTORY = os.path.join(collect.STATE_DIR, "spotify-history.json")
+
+    def _history(self) -> list:
+        if not hasattr(self, "_played"):
+            try:
+                with open(self.HISTORY, encoding="utf-8") as f:
+                    d = json.load(f)
+                self._played = d if isinstance(d, list) else []
+            except (OSError, ValueError):
+                self._played = []
+        return self._played
+
+    def note_played(self, item) -> None:
+        """A track began on this device: remember it, with the album and the artists it belongs to."""
+        try:
+            deco = lambda e: (e or {}).get("decorations") or {}   # noqa: E731
+            name = lambda e: (deco(e).get("identity") or {}).get("name") or ""   # noqa: E731
+            uri = (item or {}).get("uri") or ""
+            if not SPOTIFY_URI.fullmatch(uri) or self.auth.get("is_active") is False:
+                return
+            h = self._history()
+            if h and h[-1].get("uri") == uri:
+                return
+            album = (deco(item).get("parent") or {}).get("entity") or {}
+            covers = (deco(item).get("visual_identity") or {}).get("cover") or []
+            cover = next((c.get("url") for c in covers if c.get("size") == "large"), None) or (covers[-1].get("url") if covers else None)
+            h.append({"t": int(time.time()), "uri": uri, "title": name(item)[:200],
+                      "artists": [{"name": name(c.get("entity"))[:120], "uri": (c.get("entity") or {}).get("uri") or ""}
+                                  for c in (deco(item).get("creators") or [])[:6] if name(c.get("entity"))],
+                      "album": {"name": name(album)[:200], "uri": album.get("uri") or ""},
+                      "cover": cover if isinstance(cover, str) and cover.startswith("https://") else None})
+            del h[:-600]
+            with open(self.HISTORY + ".new", "w", encoding="utf-8") as f:
+                json.dump(h, f, ensure_ascii=False)
+            os.replace(self.HISTORY + ".new", self.HISTORY)
+        except Exception as e:  # noqa: BLE001 - a list of what was played must never get in the way of playing
+            log.warning("history: %s", e)
+
+    def played(self) -> dict:
+        """The albums, tracks and artists played here, the latest first, each once."""
+        albums, tracks, artists = {}, {}, {}
+        for e in reversed(self._history()):
+            a = e.get("album") or {}
+            who = ", ".join(x.get("name", "") for x in e.get("artists", []))
+            if SPOTIFY_URI.fullmatch(a.get("uri") or "") and a["uri"] not in albums:
+                albums[a["uri"]] = {"uri": a["uri"], "name": a.get("name", ""), "artist": who, "cover": e.get("cover"), "t": e.get("t")}
+            if e.get("uri") not in tracks:
+                tracks[e["uri"]] = {"uri": e["uri"], "name": e.get("title", ""), "artist": who, "album": a.get("name", ""), "cover": e.get("cover"), "t": e.get("t")}
+            for x in e.get("artists", []):
+                if SPOTIFY_URI.fullmatch(x.get("uri") or "") and x["uri"] not in artists:
+                    artists[x["uri"]] = {"uri": x["uri"], "name": x.get("name", ""), "t": e.get("t")}
+        return {"albums": list(albums.values())[:120], "tracks": list(tracks.values())[:200], "artists": list(artists.values())[:120]}
 
     async def measure_track_quality(self):
         """Measure the track that plays, and then the one that plays when that is done: a track
@@ -788,6 +843,10 @@ class Spotify(SourcePlugin):
             if r and r.get("type") == "error":
                 raise web.HTTPBadGateway(text=f"Soloist: {r.get('message')}")
             return hub.ok(result=r)
+
+        @routes.get("/api/spotify/played")
+        async def spotify_played(request):
+            return web.json_response(sp.played())
 
         @routes.post("/api/soloist/restart")
         async def soloist_restart(request):

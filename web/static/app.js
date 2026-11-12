@@ -82,6 +82,7 @@ function showView(id) {
   const tab = id === "v-mods" ? "v-sys" : id;   // Modules is a page under System
   $$(".tabs a").forEach((a) => { const on = a.getAttribute("href") === `#${tab}`; a.classList.toggle("on", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   document.body.dataset.view = id;
+  setTimeout(() => pagesDo("view", id));   // (after this file has run: the first view is shown before the modules' code exists)
   requestAnimationFrame(fitListen);
   if (id === "v-signal") { loadOpts(); loadDac(); requestAnimationFrame(() => { renderSpark(); if (S.dacd?.clock_avg) renderClockChart(S.dacd.clock_avg.series || []); }); }
   if (id === "v-mods") loadMods();
@@ -142,11 +143,13 @@ function pageApi(id) {
     // what is playing, whichever source plays it: {title, artist, album} or null
     track: () => VIEW().track?.() ?? (S.now?.title ? { title: S.now.title, artist: S.now.artist || "", album: S.now.album || "" } : null),
     render: () => { renderPlay(); renderSignal(); renderSysHead(); },
-    // put markup of the module's own on the page: "notice", "play" and "about" (Listen), "signal" (Signal)
+    // put markup of the module's own on the page: "notice", "play" and "about" (Listen), "signal" (Signal), "music" (Music)
     slot(where, html) {
       const mark = $(`#slot-${where}`), t = document.createElement("template");
       t.innerHTML = html;
       const els = [...t.content.children];
+      // a place this version of the page does not have: the module's code goes on without it
+      if (!mark) { const d = document.createElement("div"); d.append(...els); return els[0]; }
       els.forEach((el) => { el.dataset.pageOf = id; mark.before(el); if (el.matches("details.fold")) wireFold(el); });
       widePanels();
       return els[0];
@@ -207,6 +210,10 @@ function stageLayout() {
   const col = document.querySelector(".console-col");
   const empty = ![...$$("#v-play .console-col [data-page-of]")].some((el) => !el.hidden);
   // Controls: the amplifier's input and power, and the modules' own cards. No tab when there are none.
+  // Music: only when the current source's module has put something there
+  const music = [...$$("#v-music [data-page-of]")].some((el) => !el.hidden);
+  $("#tab-music").hidden = !music;
+  if (!music && document.body.dataset.view === "v-music") showView("v-play");
   const ctl = !$("#f-amp").hidden || !$("#f-source").hidden || $("#panels").children.length > 0;
   $("#tab-ctl").hidden = !ctl;
   if (!ctl && document.body.dataset.view === "v-ctl") showView("v-play");
@@ -901,6 +908,10 @@ function renderAmp() {
   $("#ml-state").textContent = m.note ? loc(m.note) : m.power === false ? tr`${outName()}: i standby`
     : tr`${outName()}: på${name ? tr`, ingång ${name}` : ""}${m.muted ? tr(", ljudet av") : ""}`;
   $("#ml-ctl").hidden = !m.reachable;
+  $("#ml-numbox").hidden = !m.reachable || m.power === false;
+  const num = $("#ml-num");
+  num.max = max;
+  if (document.activeElement !== num) num.value = m.volume_db != null ? m.volume_db : "";
   $("#ml-step").hidden = !m.reachable || m.power === false;
   $("#amp").classList.toggle("live", !!m.reachable && m.power !== false);
   $("#amp").classList.toggle("off", m.power === false);
@@ -957,6 +968,17 @@ function ampStep(d) {
   $("#ml-vol-v").textContent = dec(v);
   amp({ volume_db: v });
 }
+// the level typed as a number: to the nearest half dB, and never above the panel's ceiling
+$("#ml-num").addEventListener("change", (e) => {
+  const m = AMP || {}, max = +(m.max_db || 40), v = parseFloat(String(e.target.value).replace(",", "."));
+  if (!Number.isFinite(v)) { e.target.value = m.volume_db ?? ""; return; }
+  if (v > max) { toast(tr`Panelen går högst till ${dec(max)} dB. Högre volym ställer du med fjärrkontrollen.`); e.target.value = m.volume_db ?? ""; return; }
+  const to = Math.max(0, Math.round(v * 2) / 2);
+  e.target.value = to; e.target.blur();
+  $("#ml-vol-v").textContent = dec(to);
+  amp({ volume_db: to });
+});
+$("#ml-num").addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.blur(); });
 $("#ml-down").addEventListener("click", () => ampStep(-1));
 $("#ml-up").addEventListener("click", () => ampStep(1));
 $("#ml-vol").addEventListener("change", (e) => amp({ volume_db: +e.target.value }));
