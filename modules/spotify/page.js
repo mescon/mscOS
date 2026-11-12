@@ -113,6 +113,8 @@ export default function page(api) {
       cover: (it && coverOf(it)) || "", playing, shuffle: !!o.shuffle, repeat: o.repeat || "off",
     };
   }
+  // the names alone, for modules that look the music up
+  const track = () => { const it = M.playback.item; return it ? { title: nameOf(it), artist: artistsOf(it), album: nameOf(deco(it).parent?.entity) || "" } : null; };
   const duration = () => deco(M.playback.item).playback?.duration_ms || 0;
   function position() {
     const p = M.playback, pos = p.position;
@@ -264,7 +266,7 @@ export default function page(api) {
       $("#auto-verify").checked = !!S.settings?.auto_verify;
     },
     // as the current source: the Listen view, the progress bar, the signal chain
-    play, duration, position, chain, carry,
+    play, track, duration, position, chain, carry,
     playing: () => M.playback.status === "playing" && M.auth.is_active !== false,
     // what needs attention, for the line at the top of System
     issues() {

@@ -134,8 +134,11 @@ const pagesDo = (hook, ...a) => Object.values(PAGES).forEach((p) => { try { p[ho
 function pageApi(id) {
   return { $, $$, S, tr, esc, dec, khz, fmtWord, fmtTime, clock, stamp, post, toast, fv, loc, MARK,
     outName, srcId, srcState,
+    lang: () => LANG,
+    // what is playing, whichever source plays it: {title, artist, album} or null
+    track: () => VIEW().track?.() ?? (S.now?.title ? { title: S.now.title, artist: S.now.artist || "", album: S.now.album || "" } : null),
     render: () => { renderPlay(); renderSignal(); renderSysHead(); },
-    // put markup of the module's own on the page: "notice" and "play" (Listen), "signal" (Signal)
+    // put markup of the module's own on the page: "notice", "play" and "about" (Listen), "signal" (Signal)
     slot(where, html) {
       const mark = $(`#slot-${where}`), t = document.createElement("template");
       t.innerHTML = html;
@@ -186,8 +189,11 @@ function renderNames() {
 // Nothing beside the sleeve (no amplifier module, no cards, no queue): the text takes that place.
 function stageLayout() {
   const col = document.querySelector(".console-col");
-  const empty = $("#amp").hidden && !$("#panels").children.length && $("#f-amp").hidden
-    && ![...$$("#v-play [data-page-of]")].some((el) => !el.hidden);
+  const empty = $("#amp").hidden && ![...$$("#v-play .console-col [data-page-of]")].some((el) => !el.hidden);
+  // Controls: the amplifier's input and power, and the modules' own cards. No tab when there are none.
+  const ctl = !$("#f-amp").hidden || $("#panels").children.length > 0;
+  $("#tab-ctl").hidden = !ctl;
+  if (!ctl && document.body.dataset.view === "v-ctl") showView("v-play");
   document.querySelector(".stage").classList.toggle("solo", empty);
   col.hidden = empty;
 }
@@ -690,6 +696,10 @@ function panelControls(id, list) {
   flush();
   return out;
 }
+// The cards that are open and have been read since they were opened. Kept here and not on the
+// element: every answer draws the cards again, and a card drawn open reports "toggle" like one
+// the user opened, which would read the device again, without end.
+const panelRead = new Set();
 function renderPanels() {
   const box = $("#panels"), P = S.panels || {};
   if (box.contains(document.activeElement) && document.activeElement.type === "range") return;  // not under a thumb being dragged
@@ -715,7 +725,8 @@ $("#panels").addEventListener("change", (e) => {
 $("#panels").addEventListener("toggle", (e) => {  // toggle does not bubble: caught on the way down
   const d = e.target; if (!d.dataset?.panel) return;
   try { localStorage.setItem(`fold:panel-${d.dataset.panel}`, d.open ? "1" : "0"); } catch {}
-  if (d.open && !d.dataset.read) { d.dataset.read = "1"; panelAct(d.dataset.panel, "refresh", null); }
+  if (!d.open) panelRead.delete(d.dataset.panel);
+  else if (!panelRead.has(d.dataset.panel)) { panelRead.add(d.dataset.panel); panelAct(d.dataset.panel, "refresh", null); }
 }, true);
 
 // ------------------------------------------------------------------ DAC (Eunhasu's /dacinfo/, interpreted)

@@ -109,7 +109,7 @@ A module needs no page of its own (it may bring page code, see below). The panel
 | `log()` | recent communication, folded, for troubleshooting |
 | `facts()` | rows of state in its card (service running, signed in, ...) |
 | `actions` and `action()` | buttons in its card (restart the player, look for a new version) |
-| `panel()` and `panel_action()` | a card of buttons, sliders and choices in the Listen view |
+| `panel()` and `panel_action()` | a card of buttons, sliders and choices in the Controls view |
 | `amp_state()` and `amp_action()` (an `AmpPlugin`) | the volume dial, inputs, power and mute |
 | `now_playing()`, `transport` and `command()` (a `SourcePlugin`) | what plays, and the transport buttons |
 | `notify()` and `can_notify()` | a way to deliver the core's alerts to a phone |
@@ -140,6 +140,7 @@ export default function page(api) {
     // a source, while it is the chosen one, may replace the general views:
     play() { return { title, artist, album, cover, format: { text, lossy, pending }, playing, shuffle, repeat }; },
     position() {}, duration() {}, playing() {},   // milliseconds, milliseconds, true or false
+    track() { return { title, artist, album }; },  // the names alone, for modules that look the music up
     chain() { return { stages, running, playing, rate, issues, dac, seal: { head, sub, cls }, bits, gain }; },
     carry(format) {},   // what an ALSA format really carries, in words
   };
@@ -148,16 +149,22 @@ export default function page(api) {
 
 `api` holds the panel's state (`S`: `status`, `settings`, `features`, `names`, `xruns`), its
 helpers (`$`, `$$`, `tr`, `esc`, `dec`, `khz`, `fmtWord`, `fmtTime`, `clock`, `stamp`, `post`,
-`toast`, `fv`, `loc`, `MARK`, `outName`, `srcId`, `srcState`), `render()` to draw the Listen and
-Signal views again, and `slot(where, html)`, which puts the module's own markup on the page:
-`"notice"` and `"play"` in the Listen view, `"signal"` in the Signal view. The markup is removed
-when the module is switched off. Everything that does not come from the module itself goes
+`toast`, `fv`, `loc`, `MARK`, `outName`, `srcId`, `srcState`), `lang()` (the page's language),
+`track()` (what is playing, whichever source plays it: `{title, artist, album}` or `null`),
+`render()` to draw the Listen and Signal views again, and `slot(where, html)`, which puts the
+module's own markup on the page: `"notice"` and `"play"` beside the sleeve and `"about"` under it
+in the Listen view, `"signal"` in the Signal view. The markup is removed when the module is
+switched off; a `<style>` element inside it carries the module's own styles. Everything that does not come from the module itself goes
 through `esc()` before it is put in markup.
 
 Texts are written in Swedish through `tr("…")` or ``tr`…${value}…` ``; the other languages are
 in `i18n/<language>.json` beside the module (`tools/i18n-keys.py` lists what is missing).
-`modules/spotify/page.js` is the worked example: the queue, the measured format, the signal
-chain and the verification are all drawn there.
+`modules/spotify/page.js` is the worked example of a source: the queue, the measured format, the
+signal chain and the verification are all drawn there. `modules/about/page.js` is a small one
+that is no source: it reads `api.track()` and shows notes on the music under the sleeve.
+
+A module's card (`panel()`, above) is shown in the Controls view, with the amplifier's input and
+power. The Listen view is for the music.
 
 ## The catalogue
 

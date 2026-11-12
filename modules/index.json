@@ -1,7 +1,47 @@
 {
  "format": 1,
- "serial": 3,
+ "serial": 7,
  "modules": [
+  {
+   "id": "about",
+   "version": "1.0.0",
+   "kind": "integration",
+   "name": {
+    "sv": "Om musiken",
+    "en": "About the music"
+   },
+   "description": {
+    "sv": "Text om artisten, albumet och låten som spelas, från Wikipedia, Discogs och MusicBrainz. Enheten frågar de tjänsterna om det som spelas.",
+    "en": "Notes on the artist, the album and the song that is playing, from Wikipedia, Discogs and MusicBrainz. The device asks those services about what is playing."
+   },
+   "files": [
+    {
+     "path": "__init__.py",
+     "sha256": "de135e14d107c6f62360468fa95d1a3d36a4f4e9315d12710518a6a141c276c7",
+     "exec": false
+    },
+    {
+     "path": "lookup.py",
+     "sha256": "d6f7d2c2038152656728e347b91070c790eb5bba41564719a902376783c8553d",
+     "exec": false
+    },
+    {
+     "path": "module.json",
+     "sha256": "e36b155b5bd4c756fe66ed77e685494778306637aff1ba5b0532b710026edbe4",
+     "exec": false
+    },
+    {
+     "path": "page.js",
+     "sha256": "4f2699e4ae0f2349323834db05a3a3b821306ce214d8c22daabc552078fd4008",
+     "exec": false
+    },
+    {
+     "path": "i18n/en.json",
+     "sha256": "d6aa75e987c4b6eb142b450b069e6e98ae348ae9a985c361391925013155506f",
+     "exec": false
+    }
+   ]
+  },
   {
    "id": "arcam",
    "version": "1.0.0",
@@ -259,7 +299,7 @@
   },
   {
    "id": "spotify",
-   "version": "1.1.0",
+   "version": "1.2.0",
    "kind": "source",
    "name": {
     "sv": "Spotify Lossless (Soloist)",
@@ -282,12 +322,12 @@
     },
     {
      "path": "module.json",
-     "sha256": "89c9389bb1b030773da8aa6a008a3968c120dfb0b82c6492de78edcb0af11ab3",
+     "sha256": "1f09ce1db089a1f53ef49da1eb1825ef6f871917c428535f77070f470c2dfbb0",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "d8bc568ff8ecf818b59b5daf9a0ecb66f09dbcd398039ac386f7aeb95bd31a30",
+     "sha256": "7cb8925e3921b156610f5da87a39b04e9f8af9a56ccd7e0eceae4c83a1f6f1c3",
      "exec": false
     },
     {

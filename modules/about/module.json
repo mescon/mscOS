@@ -1,0 +1,13 @@
+{
+ "id": "about",
+ "version": "1.0.0",
+ "kind": "integration",
+ "name": {
+  "sv": "Om musiken",
+  "en": "About the music"
+ },
+ "description": {
+  "sv": "Text om artisten, albumet och låten som spelas, från Wikipedia, Discogs och MusicBrainz. Enheten frågar de tjänsterna om det som spelas.",
+  "en": "Notes on the artist, the album and the song that is playing, from Wikipedia, Discogs and MusicBrainz. The device asks those services about what is playing."
+ }
+}

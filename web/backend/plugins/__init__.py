@@ -147,7 +147,7 @@ class Plugin:
         """Recent lines of its communication, for troubleshooting in the Modules view."""
         return None
 
-    # ---- a card of its own in the Listen view
+    # ---- a card of its own in the Controls view
     def panel(self) -> dict | None:
         """Controls the panel draws without knowing the module:
           {"title": {sv, en}, "summary": {sv, en}, "lead": {sv, en}, "controls": [

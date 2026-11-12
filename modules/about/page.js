@@ -1,0 +1,124 @@
+// About the music: what Wikipedia, Discogs and MusicBrainz say about the song, the album and
+// the artist that is playing, under the sleeve in the Listen view. The device does the asking
+// (/api/about) and keeps the answers. Loaded while the module is on (docs/MODULES.md, "Page code").
+export default function page(api) {
+  const { $, tr, esc } = api;
+  const CLOSED = 248;   // px: every card is this high until it is opened
+  const box = api.slot("about", `<section class="about" id="about" aria-label="${esc(tr("Om musiken"))}" hidden>
+    <div class="about-cols" id="about-cols"></div>
+    <style>
+      .about { margin-top: 36px; }
+      .about-cols { display: grid; gap: 14px; align-items: start; }
+      @media (min-width: 980px) { .about-cols { grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 18px; } }
+      .about article { position: relative; isolation: isolate; height: ${CLOSED}px; overflow: hidden; border: 1px solid var(--hair);
+        border-radius: 3px; background: var(--plate); transition: height .32s cubic-bezier(.3, .7, .2, 1), opacity .3s; }
+      @media (prefers-reduced-motion: reduce) { .about article { transition: none; } }
+      .about.stale article[data-part="track"] { opacity: .4; }
+      /* the album's own sleeve behind its card: blurred, and fading out downwards */
+      .about .art { position: absolute; inset: -24px -24px auto; height: 250px; z-index: -1; background-size: cover; background-position: center;
+        filter: blur(14px) saturate(1.15); opacity: .85;
+        -webkit-mask-image: linear-gradient(to bottom, #000 12%, transparent 96%); mask-image: linear-gradient(to bottom, #000 12%, transparent 96%); }
+      .about .art::after { content: ""; position: absolute; inset: 0; background: color-mix(in srgb, var(--plate) 42%, transparent); }
+      .about .head { appearance: none; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 2px 12px; width: 100%;
+        padding: 18px 20px 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+      .about article.fits .head { cursor: default; }
+      .about .part { grid-column: 1 / -1; font-size: .8125rem; letter-spacing: .04em; color: var(--engraved); }
+      .about h3 { font-family: var(--serif); font-weight: 500; font-size: 1.5rem; line-height: 1.15; overflow-wrap: anywhere; }
+      .about .chev { width: 18px; height: 18px; margin-top: 6px; color: var(--engraved); transition: transform .3s; }
+      .about article.open .chev { transform: rotate(180deg); }
+      .about article.fits .chev { visibility: hidden; }
+      .about .head:focus-visible { outline: 2px solid var(--ink); outline-offset: -4px; }
+      .about .body { padding: 12px 20px 20px; }
+      .about article:not(.open):not(.fits) .body { cursor: pointer;
+        -webkit-mask-image: linear-gradient(to bottom, #000 calc(${CLOSED}px - 150px), transparent calc(${CLOSED}px - 86px));
+        mask-image: linear-gradient(to bottom, #000 calc(${CLOSED}px - 150px), transparent calc(${CLOSED}px - 86px)); }
+      .about dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 16px; font-size: .875rem; margin: 0 0 12px; }
+      .about dt { color: var(--engraved); }
+      .about dd { margin: 0; }
+      .about .txt { font-size: .9375rem; line-height: 1.55; max-width: 64ch; }
+      .about .txt p + p { margin-top: .7em; }
+      .about h4 { font-family: var(--serif); font-style: italic; font-weight: 500; font-size: 1.125rem; color: var(--engraved); margin: 18px 0 6px; }
+      .about .from { font-size: .8125rem; color: var(--engraved); margin-top: 14px; }
+      .about .from a { color: inherit; text-underline-offset: 3px; margin-right: 14px; }
+      .about .from a:hover { color: var(--ink); }
+    </style>
+  </section>`);
+  const cols = box.querySelector("#about-cols");
+  const PART = { track: tr("Låten"), album: tr("Albumet"), artist: tr("Artisten") };
+  const FACT = { from: tr("Från"), born: tr("Född"), active: tr("Aktiv sedan"), genre: tr("Genre"), released: tr("Utgiven"), label: tr("Skivbolag"), discogs: tr("Betyg på Discogs") };
+  let key = "", timer = 0;
+  const open = new Set();   // the cards the reader opened stay open from track to track
+
+  const paras = (t) => String(t || "").split(/\n+/).filter((p) => p.trim()).map((p) => `<p>${esc(p.trim())}</p>`).join("");
+  const fact = ([k, v, n]) => `<dt>${esc(FACT[k] || k)}</dt><dd>${esc(k === "discogs" ? tr`${v} av 5 (${n} röster)` : v)}</dd>`;
+  function part(kind, d) {
+    if (!d || !(d.text || d.review || (d.facts || []).length)) return "";
+    const links = [...(d.links || [])];
+    if (d.review?.url && !links.some((l) => l.url === d.review.url)) links.push({ name: "Wikipedia (en)", url: d.review.url });
+    return `<article data-part="${kind}">
+      ${kind === "album" ? `<div class="art" aria-hidden="true"></div>` : ""}
+      <button class="head" aria-expanded="false" aria-controls="about-${kind}">
+        <span class="part">${esc(PART[kind])}</span><h3>${esc(d.name || "")}</h3>
+        <svg class="chev" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9.5 6 6 6-6"/></svg>
+      </button>
+      <div class="body" id="about-${kind}">
+        ${(d.facts || []).length ? `<dl>${d.facts.map(fact).join("")}</dl>` : ""}
+        ${d.text ? `<div class="txt">${paras(d.text)}</div>` : ""}
+        ${d.review ? `<h4>${esc(tr("Mottagande"))}</h4><div class="txt">${paras(d.review.text)}</div>` : ""}
+        ${links.length ? `<p class="from">${links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.name)}</a>`).join("")}</p>` : ""}
+      </div>
+    </article>`;
+  }
+  const full = (a) => a.querySelector(".head").offsetHeight + a.querySelector(".body").offsetHeight + 2;
+  function setOpen(a, on, animate = true) {
+    if (a.classList.contains("fits")) return;
+    if (!animate) a.style.transition = "none";
+    a.classList.toggle("open", on);
+    a.querySelector(".head").setAttribute("aria-expanded", String(on));
+    a.style.height = `${on ? full(a) : CLOSED}px`;
+    if (!animate) { a.offsetHeight; a.style.transition = ""; }
+    on ? open.add(a.dataset.part) : open.delete(a.dataset.part);
+  }
+  function draw(d) {
+    cols.innerHTML = part("track", d.track) + part("album", d.album) + part("artist", d.artist);
+    box.hidden = !cols.children.length;
+    box.classList.remove("stale");
+    const art = cols.querySelector(".art"), cover = $("#np-cover");
+    if (art) { if (cover && !cover.hidden && cover.src) art.style.backgroundImage = `url(${JSON.stringify(cover.src)})`; else art.remove(); }
+    for (const a of cols.children) {
+      a.classList.toggle("fits", full(a) <= CLOSED);   // all of it shows: nothing to open
+      if (open.has(a.dataset.part)) setOpen(a, true, false);
+    }
+  }
+  cols.addEventListener("click", (e) => {
+    const a = e.target.closest("article"); if (!a) return;
+    // the heading opens and closes; a closed card opens wherever it is pressed
+    if (e.target.closest(".head")) setOpen(a, !a.classList.contains("open"));
+    else if (!a.classList.contains("open") && !e.target.closest("a")) setOpen(a, true);
+  });
+  addEventListener("resize", () => { for (const a of cols.querySelectorAll("article.open")) a.style.height = `${full(a)}px`; });
+  async function ask(t, k) {
+    try {
+      const r = await fetch("/api/about", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...t, lang: api.lang() }) });
+      if (!r.ok) throw new Error(r.status);
+      const d = await r.json();
+      if (k === key) draw(d);
+    } catch {   // the device did not answer: once more in a while, not at every redraw
+      if (k !== key) return;
+      box.hidden = true;
+      timer = setTimeout(() => { if (k === key) key = ""; }, 30000);
+    }
+  }
+  return {
+    // called whenever the page is drawn: ask when the track is another one
+    render() {
+      const t = api.track(), ok = t && t.artist && t.title;
+      const k = ok ? [t.artist, t.album, t.title].join("\u0001") : "";
+      if (k === key) return;
+      key = k; clearTimeout(timer);
+      if (!ok) { box.hidden = true; cols.innerHTML = ""; return; }
+      box.classList.add("stale");
+      timer = setTimeout(() => ask({ title: t.title, artist: t.artist, album: t.album || "" }, k), 1200);  // not for every skipped track
+    },
+  };
+}
