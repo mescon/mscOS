@@ -8,6 +8,7 @@ taken only when its opening names both the song and the artist."""
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import time
 from urllib.parse import quote
@@ -459,6 +460,61 @@ def lrc_lines(text: str) -> list[list]:
     return out[:600]
 
 
+def _scalar(v: str) -> str:
+    """A YAML scalar as LRCLIB writes them: plain, 'single-quoted' or "double-quoted"."""
+    v = v.strip()
+    if len(v) >= 2 and v[0] == v[-1] == "'":
+        return v[1:-1].replace("''", "'")
+    if len(v) >= 2 and v[0] == v[-1] == '"':
+        try:
+            return json.loads(v)
+        except ValueError:
+            return v[1:-1]
+    return v
+
+
+def word_lines(text: str) -> list[dict]:
+    """LRCLIB's "lyricsfile" (lines with the time of each word) as
+    [{"ms": start, "text": line, "words": [[ms, "word "], ...]}, ...]. Its format is a small
+    part of YAML, read here line by line: no YAML library is needed for it."""
+    out, cur, word, inside = [], None, None, False
+    for raw in (text or "").splitlines():
+        if not raw.strip():
+            continue
+        if not raw.startswith((" ", "-")):          # a top-level key: only "lines:" is ours
+            inside = raw.strip() == "lines:"
+            continue
+        if not inside:
+            continue
+        m = re.match(r"^(\s*)(- )?(\w+):\s?(.*)$", raw)
+        if not m:
+            continue
+        indent, dash, key, val = len(m.group(1)), bool(m.group(2)), m.group(3), m.group(4)
+        if indent == 0 and dash:                     # "- text: a line"
+            cur, word = {"ms": None, "text": "", "words": []}, None
+            out.append(cur)
+        elif indent >= 2 and dash and cur is not None:   # "  - text: 'a word '"
+            word = [None, ""]
+            cur["words"].append(word)
+        target_word = word is not None and (dash or indent >= 4) and indent >= 2
+        if key == "text":
+            if target_word:
+                word[1] = _scalar(val)[:80]
+            elif cur is not None:
+                cur["text"] = _scalar(val)[:300]
+        elif key == "start_ms" and val.strip().lstrip("-").isdigit():
+            if target_word:
+                word[0] = int(val)
+            elif cur is not None:
+                cur["ms"] = int(val)
+        elif key == "words":
+            word = None
+    lines = [l for l in out if isinstance(l["ms"], int)]
+    for l in lines:
+        l["words"] = [w for w in l["words"] if isinstance(w[0], int) and w[1]]
+    return lines[:600]
+
+
 async def lyrics(http, artist_name: str, title: str, album_title: str = "", duration_ms: int = 0) -> dict | None:
     """The song's words from LRCLIB (an open, community-kept database): {"synced": [[ms, line], ...],
     "plain": "...", "instrumental": bool}. None: it has none."""
@@ -474,11 +530,15 @@ async def lyrics(http, artist_name: str, title: str, album_title: str = "", dura
         d = hits[0] if hits else None
     if not d:
         return None
-    synced = lrc_lines(d.get("syncedLyrics") or "")
+    synced, words = lrc_lines(d.get("syncedLyrics") or ""), None
+    timed = word_lines(d.get("lyricsfile") or "")
+    if timed and any(len(l["words"]) > 1 for l in timed):
+        # the file with a time for every word: its lines and their times go together
+        synced, words = [[l["ms"], l["text"]] for l in timed], [l["words"] for l in timed]
     plain_text = (d.get("plainLyrics") or "")[:8000]
     if not synced and not plain_text and not d.get("instrumental"):
         return None
-    return {"synced": synced, "plain": plain_text, "instrumental": bool(d.get("instrumental"))}
+    return {"synced": synced, "words": words, "plain": plain_text, "instrumental": bool(d.get("instrumental"))}
 
 
 if __name__ == "__main__":  # python3 lookup.py "Artist" "Album" "Song" [lang] [spotify artist id]

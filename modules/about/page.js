@@ -5,37 +5,67 @@ export default function page(api) {
   const { $, tr, esc } = api;
   const CLOSED = 248;   // px: every card is this high until it is opened
   const lyr = api.slot("about", `<section class="lyrics" id="about-lyrics" aria-label="${esc(tr("Låttext"))}" hidden>
-    <button class="ly-head" id="ly-head" aria-expanded="false" aria-controls="ly-all">
+    <div class="ly-bg" aria-hidden="true"></div><div class="ly-shade" aria-hidden="true"></div>
+    <div class="ly-top">
       <span class="part">${esc(tr("Texten"))}</span>
-      <svg class="chev" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9.5 6 6 6-6"/></svg>
-    </button>
-    <div class="ly-now" id="ly-now" aria-live="off"><p class="prev"></p><p class="cur"></p><p class="next"></p></div>
-    <ol class="ly-all" id="ly-all" hidden></ol>
+      <p class="ly-what" id="ly-what"><b></b><span></span></p>
+      <button class="ly-full" id="ly-full" aria-pressed="false" aria-label="${esc(tr("Helskärm"))}">
+        <svg class="i-open" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 9.5v-5h5M19.5 9.5v-5h-5M4.5 14.5v5h5M19.5 14.5v5h-5"/></svg>
+        <svg class="i-close" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div class="ly-stage" id="ly-stage"><ol class="ly-track" id="ly-track"></ol></div>
     <p class="from"><a href="https://lrclib.net/" target="_blank" rel="noopener noreferrer">LRCLIB</a></p>
     <style>
-      .lyrics { margin-top: 36px; border: 1px solid var(--hair); border-radius: 3px; background: var(--plate); }
-      .lyrics .ly-head { appearance: none; display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 16px 20px 0;
-        border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-      .lyrics .part { font-size: .8125rem; letter-spacing: .04em; color: var(--ink); opacity: .72; }
-      .lyrics .chev { width: 18px; height: 18px; color: var(--engraved); transition: transform .3s; }
-      .lyrics.open .chev { transform: rotate(180deg); }
-      .ly-now { padding: 6px 20px 4px; min-height: 124px; display: grid; align-content: center; gap: 4px; cursor: pointer; }
-      .ly-now p { margin: 0; font-family: var(--serif); line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .ly-now .prev, .ly-now .next { font-size: 1.0625rem; color: var(--engraved); opacity: .6; min-height: 1.3em; }
-      .ly-now .cur { font-size: 1.625rem; font-weight: 500; white-space: normal; min-height: 1.25em; }
-      .lyrics.open .ly-now { display: none; }
-      @keyframes ly-in { from { opacity: 0; transform: translateY(-6px); } }
-      .lyrics.open .ly-all { animation: ly-in .2s cubic-bezier(.3, .7, .2, 1); }
-      .lyrics:not(.open) .ly-now { animation: ly-in .2s cubic-bezier(.3, .7, .2, 1); }
-      @media (prefers-reduced-motion: reduce) { .lyrics .ly-all, .lyrics .ly-now { animation: none !important; } }
-      .ly-all { list-style: none; margin: 8px 0 0; padding: 0 20px; max-height: min(60vh, 520px); overflow-y: auto; overscroll-behavior: contain; scroll-behavior: smooth; }
-      @media (prefers-reduced-motion: reduce) { .ly-all { scroll-behavior: auto; } }
-      .ly-all li { padding: 5px 0; font-family: var(--serif); font-size: 1.1875rem; line-height: 1.3; color: var(--engraved); transition: color .25s; }
-      .ly-all li.on { color: var(--ink); font-weight: 600; }
-      .ly-all li[data-ms] { cursor: pointer; }
-      .ly-all li:empty::before { content: "♪"; opacity: .5; }
-      .lyrics .from { font-size: .8125rem; color: var(--engraved); margin: 8px 20px 14px; }
+      /* The words move as one column: the line that is sung stands in the middle, the one before
+         goes up and out, the next comes up from below. One movement for all of it, in the time
+         a line takes to arrive. */
+      .lyrics { position: relative; isolation: isolate; margin-top: 36px; border: 1px solid var(--hair); border-radius: 3px; background: var(--plate); overflow: hidden; }
+      .ly-top { display: flex; align-items: center; gap: 12px; padding: 12px 12px 0 20px; }
+      .lyrics .part { flex: 1; font-size: .8125rem; letter-spacing: .04em; color: var(--ink); opacity: .72; }
+      .ly-what { display: none; }
+      .ly-full { appearance: none; width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: var(--engraved); cursor: pointer; }
+      .ly-full:hover { color: var(--ink); }
+      .ly-full svg { width: 20px; height: 20px; }
+      .ly-full .i-close, .lyrics.full .ly-full .i-open { display: none; }
+      .lyrics.full .ly-full .i-close { display: block; }
+      .ly-stage { position: relative; height: 172px; overflow: hidden;
+        -webkit-mask-image: linear-gradient(to bottom, transparent, #000 24%, #000 76%, transparent); mask-image: linear-gradient(to bottom, transparent, #000 24%, #000 76%, transparent); }
+      .ly-track { list-style: none; margin: 0; padding: 0 20px; transition: transform .6s cubic-bezier(.4, 0, .2, 1); will-change: transform; }
+      .ly-track li { padding: 7px 0; text-align: center; font-family: var(--serif); font-size: 1.5rem; line-height: 1.25; opacity: 0; transform: scale(.82);
+        transition: opacity .6s cubic-bezier(.4, 0, .2, 1), transform .6s cubic-bezier(.4, 0, .2, 1), filter .6s; }
+      .ly-track li.d0 { opacity: 1; transform: none; font-weight: 500; }
+      .ly-track li.d1 { opacity: .5; }
+      .ly-track li.d2 { opacity: .2; filter: blur(1px); }
+      .ly-track li:empty::before { content: "♪"; }
+      .ly-track li span { white-space: pre-wrap; transition: opacity .18s ease-out; }
+      .ly-track li.d0 span:not(.sung) { opacity: .42; }
+      /* words without times: all of them, to read and scroll */
+      .lyrics.plain .ly-stage { overflow-y: auto; -webkit-mask-image: none; mask-image: none; height: 220px; }
+      .lyrics.plain .ly-track { transform: none !important; padding-bottom: 12px; }
+      .lyrics.plain .ly-track li { opacity: .85; transform: none; font-size: 1.125rem; padding: 3px 0; }
+      .lyrics .from { font-size: .8125rem; color: var(--engraved); margin: 0 20px 12px; }
       .lyrics .from a { color: inherit; text-underline-offset: 3px; }
+      @media (prefers-reduced-motion: reduce) { .ly-track, .ly-track li { transition: none; } }
+      /* full screen: the sleeve behind, blurred, under half black, so that the words stand clear */
+      .ly-bg, .ly-shade { display: none; }
+      .lyrics.full { position: fixed; inset: 0; z-index: 200; margin: 0; border: 0; border-radius: 0; background: #000; color: #fff; display: flex; flex-direction: column; }
+      .lyrics.full .ly-bg { display: block; position: absolute; inset: -48px; z-index: -2; background-size: cover; background-position: center; filter: blur(30px) saturate(1.15); }
+      .lyrics.full .ly-shade { display: block; position: absolute; inset: 0; z-index: -1; background: rgba(0, 0, 0, .5); }
+      .lyrics.full .ly-top { padding: calc(14px + env(safe-area-inset-top)) 14px 0 24px; }
+      .lyrics.full .part { display: none; }
+      .lyrics.full .ly-what { display: block; flex: 1; min-width: 0; margin: 0; }
+      .lyrics.full .ly-what b { display: block; font-family: var(--serif); font-weight: 500; font-size: 1.25rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .lyrics.full .ly-what span { display: block; font-size: .875rem; opacity: .7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .lyrics.full .ly-full { color: #fff; }
+      .lyrics.full .ly-stage { flex: 1; height: auto; -webkit-mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 82%, transparent); mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 82%, transparent); }
+      .lyrics.full .ly-track { padding: 0 max(24px, 8vw); }
+      .lyrics.full .ly-track li { font-size: clamp(1.75rem, 4.8vw, 3.5rem); padding: clamp(10px, 1.6vh, 20px) 0; text-shadow: 0 2px 24px rgba(0, 0, 0, .55); }
+      .lyrics.full .ly-track li.d1 { opacity: .55; }
+      .lyrics.full .ly-track li.d2 { opacity: .25; }
+      .lyrics.full.plain .ly-stage { height: auto; }
+      .lyrics.full.plain .ly-track li { font-size: clamp(1.125rem, 2.6vw, 1.75rem); }
+      .lyrics.full .from { color: rgba(255, 255, 255, .6); margin: 0 24px calc(14px + env(safe-area-inset-bottom)); }
     </style>
   </section>`);
   const box = api.slot("about", `<section class="about" id="about" aria-label="${esc(tr("Om musiken"))}" hidden>
@@ -222,51 +252,64 @@ export default function page(api) {
   }
   // the cards get their size when Listen is shown, when the window changes, when the type loads
   new ResizeObserver(measure).observe(cols);
-  // ---- the words: the line that is sung now between the one before and the one after
+  // ---- the words: the line that is sung now in the middle, the column moving under it
   let words = null, wordsAt = -2, wordsFor = "";
-  const lyOpen = () => lyr.classList.contains("open");
+  const track = lyr.querySelector("#ly-track"), stage = lyr.querySelector("#ly-stage");
   function lyDraw() {
-    const all = lyr.querySelector("#ly-all"), w = words;
-    lyr.hidden = !w || !!w.none;
-    if (lyr.hidden) return;
-    const lines = w.synced.length ? w.synced : (w.plain || "").split("\n").map((x) => [null, x]);
-    all.innerHTML = w.instrumental && !lines.length ? `<li>${esc(tr("Instrumental"))}</li>`
-      : lines.map(([ms, x]) => `<li${ms != null ? ` data-ms="${ms}"` : ""}>${esc(x)}</li>`).join("");
-    wordsAt = -2;
-    if (!w.synced.length) {   // no times: the first lines as a taste, the rest when opened
-      const said = lines.map((l) => l[1]).filter(Boolean), now = lyr.querySelector("#ly-now").children;
-      const none = w.instrumental && !said.length;
-      now[0].textContent = none ? "" : tr("Texten är inte tidssatt");
-      now[1].textContent = none ? tr("Instrumental") : said[0] || "";
-      now[2].textContent = none ? "" : said[1] || "";
-    }
-    lyTick();
-  }
-  function lyTick() {
     const w = words;
-    if (!w || lyr.hidden || !w.synced.length) return;
-    const pos = api.position() + 250;
-    let i = -1;
-    for (let n = 0; n < w.synced.length && w.synced[n][0] <= pos; n++) i = n;
-    if (i === wordsAt) return;
-    wordsAt = i;
-    const line = (n) => (w.synced[n] ? w.synced[n][1] : "");
-    const now = lyr.querySelector("#ly-now").children;
-    now[0].textContent = line(i - 1); now[1].textContent = line(i) || (i < 0 ? "…" : "♪"); now[2].textContent = line(i + 1);
-    const all = lyr.querySelector("#ly-all");
-    all.querySelector("li.on")?.classList.remove("on");
-    const li = all.children[i];
-    if (li) { li.classList.add("on"); if (lyOpen()) all.scrollTop = li.offsetTop - all.offsetTop - all.clientHeight / 2 + li.offsetHeight / 2; }
-  }
-  setInterval(lyTick, 300);
-  function lyToggle(on) {
-    lyr.classList.toggle("open", on);
-    lyr.querySelector("#ly-all").hidden = !on;
-    lyr.querySelector("#ly-head").setAttribute("aria-expanded", String(on));
+    lyr.hidden = !w || !!w.none;
+    if (lyr.hidden) { lyFull(false); return; }
+    const timed = w.synced.length > 0;
+    const lines = timed ? w.synced.map((l) => l[1]) : (w.plain || "").split("\n");
+    lyr.classList.toggle("plain", !timed);
+    // where every word has its time, each word is its own piece, to light as it is sung
+    const line = (x, n) => { const ws = timed && w.words && w.words[n]; return ws && ws.length > 1 ? ws.map(([ms, t]) => `<span data-ms="${+ms}">${esc(t)}</span>`).join("") : esc(x); };
+    track.innerHTML = !timed && w.instrumental && !lines.join("").trim() ? `<li>${esc(tr("Instrumental"))}</li>` : lines.map((x, n) => `<li>${line(x, n)}</li>`).join("");
+    track.style.transform = "";
+    const t = api.track() || {};
+    lyr.querySelector("#ly-what b").textContent = t.title || ""; lyr.querySelector("#ly-what span").textContent = t.artist || "";
     wordsAt = -2; lyTick();
   }
-  lyr.querySelector("#ly-head").addEventListener("click", () => lyToggle(!lyOpen()));
-  lyr.querySelector("#ly-now").addEventListener("click", () => lyToggle(true));
+  // The line for this moment, and the column moved so that it stands in the middle of the stage.
+  function lyTick(force) {
+    const w = words;
+    if (!w || lyr.hidden || !w.synced.length) return;
+    const pos = api.position() + 300;   // a little early: the line arrives as it is sung
+    let i = -1;
+    for (let n = 0; n < w.synced.length && w.synced[n][0] <= pos; n++) i = n;
+    // the words of the line that is sung, lit one by one
+    const now = track.children[i];
+    if (now && now.firstElementChild) for (const sp of now.children) sp.classList.toggle("sung", +sp.dataset.ms <= pos - 150);
+    if (i === wordsAt && !force) return;
+    wordsAt = i;
+    const at = Math.max(i, 0), li = track.children[at];
+    if (!li) return;
+    [...track.children].forEach((el, n) => {
+      const d = Math.abs(n - i);
+      el.className = i < 0 ? (n === 0 ? "d1" : n === 1 ? "d2" : "") : d === 0 ? "d0" : d === 1 ? "d1" : d === 2 ? "d2" : "";
+    });
+    track.style.transform = `translateY(${Math.round(stage.clientHeight / 2 - (li.offsetTop + li.offsetHeight / 2))}px)`;
+  }
+  setInterval(lyTick, 80);
+  addEventListener("resize", () => lyTick(true));
+  // Full screen: this same part over the whole page, the sleeve behind it. (The browser's own
+  // full screen too, where it is allowed; without it the part still covers the page.)
+  function lyFull(on) {
+    if (lyr.classList.contains("full") === on) return;
+    lyr.classList.toggle("full", on);
+    lyr.querySelector("#ly-full").setAttribute("aria-pressed", String(on));
+    lyr.querySelector("#ly-full").setAttribute("aria-label", on ? tr("Stäng helskärm") : tr("Helskärm"));
+    if (on) {
+      const cover = $("#np-cover");
+      lyr.querySelector(".ly-bg").style.backgroundImage = cover && !cover.hidden && cover.src ? `url(${JSON.stringify(cover.src)})` : "";
+      lyr.requestFullscreen?.().catch(() => {});
+    } else if (document.fullscreenElement === lyr) document.exitFullscreen?.().catch(() => {});
+    document.documentElement.style.overflow = on ? "hidden" : "";
+    track.style.transition = "none"; lyTick(true); track.offsetHeight; track.style.transition = "";   // in place at once, not sliding in
+  }
+  lyr.querySelector("#ly-full").addEventListener("click", () => lyFull(!lyr.classList.contains("full")));
+  document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement) lyFull(false); else lyTick(true); });
+  addEventListener("keydown", (e) => { if (e.key === "Escape" && lyr.classList.contains("full")) lyFull(false); });
   async function askWords(t, k) {
     if (!api.S.settings?.about_lyrics) { words = null; lyr.hidden = true; return; }
     if (wordsFor === k && words) return;
@@ -276,6 +319,7 @@ export default function page(api) {
       const d = r.ok ? await r.json() : null;
       if (k !== key) return;
       words = d; wordsFor = k; lyDraw();
+      if (lyr.classList.contains("full")) { const c = $("#np-cover"); lyr.querySelector(".ly-bg").style.backgroundImage = c && !c.hidden && c.src ? `url(${JSON.stringify(c.src)})` : ""; }
     } catch { if (k === key) { words = null; lyr.hidden = true; } }
   }
   async function ask(t, k) {

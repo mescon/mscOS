@@ -1,10 +1,10 @@
 {
  "format": 1,
- "serial": 36,
+ "serial": 38,
  "modules": [
   {
    "id": "about",
-   "version": "1.1.0",
+   "version": "1.2.0",
    "kind": "integration",
    "name": {
     "sv": "Om musiken",
@@ -17,27 +17,27 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "1dd57677b0950b10762d79f9e43728065b0a5431a3d4a89bdb78309df27aa1cb",
+     "sha256": "74bdb38bbfb3d819bf48120d62dac5acd182eb016a21c484cfdc70b0f6bce8ef",
      "exec": false
     },
     {
      "path": "lookup.py",
-     "sha256": "a1cd2f83949162b392f91417150ea39c6efd9627f816afbfee9330aefa02e921",
+     "sha256": "b9d6aa20d64962797cf4b6f7653e2e28967a625b4bd8420e5df7e859107950ad",
      "exec": false
     },
     {
      "path": "module.json",
-     "sha256": "173e7d0379ae4ec47c73f5f7bb7ed401108bfbc2d5a4e5358fc0fea6c92eb553",
+     "sha256": "33d7f9269f101d2d698cffb421884b29a0a0e7fe2fd527899e8e2233223f587b",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "615f994d1395190ba5cb6980ddd4a20cff9f0212a04a2313ca74d74323fd61e7",
+     "sha256": "13c23d1471100c991c2edaa1d4e6dc30f69da291d15444d8320dfc7fe2640adf",
      "exec": false
     },
     {
      "path": "i18n/en.json",
-     "sha256": "7d9ab4dcba66ebfe7d198127c49c85b7f3b9e67561cc728852969e9d44e49fa7",
+     "sha256": "2579d99836995649240d8d0fce9996f3e68d223990c41c3b6acdab1e58201c1c",
      "exec": false
     }
    ]

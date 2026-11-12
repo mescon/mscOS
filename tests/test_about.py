@@ -67,3 +67,15 @@ class Texts(unittest.TestCase):
         html = 'A band from <b>somewhere</b> &amp; elsewhere. <a href="https://www.last.fm/music/X">Read more on Last.fm</a>. User-contributed text…'
         self.assertEqual(lookup.lastfm_clean(html), "A band from somewhere & elsewhere.")
 
+    def test_words_with_their_times(self):
+        text = (
+            "version: '1.0'\nmetadata:\n  title: Money\n  duration_ms: 383000\nlines:\n"
+            "- text: Money\n  start_ms: 40580\n  end_ms: 41320\n  words:\n  - text: Money\n    start_ms: 40580\n"
+            "- text: You're okay\n  start_ms: 46880\n  end_ms: 51660\n  words:\n  - text: 'You''re '\n    start_ms: 46880\n  - text: okay\n    start_ms: 50560\n"
+            "plain: |\n  Money\n  - text: not a line\n"
+        )
+        self.assertEqual(lookup.word_lines(text), [
+            {"ms": 40580, "text": "Money", "words": [[40580, "Money"]]},
+            {"ms": 46880, "text": "You're okay", "words": [[46880, "You're "], [50560, "okay"]]}])
+        self.assertEqual(lookup.word_lines("not that format at all"), [])
+

@@ -15,7 +15,6 @@
  "Låttext": "Lyrics",
  "Texten": "The words",
  "Instrumental": "Instrumental",
- "Texten är inte tidssatt": "The words are not timed",
  "Medlemmar": "Members",
  "Utmärkelser": "Awards",
  "Medverkande": "Credits",
@@ -30,5 +29,7 @@
  "Producent": "Producer",
  "Tekniker": "Engineer",
  "Mixning": "Mix",
- "Mastering": "Mastering"
+ "Mastering": "Mastering",
+ "Helskärm": "Full screen",
+ "Stäng helskärm": "Leave full screen"
 }
