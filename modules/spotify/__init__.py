@@ -56,6 +56,9 @@ class Spotify(SourcePlugin):
     pushes_playing = True  # Soloist's events say when playback starts and stops here
     rt_proc = "soloist"   # its rendering threads run with realtime priority (soloist-rt)
     defaults = {"auto_verify": True, "soloist_normalization": False}
+    alert_kinds = ({"id": "soloist", "label": {"sv": "Soloist har stannat", "en": "Soloist has stopped"}},
+                   {"id": "verify", "label": {"sv": "En verifiering avviker", "en": "A verification deviates"}},
+                   {"id": "expiry", "label": {"sv": "Spotify-bygget går snart ut", "en": "The Spotify build expires soon"}})
 
     def __init__(self, hub):
         super().__init__(hub)
@@ -449,6 +452,8 @@ class Spotify(SourcePlugin):
             return
         p = self.playback
         if p.get("status") != "playing" or (self.hub.status.get("dac") or {}).get("state") != "RUNNING":
+            return
+        if self.auth.get("is_active") is False:  # the account plays on another device: nothing to record here
             return
         pos = p.get("position") or {}
         dur = (((p.get("item") or {}).get("decorations") or {}).get("playback") or {}).get("duration_ms") or 0

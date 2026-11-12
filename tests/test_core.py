@@ -33,6 +33,16 @@ class Translations(unittest.TestCase):
                             os.path.join(ROOT, "web", "static", "i18n", "en.json")], capture_output=True, text=True)
         self.assertEqual(r.stdout.strip(), "[]", "texts without a translation: " + r.stdout[:600])
 
+    def test_the_page_names_no_player(self):
+        """What is one player's own lives in its module's page.js, not in the panel's page."""
+        import re
+        static = os.path.join(ROOT, "web", "static")
+        for name in ("app.js", "setup.js", "index.html"):
+            with open(os.path.join(static, name)) as f:
+                s = f.read()
+            self.assertIsNone(re.search(r"soloist", s, re.I), name)
+            self.assertIsNone(re.search(r"""["'`]spotify["'`]""", s), name)
+
     def test_placeholders_survive_translation(self):
         import re
         with open(os.path.join(ROOT, "web", "static", "i18n", "en.json")) as f:

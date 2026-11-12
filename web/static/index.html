@@ -74,7 +74,7 @@
         </figure>
         <div class="now">
           <p class="np-title" id="np-title">Inget spelas</p>
-          <p class="np-artist" id="np-artist">Välj enheten i Spotify-appen</p>
+          <p class="np-artist" id="np-artist"></p>
           <p class="np-album" id="np-album"></p>
           <p class="np-format" id="np-format" hidden></p>
       <div class="scrub needs-seek" id="scrub" role="slider" aria-label="Position i låten" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
@@ -126,10 +126,7 @@
             <p class="fine" id="ml-limit"></p>
           </div>
         </section>
-        <div class="notice" id="vol-warn" hidden>
-          <p>Spotify-volymen står på <b id="vol-val"></b> %. Under 100 % räknas varje sampel om. Styr volymen med förstärkaren ovan.</p>
-          <button class="btn" id="vol-reset">Återställ till 100 %</button>
-        </div>
+        <i id="slot-notice" hidden></i>
         <div class="folds">
     <details class="fold" id="f-amp" data-k="amp">
             <summary><span>Ingång och ström</span><span class="fv" id="fv-amp"></span></summary>
@@ -141,12 +138,7 @@
               <div class="sources" id="ml-src" role="radiogroup" aria-label="Ingång"></div>
             </div>
           </details>
-    <details class="fold spotify-only" id="f-queue" data-k="queue">
-            <summary><span>Härnäst</span><span class="fv" id="fv-queue"></span></summary>
-            <div class="fold-body">
-              <ol class="queue" id="queue"><li class="empty">Kön visas när något spelas.</li></ol>
-            </div>
-          </details>
+          <i id="slot-play" hidden></i>
             <div id="panels"></div>
         </div>
       </div>
@@ -194,27 +186,7 @@
           <div id="opt-list"></div>
         </div>
       </details>
-<details class="fold" id="f-ver" data-k="ver">
-        <summary><span>Verifiering och logg</span><span class="fv" id="fv-ver"></span></summary>
-        <div class="fold-body">
-          <p class="lead">Spelar in exakt det som går till DAC:en och kontrollerar varje sampel mot Spotifys FLAC-raster, och att inga avbrott finns.</p>
-          <div class="verify" id="test-result"></div>
-          <p class="notice roon-only">Verifieringen mäter Spotify Lossless och fungerar därför bara med den källan.</p>
-          <div class="verify-run spotify-only">
-            <div class="seg" role="radiogroup" aria-label="Testlängd" id="test-secs">
-              <button role="radio" data-v="15" aria-checked="false">15 s</button>
-              <button role="radio" data-v="30" aria-checked="true">30 s</button>
-              <button role="radio" data-v="60" aria-checked="false">60 s</button>
-              <button role="radio" data-v="120" aria-checked="false">2 min</button>
-            </div>
-            <button class="btn primary" id="test-run">Verifiera nu</button>
-          </div>
-          <label class="toggle admin"><input type="checkbox" id="auto-verify"><span class="toggle-ui" aria-hidden="true"></span><span>Verifiera automatiskt varje timme</span></label>
-          <p class="fine admin">20 sekunder mitt i en låt, bara när musik spelar. Avvikelser skickas som larm.</p>
-          <h4 class="sub">Logg</h4>
-          <ol class="vlog" id="vlog"><li class="empty">Inga verifieringar än.</li></ol>
-        </div>
-      </details>
+<i id="slot-signal" hidden></i>
 <details class="fold" id="f-clock" data-k="clock">
         <summary><span>Klockan</span><span class="fv" id="fv-clock"></span></summary>
         <div class="fold-body">
@@ -371,7 +343,7 @@
         <div class="fold-body">
           <div class="row wrap">
             <select id="log-src" aria-label="Logg">
-              <option value="soloist">Soloist</option><option value="audio">PipeWire</option>
+              <option value="player">Spelaren</option><option value="audio">PipeWire</option>
               <option value="kernel">Kärna</option><option value="system">System</option><option value="web">Panelen</option>
             </select>
             <label class="toggle inline"><input type="checkbox" id="log-err"><span class="toggle-ui" aria-hidden="true"></span><span>Bara fel</span></label>
@@ -443,10 +415,7 @@
           <h4 class="sub">Larma om</h4>
           <div id="alert-kinds">
             <label class="toggle"><input type="checkbox" data-kind="dac"><span class="toggle-ui" aria-hidden="true"></span><span>DAC:en är borta i mer än en minut</span></label>
-            <label class="toggle"><input type="checkbox" data-kind="soloist"><span class="toggle-ui" aria-hidden="true"></span><span>Källan har stannat</span></label>
             <label class="toggle"><input type="checkbox" data-kind="dropouts"><span class="toggle-ui" aria-hidden="true"></span><span>Avbrott i ljudet under uppspelning</span></label>
-            <label class="toggle"><input type="checkbox" data-kind="verify"><span class="toggle-ui" aria-hidden="true"></span><span>En verifiering avviker</span></label>
-            <label class="toggle"><input type="checkbox" data-kind="expiry"><span class="toggle-ui" aria-hidden="true"></span><span>Spotify-bygget går snart ut</span></label>
           </div>
           <p class="fine">Samma larm skickas högst var sjätte timme, avbrott högst en gång i timmen. Hur larmen skickas ställer du in under <a href="#v-mods">Moduler</a>.</p>
           <button class="btn" id="alerts-test">Skicka testlarm</button>

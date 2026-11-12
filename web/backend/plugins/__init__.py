@@ -36,6 +36,8 @@ class Plugin:
     external: dict | None = None    # set for a module installed beside mscOS: its module.json
     module_dir = ""                 # where its files are (its install script, units, ...)
     module_version = ""             # from its module.json
+    # alerts of its own that the user can switch off one by one: ({"id": ..., "label": {"sv": ..., "en": ...}}, ...)
+    alert_kinds: tuple = ()
     # Settings the panel shows under the module (Modules view) and saves through /api/settings:
     #   {"key": ..., "type": "text" | "number" | "select" | "toggle" | "secret",
     #    "label": {sv, en}, "help": {sv, en}, "options": [[value, {sv, en}], ...] (select),

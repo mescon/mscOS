@@ -1,11 +1,10 @@
 // mscOS panel. One WebSocket for live state, POSTs for actions.
-import { tr, initI18n, decSep, LANG, LANGS, chosenLang, setLang } from "./i18n.js";
+import { tr, initI18n, addTexts, decSep, LANG, LANGS, chosenLang, setLang } from "./i18n.js";
 await initI18n();  // before anything renders: texts below are looked up as they are built
 import { maybeSetup } from "./setup.js";
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
-const S = { status: {}, playback: {}, auth: {}, queue: {}, xruns: [], lastTest: null, panels: {}, opts: null,
-  tests: [], settings: {}, access: { configured: true, logged_in: false } };
+const S = { status: {}, xruns: [], panels: {}, opts: null, settings: {}, access: { configured: true, logged_in: false } };
 
 // ------------------------------------------------------------------ formatting
 const dec = (n, d = 1) => Number(n).toFixed(d).replace(".", decSep());
@@ -16,22 +15,11 @@ const fmtUptime = (s) => { const d = Math.floor(s / 86400), h = Math.floor(s % 8
 const clock = (t) => new Date(t * 1000).toLocaleTimeString(LANG === "sv" ? "sv-SE" : "en-GB", { hour: "2-digit", minute: "2-digit" });
 const stamp = (t) => new Date(t * 1000).toLocaleString("sv-SE", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-// ALSA sample formats in plain words. S32_LE = each sample sent as a 32-bit number; Spotify's
-// 24-bit audio sits unchanged in it (the last 8 bits are zero), as the verification confirms.
+// ALSA sample formats in plain words. S32_LE = each sample sent as a 32-bit number.
 const FMT = { S16_LE: "16 bit", S24_3LE: "24 bit", S24_LE: "24 bit", S32_LE: "32 bit", S32LE: "32 bit", F32LE: tr("32 bit flyttal") };
 const fmtWord = (f) => FMT[f] || f || "";
-// the current track, measured from the samples a few seconds in (Soloist does not report it)
-const trackQuality = () => { const q = S.quality || {}, u = (S.playback.item || {}).uri; return u && q.uri === u ? q : null; };
-const verifiedBits = () => { const q = trackQuality(); if (q) return q.verdict === "bitperfect" ? q.bits : null;
-  return (S.lastTest && S.lastTest.verdict === "bitperfect" && S.lastTest.bits) || null; };
-// What this track really is, measured from the samples (null: not measured yet).
-function formatOf() {
-  const q = trackQuality();
-  if (q && q.verdict === "bitperfect" && q.bits) return { text: `FLAC ${q.bits} bit, 44,1 kHz`, lossy: false };
-  if (q && q.verdict === "lossy_or_processed") return { text: tr("Förlustkomprimerat, inte Lossless"), lossy: true };
-  return null;
-}
-const fmtCarry = (f, bits = verifiedBits()) => /32/.test(f || "") && bits && bits < 32 ? tr`${bits} bit i 32-bitarsformat` : fmtWord(f);
+// a source's page code may know better what a format carries (24 bit in a 32-bit container)
+const fmtCarry = (f) => VIEW().carry?.(f) ?? fmtWord(f);
 const bitsOf = (fmt) => { const m = /S(\d+)/.exec(fmt || ""); return m ? (m[1] === "32" ? 32 : +m[1]) : null; };
 
 function spec(el, rows) {
@@ -44,11 +32,10 @@ async function post(url, data = {}) {
   if (!r.ok) { const t = await r.text(); toast(t || tr`Fel ${r.status}`); if (r.status === 401) refreshAuth(); throw new Error(t); }
   return r.json();
 }
-const cmd = (command, extra = {}) => post("/api/soloist/command", { command, ...extra }).catch(() => {});
 const desktop = matchMedia("(min-width: 1024px)");
 // Fold rows: a short value on the right of each closed row (fv-<id>).
 const fv = (id, text, warn = false) => { const el = $(`#fv-${id}`); if (el) { el.textContent = text ?? ""; el.classList.toggle("warn", !!warn); } };
-let optT = 0, testSecs = 30, dacT = 0;
+let optT = 0, dacT = 0;
 
 // ------------------------------------------------------------------ the signal as an oscilloscope trace
 // A burst of waveform travels the lit part of the chain, stage to stage, then starts over.
@@ -98,7 +85,7 @@ document.addEventListener("click", (e) => {
 showView(LEGACY[(location.hash || "#v-play").slice(1)] || (location.hash || "#v-play").slice(1));
 // remember which rows are open; a chart drawn while its row was closed is redrawn at full width
 const foldKey = (d) => `fold:${d.dataset.k}`;
-$$("details.fold").forEach((d) => {
+function wireFold(d) {
   try { if (localStorage.getItem(foldKey(d)) === "1") d.open = true; } catch {}
   d.addEventListener("toggle", () => {
     if (d.dataset.auto) delete d.dataset.auto;  // opened by the wide layout, not by the listener
@@ -108,7 +95,8 @@ $$("details.fold").forEach((d) => {
     if (d.id === "f-clock" && S.dacd?.clock_avg) renderClockChart(S.dacd.clock_avg.series || []);
     if (d.id === "f-opt") loadOpts(true);
   });
-});
+}
+$$("details.fold").forEach(wireFold);
 
 // On a wide screen the panels of a view lie open side by side; raw data and logs stay folded.
 function widePanels() {
@@ -127,7 +115,53 @@ function connect() {
     $("#dev-sub").textContent = tr("– ingen kontakt, försöker igen…");
     setTimeout(connect, retry); retry = Math.min(retry * 2, 15000);
   };
-  ws.onmessage = (e) => handle(JSON.parse(e.data));
+  ws.onmessage = (e) => { const m = JSON.parse(e.data); inbox = inbox.then(() => handle(m)).catch((err) => console.error(err)); };
+}
+let inbox = Promise.resolve();
+
+// ------------------------------------------------------------------ page code from modules
+// A module may bring a page.js (docs/MODULES.md, "Page code"): its default export gets `api`
+// and returns hooks. The current source's hooks replace the general Listen and Signal views;
+// every loaded module may add parts of its own to the page (api.slot) and handle its messages.
+const PAGES = {}, PAGE_V = {};
+const VIEW = () => PAGES[srcId()] || {};          // the current source's own view, if it brings one
+const pagesDo = (hook, ...a) => Object.values(PAGES).forEach((p) => { try { p[hook]?.(...a); } catch (e) { console.error(e); } });
+function pageApi(id) {
+  return { $, $$, S, tr, esc, dec, khz, fmtWord, fmtTime, clock, stamp, post, toast, fv, loc, MARK,
+    outName, srcId, srcState,
+    render: () => { renderPlay(); renderSignal(); renderSysHead(); },
+    // put markup of the module's own on the page: "notice" and "play" (Listen), "signal" (Signal)
+    slot(where, html) {
+      const mark = $(`#slot-${where}`), t = document.createElement("template");
+      t.innerHTML = html;
+      const els = [...t.content.children];
+      els.forEach((el) => { el.dataset.pageOf = id; mark.before(el); if (el.matches("details.fold")) wireFold(el); });
+      widePanels();
+      return els[0];
+    } };
+}
+async function loadPages(list = []) {
+  for (const id of Object.keys(PAGES)) if (!list.some((p) => p.id === id)) {  // the module was switched off
+    delete PAGES[id]; $$(`[data-page-of="${CSS.escape(id)}"]`).forEach((el) => el.remove());
+  }
+  let fresh = false;
+  for (const p of list) {
+    if (PAGES[p.id] && PAGE_V[p.id] === p.v) continue;
+    // new, or the module was updated while the page is open: its old parts go, the new code draws them again
+    delete PAGES[p.id]; $$(`[data-page-of="${CSS.escape(p.id)}"]`).forEach((el) => el.remove());
+    fresh = true; PAGE_V[p.id] = p.v;
+    try {
+      if (LANG !== "sv" && (p.langs || []).includes(LANG)) {
+        const r = await fetch(`/modules/${encodeURIComponent(p.id)}/i18n/${LANG}.json`); if (r.ok) addTexts(await r.json());
+      }
+      const mod = await import(`/modules/${encodeURIComponent(p.id)}/page.js?v=${encodeURIComponent(p.v || "")}`);
+      PAGES[p.id] = mod.default(pageApi(p.id)) || {};
+    } catch (e) {  // the general views still work without it
+      console.error(`module ${p.id}: page code not loaded`, e);
+      $$(`[data-page-of="${CSS.escape(p.id)}"]`).forEach((el) => el.remove());
+    }
+  }
+  return fresh;
 }
 // "Mark Levinson Nº585.5 via SOtM sMS-200Ultra": both names are settings, detected by default
 function renderNames() {
@@ -148,7 +182,7 @@ function renderNames() {
 function stageLayout() {
   const col = document.querySelector(".console-col");
   const empty = $("#amp").hidden && !$("#panels").children.length && $("#f-amp").hidden
-    && (document.body.classList.contains("src-other") || $("#f-queue").hidden);
+    && ![...$$("#v-play [data-page-of]")].some((el) => !el.hidden);
   document.querySelector(".stage").classList.toggle("solo", empty);
   col.hidden = empty;
 }
@@ -156,32 +190,38 @@ function renderFeatures() {
   const f = S.features || {}, amp = f.amp && f.amp !== "none";
   $("#amp").hidden = !amp; $("#f-amp").hidden = !amp;
   const led = $("#leds").closest("label"); led.hidden = f.leds === false; led.nextElementSibling.hidden = f.leds === false;
-  // what only Spotify Lossless (Soloist) has: the sample-exact verification, and its build's expiry
-  const solo = (f.plugins || []).includes("spotify");
-  $("#f-ver").hidden = !solo;
-  $('#alert-kinds [data-kind="expiry"]').closest("label").hidden = !solo;
-  $('#alert-kinds [data-kind="verify"]').closest("label").hidden = !solo;
+  // the modules' own alerts, after the core's
+  $$("#alert-kinds [data-module]").forEach((el) => el.remove());
+  $("#alert-kinds").insertAdjacentHTML("beforeend", (f.alert_kinds || []).map((k) =>
+    `<label class="toggle" data-module="${esc(k.module)}"><input type="checkbox" data-kind="${esc(k.id)}"><span class="toggle-ui" aria-hidden="true"></span><span>${esc(loc(k.label))}</span></label>`).join(""));
   const b = f.board || {};
   $("#power-note").hidden = b.power_button !== false;
   $("#net-speed").hidden = $("#net-note").hidden = !b.link_mbps;
 }
-function handle(m) { handleMsg(m); renderDock(); stageLayout(); }
+async function handle(m) {
+  if (m.type === "hello" || (m.type === "settings" && m.features)) {
+    // a module switched on while the page is open: ask for the whole state again, with its part
+    if (await loadPages(m.features?.pages) && m.type === "settings") { ws.close(); return; }
+  }
+  if (m.type !== "hello" && Object.values(PAGES).some((p) => { try { return p.message?.(m); } catch (e) { console.error(e); return false; } })) m = null;
+  if (m) handleMsg(m);
+  pagesDo("render"); renderDock(); stageLayout();
+}
 function handleMsg(m) {
   switch (m.type) {
     case "hello":
-      Object.assign(S, { status: m.status || {}, playback: m.playback || {}, auth: m.auth || {}, queue: m.queue || {}, xruns: m.xruns || [], lastTest: m.last_test, panels: m.panels || {}, tests: m.tests || [], settings: m.settings || {}, quality: m.quality || {}, features: m.features || {}, names: m.names || {}, now: m.now || null });
+      Object.assign(S, { status: m.status || {}, xruns: m.xruns || [], panels: m.panels || {}, settings: m.settings || {}, features: m.features || {}, names: m.names || {}, now: m.now || null });
       AMP = m.amp || null;
+      pagesDo("hello", m);
       renderFeatures(); renderAll(); break;
     case "now": if (m.source === srcId()) { S.now = m.now; renderPlay(); renderSignal(); } break;
-    case "status": S.status = m.status; if (roonMode()) S.now = m.status.now ?? null; renderStatus(); renderSignal(); if (roonMode()) renderPlay(); else renderSource(); break;
-    case "soloist": soloistEvent(m.event); break;
+    case "status": S.status = m.status; if (!VIEW().play) S.now = m.status.now ?? null; renderStatus(); renderSignal(); renderPlay(); break;
     case "xrun": S.xruns.push(m.point); if (S.xruns.length > 2880) S.xruns.shift(); renderSpark(); renderSignal(); break;
     case "panels": S.panels = m.panels || {}; renderPanels(); break;
-    case "quality": S.quality = m.quality; renderSignal(); renderPlay(); break;
     case "amp": AMP = m.amp; renderAmp(); break;
     case "job": jobEvent(m); break;
     case "settings": S.settings = { ...S.settings, ...m.settings }; if (m.features) { S.features = m.features; renderFeatures(); } if (m.names) { S.names = m.names; renderNames(); } renderSettings(); renderPlay(); renderSignal(); break;
-    case "history_cleared": S.xruns = []; S.tests = []; renderSpark(); renderVlog(); renderSignal(); break;
+    case "history_cleared": S.xruns = []; renderSpark(); renderSignal(); break;
   }
 }
 const DK = { play: "M9 6.5v11l9-5.5z", pause: "M8.5 6.5h2.2v11H8.5zM13.3 6.5h2.2v11h-2.2z" };
@@ -199,32 +239,10 @@ function renderDock() {
   $("#dk-vol").textContent = $("#ml-vol-v").textContent;
   const v = S.status.system?.mscos; $("#rail-ver").textContent = v ? `mscOS ${v}` : ""; $("#about-ver").textContent = v || "";
 }
-function soloistEvent(ev) {
-  const p = S.playback;
-  switch (ev.type) {
-    case "auth_state": S.auth = ev; break;
-    case "playback_state": S.playback = ev; break;
-    case "track_changed": p.item = ev.item; break;
-    case "playback_changed": p.status = ev.status; break;
-    case "volume_changed": p.volume = ev.volume; break;
-    case "position_sync": p.position = ev.position; break;
-    case "options_changed": p.options = ev.options; break;
-    case "queue_changed": S.queue = ev; renderQueue(); return;
-    case "device_changed": S.auth = { ...S.auth, is_active: ev.is_active, device_name: ev.device_name }; break;
-    case "disconnected": S.auth = {}; break;
-  }
-  renderPlay(); renderSignal();
-}
-
 // ------------------------------------------------------------------ now playing
-const deco = (e) => (e && e.decorations) || {};
-const nameOf = (e) => deco(e).identity?.name || "";
-const coverOf = (e, size = "large") => { const c = deco(e).visual_identity?.cover || []; return (c.find((x) => x.size === size) || c[c.length - 1] || {}).url; };
-const artistsOf = (e) => (deco(e).creators || []).map((c) => nameOf(c.entity)).filter(Boolean).join(", ");
-const devName = () => S.status.soloist?.device_name || "mscOS";  // the name in the Spotify app
-const outName = () => S.names?.output || devName();
-// Sources are modules (features.sources); one at a time owns the DAC. "spotify" is Soloist,
-// which the panel follows in detail; every other source gets the general view.
+const outName = () => S.names?.output || S.names?.network || "mscOS";
+// Sources are modules (features.sources); one at a time owns the DAC. A source gets the general
+// view unless its module brings page code of its own (VIEW()).
 const sources = () => S.features?.sources || [];
 const srcId = () => S.settings?.source || S.status.source || "";
 const SRC = () => sources().find((s) => s.id === srcId()) || null;
@@ -232,7 +250,6 @@ const srcState = (id = srcId()) => (S.status.sources || {})[id] || {};
 const srcHint = (s = SRC()) => (s ? loc(s.hint).replace("{name}", srcState(s.id).device_name || outName()) : "");
 function renderSource() {
   const cur = srcId(), list = sources(), seg = $("#source");
-  document.body.classList.toggle("src-other", roonMode());
   const sig = list.map((s) => s.id).join();
   if (seg.dataset.sig !== sig) {  // one button per enabled source; no switch for a single one
     seg.dataset.sig = sig;
@@ -259,13 +276,14 @@ function transportState(playing, shuffle, repeat) {
 function renderPlay() {
   renderSource();
   const can = SRC()?.transport || [];
-  document.body.classList.toggle("has-transport", can.includes("toggle") && (!roonMode() || !!S.now));
-  document.body.classList.toggle("has-seek", can.includes("seek") && (!roonMode() || !!S.now));
-  if (roonMode() && !S.now) transportState(false, false, "off");
-  if (roonMode()) {
+  const own = VIEW().play;
+  document.body.classList.toggle("has-transport", can.includes("toggle") && (!!own || !!S.now));
+  document.body.classList.toggle("has-seek", can.includes("seek") && (!!own || !!S.now));
+  if (!own && !S.now) transportState(false, false, "off");
+  if (!own) {
     const s = SRC(), stt = srcState(), d = S.status.dac || {}, now = S.now;
     const fe = $("#np-format"), cover = $("#np-cover");
-    $("#vol-warn").hidden = true;
+    fe.classList.remove("lossy", "pending");
     if (!s) {  // no source module is on
       $("#np-title").textContent = tr("Ingen källa");
       $("#np-artist").textContent = tr("Slå på en källa under Moduler.");
@@ -299,43 +317,28 @@ function renderPlay() {
     cover.hidden = true; $("#cover-empty").hidden = false;
     return;
   }
-  const sp = srcState("spotify");
-  if (sp.installed === false || sp.key_set === false) {  // Soloist chosen but not ready yet
-    $("#np-title").textContent = "Spotify Lossless";
-    $("#np-artist").textContent = sp.installed === false
-      ? tr("Soloist är inte installerat. Installera det under Moduler.")
-      : tr("Ange din Spotify-nyckel under Moduler, Spotify Lossless.");
-    $("#np-album").textContent = ""; $("#np-format").hidden = true; $("#vol-warn").hidden = true;
-    $("#np-cover").hidden = true; $("#cover-empty").hidden = false;
-    return;
-  }
-  const p = S.playback, it = p.item, playing = p.status === "playing";
-  $("#np-title").textContent = it ? nameOf(it) : tr("Inget spelas");
-  $("#np-artist").textContent = it ? artistsOf(it) : (S.auth.logged_in ? tr("Starta musik i Spotify-appen") : tr`Välj ${devName()} i Spotify-appen`);
-  $("#np-album").textContent = it ? nameOf(deco(it).parent?.entity) : "";
-  const f = it && S.auth.is_active ? formatOf() : null, fe = $("#np-format");
-  fe.hidden = !(it && S.auth.is_active && (f || playing));  // "measuring" only while it plays
-  fe.textContent = f ? f.text : tr("Mäter formatet …");
-  fe.classList.toggle("lossy", !!f?.lossy);
-  fe.classList.toggle("pending", !f);
-  const img = $("#np-cover"), url = it && coverOf(it);
-  if (url) { if (img.src !== url) img.src = url; img.hidden = false; } else img.hidden = true;
-  $("#cover-empty").hidden = !!url;
-  const o = p.options || {};
-  transportState(playing, !!o.shuffle, o.repeat || "off");
-  const vol = p.volume;
-  $("#vol-warn").hidden = !!S.settings?.spotify_vol_to_amp || !(typeof vol === "number" && vol < 100);
-  $("#vol-val").textContent = vol;
+  // the source's own page code says what plays
+  const m = own() || {}, fe = $("#np-format"), img = $("#np-cover");
+  $("#np-title").textContent = m.title || "";
+  $("#np-artist").textContent = m.artist || "";
+  $("#np-album").textContent = m.album || "";
+  fe.hidden = !m.format; fe.textContent = m.format?.text || "";
+  fe.classList.remove("warn"); fe.classList.toggle("lossy", !!m.format?.lossy); fe.classList.toggle("pending", !!m.format?.pending);
+  if (m.cover) { if (img.src !== m.cover) img.src = m.cover; img.hidden = false; } else img.hidden = true;
+  $("#cover-empty").hidden = !!m.cover;
+  transportState(!!m.playing, !!m.shuffle, m.repeat || "off");
   tickProgress();
 }
-const durOf = () => (roonMode() ? S.now?.duration_ms : deco(S.playback.item).playback?.duration_ms) || 0;
+const durOf = () => (VIEW().duration ? VIEW().duration() : S.now?.duration_ms) || 0;
 function posNow() {
-  const p = S.playback, pos = p.position, dur = durOf();
+  const dur = durOf();
   let ms = 0;
-  if (roonMode()) { const n = S.now || {}; ms = (n.position_ms || 0) + (n.playing && n.position_ts ? Date.now() - n.position_ts * 1000 : 0); }
-  else if (pos) ms = pos.position_ms + (p.status === "playing" ? (Date.now() - pos.timestamp_ms) * (pos.speed || 1) : 0);
+  if (VIEW().position) ms = VIEW().position();
+  else { const n = S.now || {}; ms = (n.position_ms || 0) + (n.playing && n.position_ts ? Date.now() - n.position_ts * 1000 : 0); }
   return Math.max(0, Math.min(ms, dur || ms));
 }
+// is music playing, as far as the panel knows
+const isPlaying = () => (VIEW().playing ? !!VIEW().playing() : S.now ? !!S.now.playing : S.status.dac?.state === "RUNNING");
 function tickProgress() {
   const dur = durOf(), ms = posNow();
   $("#np-pos").textContent = fmtTime(ms); $("#np-dur").textContent = fmtTime(dur);
@@ -345,13 +348,6 @@ function tickProgress() {
   $("#scrub").setAttribute("aria-valuetext", tr`${fmtTime(ms)} av ${fmtTime(dur)}`);
 }
 setInterval(tickProgress, 500);
-function renderQueue() {
-  const up = (S.queue.upcoming || []).slice(0, 8);
-  $("#queue").innerHTML = up.length
-    ? up.map((q) => `<li><img src="${esc(coverOf(q.item, "small") || "")}" alt="" loading="lazy"><div><span class="q-t">${esc(nameOf(q.item))}</span><span class="q-a">${esc(artistsOf(q.item))}</span></div></li>`).join("")
-    : `<li class="empty">${tr("Kön visas när något spelas.")}</li>`;
-  fv("queue", up.length ? nameOf(up[0].item) : "");
-}
 const player = (command, extra = {}) => post("/api/player", { command, ...extra }).catch(() => {});
 $$(".transport button").forEach((b) => b.addEventListener("click", () => {
   const c = b.dataset.cmd;
@@ -370,13 +366,10 @@ scrub.addEventListener("keydown", (e) => {
   const step = { ArrowRight: 10000, ArrowLeft: -10000 }[e.key]; const dur = durOf();
   if (!step || !dur) return; e.preventDefault(); player("seek", { position_ms: Math.round(Math.max(0, Math.min(dur, posNow() + step))) });
 });
-$("#vol-reset").addEventListener("click", () => cmd("set_volume", { volume: 100 }));
 
 // ------------------------------------------------------------------ signal: the chain, readout, seal
-// Every source but Soloist ("spotify") gets the general view; the name is from when Roon was the only other one.
-const roonMode = () => srcId() !== "spotify";
 const CODEC = { vorbis: "Ogg Vorbis", flac: "FLAC", mp3: "MP3", aac: "AAC" };
-function chainRoon() {
+function chainSource() {
   const st = S.status, dac = st.dac || {}, s = SRC() || { label: tr("Ingen källa"), name: {}, protocol: "", pipewire: true };
   const roon = { ...srcState(), label: s.label, name: loc(s.name) || s.label };
   const now = S.now, lossy = !!(now && now.codec && now.codec !== "flac");
@@ -394,54 +387,10 @@ function chainRoon() {
       facts: running ? `${fmtWord(dac.hw_params.format)}, ${khz(rate)} kHz` : dac.present ? tr("Ansluten, vilar") : tr("Inte ansluten"),
       note: running ? (s.pipewire ? tr`Tar emot signalen från ${roon.name} via PipeWire` : tr`Tar emot signalen direkt från ${roon.name}`) : tr`Väntar på ${s.label}` },
   ];
-  return { stages, running, playing: running, rate, issues: [], t: null, dac, xrunHour: 0, roon, lossy, direct: !s.pipewire };
+  return { stages, running, playing: running, rate, issues: [], dac, roon, lossy, direct: !s.pipewire };
 }
-function chain() {
-  if (roonMode()) return chainRoon();
-  const st = S.status, dac = st.dac || {}, pw = st.pipewire || {}, solo = st.soloist || {}, p = S.playback;
-  const sink = pw.sink || {}, stream = (pw.streams || []).find((s) => (s.app || "").toLowerCase() === "spotify");
-  const running = dac.state === "RUNNING", playing = p.status === "playing";
-  const rate = running ? parseInt(dac.hw_params?.rate) || null : null;
-  const vol = p.volume ?? 100, norm = solo.normalization;
-  const bridge = !!S.settings?.spotify_vol_to_amp, volDigital = vol < 100 && !bridge;  // with the bridge the slider is the amplifier's
-  const sinkUnity = sink.volume == null || Math.abs(sink.volume - 1) < 1e-6;
-  const t = S.lastTest, fresh = t && (Date.now() / 1000 - t.t) < 6 * 3600 && t.verdict !== "silent";
-  const hourAgo = Date.now() / 1000 - 3600;
-  const recent = S.xruns.filter((x) => x.t > hourAgo);
-  const xrunHour = recent.reduce((a, x) => a + (x.dac || 0), 0);           // dropouts at the DAC
-  const streamHour = recent.reduce((a, x) => a + (x.stream || 0), 0);      // Soloist stream counter
-  const issues = [];
-  if (vol < 100 && !S.settings?.spotify_vol_to_amp) issues.push(tr`Spotify-volymen är ${vol} %`);
-  if (norm) issues.push(tr("volymnormalisering är på"));
-  if (!sinkUnity) issues.push(tr`PipeWire-volymen är ${Math.round(sink.volume * 100)} %`);
-  if (stream && stream.rate && sink.rate && stream.rate !== sink.rate) issues.push(tr("omsampling i PipeWire"));
-  const stages = [
-    { k: "spotify", name: "Spotify", tag: "Lossless",
-      state: S.auth.logged_in ? (playing ? "ok" : "idle") : "bad",
-      facts: (() => {
-        const f = formatOf();
-        if (f) return tr`${f.text} (uppmätt)`;
-        return tr("FLAC upp till 24 bit, 44,1 kHz, mäts när låten spelat några sekunder"); })(),
-      note: !S.auth.logged_in ? tr("Inte ansluten. Välj enheten i Spotify-appen.") : playing ? (nameOf(p.item) || tr("Spelar")) : tr("Ansluten, väntar") },
-    { k: "soloist", name: "Soloist", tag: (solo.version || "").replace(/^soloist /, "").split(" ")[0],
-      state: solo.service !== "active" ? "bad" : (volDigital || norm) ? "bad" : playing ? "ok" : "idle",
-      facts: bridge ? tr`Volym ${vol} % styr ${outName()}, normalisering ${norm ? tr("på") : tr("av")}` : tr`Volym ${vol} %, normalisering ${norm ? tr("på") : tr("av")}`,
-      note: solo.service !== "active" ? tr("Tjänsten kör inte") : (volDigital || norm) ? tr("Ändrar samplen digitalt") : solo.rt_watcher === "active" ? tr("Realtidsprioritet, avkodar orört") : tr("Avkodar orört") },
-    { k: "pipewire", name: "PipeWire", tag: "pro-audio",
-      state: !sink.name ? "bad" : (!sinkUnity || issues.includes(tr("omsampling i PipeWire"))) ? "bad" : (stream && running ? "ok" : "idle"),
-      facts: tr`${fmtCarry(sink.format || "S32LE")}, ${sink.rate ? khz(sink.rate) : "44,1"} kHz, ingen omsampling`,
-      note: tr`Buffert ${st.pw_top?.quantum || 1024} sampel, ${xrunHour ? tr`${xrunHour} avbrott vid DAC:en` : tr("inga avbrott vid DAC:en")} senaste timmen${streamHour ? tr` (strömmen: ${streamHour} missade cykler vid låtbyten)` : ""}` },
-    { k: "usb", name: "USB", tag: dac.usb_speed === "high" ? "high speed" : dac.present ? "full speed" : "",
-      state: !dac.present ? "bad" : running ? "ok" : "idle",
-      facts: dac.present ? tr`Asynkron överföring, ${dac.usb_speed === "high" ? "USB 2.0" : "USB 1.1"}` : tr("Ingen DAC ansluten"),
-      note: dac.present ? tr`DAC:ns egen klocka styr takten. ${dac.usb_speed === "high" ? tr("Upp till 192 kHz.") : tr`Upp till ${khz(dac.max_rate || 48000)} kHz, räcker för Spotify.`}` : tr("Kontrollera USB-kabeln") },
-    { k: "dac", name: outName(), tag: tr("DAC"),
-      state: !dac.present ? "bad" : running ? "ok" : "idle",
-      facts: running ? `${fmtCarry(dac.hw_params.format)}, ${khz(rate)} kHz` : dac.present ? tr("Ansluten, vilar") : tr("Inte ansluten"),
-      note: running ? tr("Tar emot signalen") : tr("Väljer USB-ingången när musik spelar") },
-  ];
-  return { stages, running, playing, rate, issues, t: fresh ? t : null, dac, xrunHour };
-}
+// The chain as the current source's page code draws it, or the general one.
+const chain = () => (VIEW().chain ? VIEW().chain() : chainSource());
 
 function renderSignal() {
   const c = chain();
@@ -452,29 +401,20 @@ function renderSignal() {
   if (lit.length > 1) waveSet(!!c.running, (lit[0] + .5) / n, (lit[lit.length - 1] + .5) / n); else waveSet(false);
   // readout
   $(".display").classList.toggle("idle", !c.running);
-  // idle: the display keeps showing the locked format, dimmed, like hardware in standby
-  const last = S.lastTest && S.lastTest.verdict === "bitperfect" ? S.lastTest : null;
-  $("#r-rate").textContent = c.rate ? khz(c.rate) : "44,1";
-  $("#r-bits").textContent = c.t?.bits || last?.bits || (c.running ? bitsOf(c.dac.hw_params?.format) : null) || "–";
-  $("#r-gain").textContent = c.issues.length ? "≠ 0" : c.t && c.t.gain_db != null ? dec(c.t.gain_db) : "0,0";
+  $("#r-rate").textContent = c.rate ? khz(c.rate) : khz(44100);
+  $("#r-bits").textContent = c.bits || (c.running ? bitsOf(c.dac.hw_params?.format) : null) || "–";
+  $("#r-gain").textContent = c.gain ?? dec(0);
   // seal
   const seal = $("#seal"); let head, sub, cls = "";
   if (!c.dac.present) { head = tr("Ingen DAC"); sub = tr("Kontrollera USB-kabeln till DAC:en."); cls = "warn"; }
-  else if (c.roon) {
+  else if (c.seal) ({ head, sub, cls = "" } = c.seal);  // the source's page code has its own verdict
+  else {
     head = c.roon.active ? (c.running ? tr`${c.roon.label} spelar` : tr`${c.roon.label}, redo`) : tr`${c.roon.name} kör inte`;
     sub = !c.running ? srcHint() + "."
       : c.lossy ? tr`${CODEC[S.now.codec] || S.now.codec}${S.now.bitrate ? `, ${S.now.bitrate} kbit/s` : ""}: komprimerat ljud, inte Lossless.`
       : c.direct ? tr`${c.roon.name} äger DAC:en: ${fmtWord(c.dac.hw_params?.format)}, ${khz(c.rate)} kHz.` : tr`${c.roon.name} spelar via PipeWire.`;
     cls = c.roon.active ? "" : "warn";
   }
-  else if (c.issues.length) { head = tr("Signalen ändras"); sub = c.issues.join(", ").replace(/^./, (x) => x.toUpperCase()) + "."; cls = "warn"; }
-  else if (c.t && c.t.verdict === "bitperfect" && !c.t.gaps.length) {
-    head = tr("Bitperfekt"); cls = "verified";
-    sub = tr`Verifierat ${clock(c.t.t)}: ${c.t.bits} bit, ${dec(c.t.gain_db)} dB, inga avbrott`;
-  } else if (c.t && c.t.verdict === "bitperfect") { head = tr("Bitperfekt, med avbrott"); sub = tr`${c.t.gaps.length} avbrott i testet ${clock(c.t.t)}`; cls = "warn"; }
-  else if (c.t && c.t.verdict === "scaled") { head = tr("Skalat"); sub = tr`Senaste testet visade ${dec(c.t.gain_db)} dB`; cls = "warn"; }
-  else if (!c.playing) { head = tr("Redo"); sub = tr("Signalvägen är inställd för bitperfekt ljud."); }
-  else { head = tr("Orörd signalväg"); sub = tr("Inställt för bitperfekt. Verifiera under Signal."); }
   seal.className = `seal ${cls}`;
   const bad = c.stages.some((x) => x.state === "bad");
   fv("path", c.issues.length ? tr("Ändras") : bad ? tr("Avvikelse") : tr("Orörd"), c.issues.length > 0 || bad);
@@ -510,13 +450,13 @@ function renderStatus() {
   renderSysHead();
 }
 function renderSysHead() {
-  const st = S.status, solo = st.soloist || {}, dac = st.dac || {}, sys = st.system || {}, m = AMP || {};
+  const st = S.status, dac = st.dac || {}, sys = st.system || {}, m = AMP || {};
   if (!st.system) return;
-  const roon = roonMode(), issues = [], sname = roon ? (SRC() ? loc(SRC().name) : "") : "Soloist";
+  const issues = [], sname = SRC() ? loc(SRC().name) : "";
   if (!dac.present) issues.push(tr("DAC:n hittas inte"));
-  if (roon ? SRC() && !srcState().active : solo.service !== "active") issues.push(tr`${sname} kör inte`);
+  if (SRC() && !srcState().active) issues.push(tr`${sname} kör inte`);
   if (!SRC()) issues.push(tr("ingen källa är påslagen"));
-  if (solo.days_left != null && solo.days_left < 14) issues.push(tr`Spotify-bygget går ut om ${solo.days_left} dagar`);
+  for (const p of Object.values(PAGES)) issues.push(...(p.issues?.() || []));  // what the modules' page code reports
   if (m.reachable === false) issues.push(tr("förstärkaren svarar inte"));
   const t = $("#sys-title");
   t.textContent = issues.length ? tr("Behöver uppmärksamhet") : tr("Allt i ordning");
@@ -551,43 +491,11 @@ function renderSpark() {
     if (n) { total += n; ctx.fillStyle = red; const bh = Math.min(h - 6, 8 + Math.log2(n + 1) * 10); ctx.fillRect(x, h - bh, Math.max(2, bw), bh); }
   }
   $("#spark-sum").textContent = played
-    ? tr`${total ? tr`${total} avbrott vid DAC:en` : tr("Inga avbrott vid DAC:en")} under ${Math.round(played / 2)} minuters uppspelning.${streamMiss ? tr` Gula markeringar: Spotify-strömmen missade ${streamMiss} cykler, oftast vid låtbyte eller volymändring, utan luckor i signalen.` : ""} Röda staplar är avbrott.`
+    ? tr`${total ? tr`${total} avbrott vid DAC:en` : tr("Inga avbrott vid DAC:en")} under ${Math.round(played / 2)} minuters uppspelning.${streamMiss ? tr` Gula markeringar: strömmen missade ${streamMiss} cykler, oftast vid låtbyte eller volymändring, utan luckor i signalen.` : ""} Röda staplar är avbrott.`
     : tr("Ingen uppspelning registrerad senaste dygnet.");
   fv("drop", played ? (total ? tr`${total} vid DAC:en` : tr("Inga")) : tr("Ingen uppspelning"), total > 0);
 }
 window.addEventListener("resize", renderSpark);
-
-// ------------------------------------------------------------------ verification
-function renderTest(r) {
-  const el = $("#test-result");
-  if (!r) { el.innerHTML = ""; return; }
-  const gaps = r.gaps || [];
-  let head, warn = true;
-  if (r.verdict === "silent" || (r.rms ?? 1) < 1e-4) head = tr("Inget ljud under testet");
-  else if (r.verdict === "bitperfect") { head = gaps.length ? tr("Bitperfekt, men med avbrott") : tr("Bitperfekt"); warn = !!gaps.length; }
-  else if (r.verdict === "scaled") head = tr`Skalat med ${dec(r.gain_db)} dB`;
-  else if (r.verdict === "lossy_or_processed") head = tr("Inte orört: förlustkodat eller bearbetat");
-  else head = tr("Kunde inte avgöra");
-  const silence = Math.round(gaps.reduce((a, g) => a + g[1], 0) / 44.1);
-  el.innerHTML = `<p class="v-head ${warn ? "warn" : ""}">${esc(head)}</p>
-    <dl class="v-facts">
-      <div><dt>${tr("Upplösning")}</dt><dd>${r.bits ? `${r.bits} bit` : "–"}</dd></div>
-      <div><dt>${tr("Förstärkning")}</dt><dd>${r.gain_db != null ? `${dec(r.gain_db)} dB` : "–"}</dd></div>
-      <div><dt>${tr("Avbrott")}</dt><dd>${gaps.length ? `${gaps.length} (${silence} ms)` : tr("Inga")}</dd></div>
-      <div><dt>${tr("Längd")}</dt><dd>${dec(r.seconds, 0)} s</dd></div>
-    </dl>
-    <p class="fine">${r.track ? `${esc(r.track)}, ` : ""}${stamp(r.t)}</p>`;
-}
-$("#test-secs").addEventListener("click", (e) => {
-  const b = e.target.closest("button"); if (!b) return;
-  testSecs = +b.dataset.v;
-  $$("#test-secs button").forEach((x) => x.setAttribute("aria-checked", x === b));
-});
-$("#test-run").addEventListener("click", async () => {
-  const b = $("#test-run");
-  if (S.playback.status !== "playing") { toast(tr("Starta musik först. Testet spelar in det som går till DAC:en.")); return; }
-  try { await post("/api/audio/test", { seconds: testSecs }); } catch {}
-});
 
 // ------------------------------------------------------------------ optimisation ledger (verified live)
 const MARK = {
@@ -626,17 +534,6 @@ setInterval(() => { if (desktop.matches || $("#v-signal").classList.contains("ac
 // ------------------------------------------------------------------ jobs
 const jobOut = $("#job-out");
 function jobEvent(m) {
-  if (m.name === "audio-test") {
-    const b = $("#test-run");
-    if (m.started) { b.disabled = true; b.textContent = m.auto ? tr("Verifierar automatiskt…") : tr`Spelar in ${m.seconds} s…`; }
-    if (m.done) {
-      b.disabled = false; b.textContent = tr("Verifiera nu");
-      if (m.tests) { S.tests = m.tests; renderVlog(); }
-      if (m.result) { S.lastTest = m.result; renderTest(m.result); renderSignal(); }
-      else if (!m.auto) toast(m.error || tr("Verifieringen misslyckades"));
-    }
-    return;
-  }
   $("#job").hidden = false;
   if (m.line) { jobOut.textContent += m.line; jobOut.scrollTop = jobOut.scrollHeight; }
   if (m.done && m.name.startsWith("install-")) loadMods();
@@ -700,22 +597,8 @@ $("#log-load").addEventListener("click", async () => {
 });
 
 // ------------------------------------------------------------------ verification log, settings
-const VERDICT = { bitperfect: tr("Bitperfekt"), scaled: tr("Skalat"), lossy_or_processed: tr("Bearbetat"), inconclusive: tr("Oavgjort") };
-function renderVlog() {
-  const items = [...S.tests].reverse().slice(0, 12);
-  $("#vlog").innerHTML = items.length ? items.map((t) => {
-    const good = t.verdict === "bitperfect" && !t.gaps;
-    const head = `${VERDICT[t.verdict] || t.verdict}${t.verdict === "bitperfect" && t.gaps ? tr`, ${t.gaps} avbrott` : ""}`;
-    const detail = [t.bits ? `${t.bits} bit` : null, t.gain_db != null ? `${dec(t.gain_db)} dB` : null, t.track].filter(Boolean).join(", ");
-    return `<li class="${good ? "" : "warn"}">${good ? MARK.ok : MARK.warn}<div class="vl-what">${esc(head)}<span>${esc(detail)}</span></div>
-      <div class="vl-when">${esc(stamp(t.t))}<br>${t.auto ? tr("Automatisk") : tr("Manuell")}</div></li>`;
-  }).join("") : `<li class="empty">${tr("Inga verifieringar än.")}</li>`;
-  const last = S.tests.length ? S.tests[S.tests.length - 1] : null;
-  fv("ver", last ? `${VERDICT[last.verdict] || last.verdict} ${clock(last.t)}` : tr("Inga än"), !!last && !(last.verdict === "bitperfect" && !last.gaps));
-}
 function renderSettings() {
   const st = S.settings || {};
-  $("#auto-verify").checked = !!st.auto_verify;
   $("#alerts-on").checked = !!st.alerts;
   $("#alerts-state").textContent = st.alerts_configured
     ? (st.alerts ? tr("Larm skickas till din telefon.") : tr("Larmen är avstängda."))
@@ -730,7 +613,6 @@ async function setSetting(key, on, el) {
   try { const r = await post("/api/settings", { [key]: on }); S.settings = { ...S.settings, ...r.settings }; renderSettings(); }
   catch { el.checked = !on; }
 }
-$("#auto-verify").addEventListener("change", (e) => setSetting("auto_verify", e.target.checked, e.target));
 $("#alerts-on").addEventListener("change", (e) => setSetting("alerts", e.target.checked, e.target));
 $("#alert-kinds").addEventListener("change", async () => {
   const off = [...$$("#alert-kinds input")].filter((i) => !i.checked).map((i) => i.dataset.kind);
@@ -847,7 +729,7 @@ function renderDac() {
   }
   // clock: long-term average of ALSA's frame counter against the SOtM's crystal
   const ck = d.clock_avg || {}, fb = d.clock || {};
-  face.classList.toggle("live", S.playback.status === "playing");
+  face.classList.toggle("live", isPlaying());
   if (ck.hz) {
     $("#ck-hz").textContent = ck.hz.toLocaleString("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     fv("clock", `${$("#ck-hz").textContent} Hz`);
@@ -952,7 +834,7 @@ $("#poweroff").addEventListener("click", async (e) => {
   try { await post("/api/system/poweroff"); toast(S.features?.board?.power_button === false ? tr("Stänger av. Bryt och slå på strömmen för att starta igen.") : tr("Stänger av.")); } catch {}
 });
 $("#audio-restart").addEventListener("click", async (e) => {
-  const b = e.currentTarget; b.disabled = true; toast(tr("Startar om PipeWire, WirePlumber och Soloist…"));
+  const b = e.currentTarget; b.disabled = true; toast(tr("Startar om PipeWire, WirePlumber och spelaren…"));
   try { await post("/api/system/restart-audio"); toast(tr("Ljudtjänsterna är omstartade")); } catch {}
   b.disabled = false;
 });
@@ -1046,14 +928,14 @@ $("#source").addEventListener("click", async (e) => {
   try {
     const r = await post("/api/source", { source: src });
     S.settings = { ...S.settings, source: r.source }; S.now = null;
-    toast(src === "spotify" ? tr`Spotify är aktivt. Välj ${devName()} i Spotify-appen.` : tr`${to.label} är aktivt. ${srcHint(to)}.`);
+    toast(tr`${to.label} är aktivt. ${srcHint(to)}.`);
   } catch {}
   seg.classList.remove("busy");
   renderPlay(); renderSignal();
 });
 
 // ------------------------------------------------------------------ boot
-function renderAll() { renderStatus(); renderPlay(); renderQueue(); renderSignal(); renderSpark(); renderTest(S.lastTest); renderPanels(); renderVlog(); renderSettings(); renderAmp(); if (desktop.matches) loadOpts(); if (dacVisible()) loadDac(); }
+function renderAll() { renderStatus(); renderPlay(); renderSignal(); renderSpark(); renderPanels(); renderSettings(); renderAmp(); if (desktop.matches) loadOpts(); if (dacVisible()) loadDac(); }
 document.body.classList.add("locked");
 // the page stays covered until it is known whether this is a new installation (the guide)
 refreshAuth().then(() => maybeSetup({ access: S.access || {}, post, toast })).catch(() => {})

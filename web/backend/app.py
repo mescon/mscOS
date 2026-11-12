@@ -345,6 +345,7 @@ class Hub:
                       "link_mbps": int(speed) if speed.lstrip("-").isdigit() and int(speed) > 0 else None}
         for p in self.plugins.values():
             f.update(p.features())
+        f["pages"], f["alert_kinds"] = module_pages(self), alert_kinds(self)
         return f
 
     def summary(self) -> dict:
@@ -775,7 +776,42 @@ async def get_names(request):
 
 
 # ---- Settings, alerts
-ALERT_KINDS = ("dac", "soloist", "dropouts", "verify", "expiry")  # what hub.alert is called with
+ALERT_KINDS = ("dac", "dropouts")  # the core's own; modules add theirs (Plugin.alert_kinds)
+
+
+def alert_kinds(h=None) -> list[dict]:
+    """The modules' alerts, for the list under Profile."""
+    return [{"id": k["id"], "label": k["label"], "module": p.id} for p in (h or hub).plugins.values() for k in p.alert_kinds]
+
+
+def module_pages(h=None) -> list[dict]:
+    """Modules that bring page code of their own (page.js beside the module, see docs/MODULES.md)."""
+    out = []
+    for i, p in (h or hub).plugins.items():
+        f = os.path.join(p.module_dir or "", "page.js")
+        if p.module_dir and os.path.isfile(f):
+            langs = sorted(n[:-5] for n in os.listdir(os.path.join(p.module_dir, "i18n")) if re.fullmatch(r"[a-z]{2}\.json", n)) \
+                if os.path.isdir(os.path.join(p.module_dir, "i18n")) else []
+            out.append({"id": i, "v": f"{p.module_version}-{int(os.path.getmtime(f))}", "langs": langs})
+    return out
+
+
+def _module_file(request, *rel: str) -> web.FileResponse:
+    p = hub.plugins.get(request.match_info["id"])
+    f = os.path.join(p.module_dir, *rel) if p and p.module_dir else ""
+    if not f or not os.path.isfile(f) or os.path.islink(f):
+        raise web.HTTPNotFound()
+    return web.FileResponse(f)
+
+
+@routes.get("/modules/{id}/page.js")
+async def module_page(request):
+    return _module_file(request, "page.js")
+
+
+@routes.get(r"/modules/{id}/i18n/{lang:[a-z]{2}}.json")
+async def module_i18n(request):
+    return _module_file(request, "i18n", request.match_info["lang"] + ".json")
 
 
 @routes.get("/api/settings")
@@ -794,7 +830,7 @@ async def set_settings(request):
                 raise web.HTTPBadRequest(text=T("Namnet får vara högst 60 tecken."))
             upd[k] = v  # "" = the detected name
     if "alerts_off" in b:  # the kinds of alert the user does not want
-        if not isinstance(b["alerts_off"], list) or any(k not in ALERT_KINDS for k in b["alerts_off"]):
+        if not isinstance(b["alerts_off"], list) or any(k not in (*ALERT_KINDS, *(a["id"] for a in alert_kinds())) for k in b["alerts_off"]):
             raise web.HTTPBadRequest(text=T("Okänt val"))
         upd["alerts_off"] = sorted(set(b["alerts_off"]))
     if "network_name" in b:

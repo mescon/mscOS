@@ -339,7 +339,6 @@ pre.console {
 .source-row .fine { margin: 0; flex: 1; min-width: 12em; }
 .seg.source button { min-width: 6.5em; }
 .seg.source.busy { opacity: .5; pointer-events: none; }
-body.src-other .spotify-only, body:not(.src-other) .roon-only { display: none !important; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; }

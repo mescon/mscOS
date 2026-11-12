@@ -31,6 +31,8 @@ export function tr(s, ...vals) {
   if (vars) out = out.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
   return out;
 }
+// texts a module brings for its own page code (modules/<id>/i18n/<lang>.json); the panel's own win
+export function addTexts(d) { dict = { ...d, ...dict }; }
 // Decimal comma in Swedish, point otherwise: 44,1 kHz / 44.1 kHz
 export const decSep = () => (LANG === "sv" ? "," : ".");
 

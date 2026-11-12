@@ -34,6 +34,11 @@ class NewInstallation(unittest.IsolatedAsyncioTestCase):
             r = await self.client.get(path)
             self.assertEqual(r.status, 200, path)
 
+        # a module's page code is served only while the module is on, and nothing else from its folder ever
+        for path in ("/modules/spotify/page.js", "/modules/spotify/i18n/en.json", "/modules/spotify/__init__.py",
+                     "/modules/spotify/module.json", "/modules/made-up/page.js"):
+            self.assertEqual((await self.client.get(path)).status, 404, path)
+
         # every module is offered, none is on
         mods = (await self.json("/api/plugins"))["plugins"]
         self.assertGreaterEqual(len(mods), 10)
@@ -62,6 +67,8 @@ class NewInstallation(unittest.IsolatedAsyncioTestCase):
         # which alerts the user wants
         self.assertEqual((await self.post("/api/settings", {"alerts_off": ["dropouts"]})).status, 200)
         self.assertEqual((await self.post("/api/settings", {"alerts_off": ["made-up"]})).status, 400)
+        # a module's own alerts exist only while the module is on
+        self.assertEqual((await self.post("/api/settings", {"alerts_off": ["verify"]})).status, 400)
         s = await self.json("/api/settings")
         self.assertEqual(s["alerts_off"], ["dropouts"])
         self.assertFalse(s["alerts_configured"])  # no alert module is on

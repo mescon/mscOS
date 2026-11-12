@@ -62,6 +62,24 @@ if m: keys.append(html.unescape(m.group(1)))
 seen = []; [seen.append(k) for k in keys if k not in seen]
 have = json.load(open(sys.argv[2])) if len(sys.argv) > 2 else {}
 missing = [k for k in seen if k not in have]
+# A module's page code (modules/<id>/page.js) brings its own texts in modules/<id>/i18n/en.json;
+# a text the panel itself also uses may come from the panel's file.
+import os
+mods = f"{root}/../../modules"
+for pj in sorted(glob.glob(f"{mods}/*/page.js")):
+    mdir = os.path.dirname(pj); mfile = f"{mdir}/i18n/en.json"
+    mhave = json.load(open(mfile)) if os.path.exists(mfile) else {}
+    mkeys = []; [mkeys.append(k) for k in js_keys(open(pj).read()) if k not in mkeys]
+    if "--split" in sys.argv and len(sys.argv) > 2:  # move the texts only this module uses out of the panel's file
+        for k in mkeys:
+            if k not in seen and k in have and k not in mhave: mhave[k] = have[k]
+        os.makedirs(f"{mdir}/i18n", exist_ok=True)
+        json.dump({k: mhave[k] for k in mkeys if k in mhave}, open(mfile, "w"), ensure_ascii=False, indent=1)
+        open(mfile, "a").write("\n")
+    missing += [k for k in mkeys if k not in mhave and k not in have]
+    stale = [k for k in mhave if k not in mkeys]
+    print(f"# {os.path.basename(mdir)}: {len(mkeys)} keys, {len(stale)} unused", file=sys.stderr)
+    if stale: print("# unused:", stale[:20], file=sys.stderr)
 unused = [k for k in have if k not in seen]
 print(json.dumps(missing, ensure_ascii=False, indent=0))
 print(f"# {len(seen)} keys, {len(missing)} missing, {len(unused)} unused", file=sys.stderr)

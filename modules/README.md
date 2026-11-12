@@ -12,7 +12,8 @@ directory without waiting for the next mscOS release (Modules, Browse the catalo
 2. Write the module: a class derived from `Plugin` (or `SourcePlugin`, `AmpPlugin`) named in
    `PLUGIN`. [docs/MODULES.md](../docs/MODULES.md) lists what a module can give the panel;
    the base classes in `web/backend/plugins/__init__.py` document every hook. A module needs
-   no page of its own: the panel draws its options, status, cards and controls.
+   no page of its own: the panel draws its options, status, cards and controls. One that wants
+   to draw more adds a `page.js` (docs/MODULES.md, Page code).
 3. Fill in `module.json`: `id`, `version`, `kind` (`source`, `amp`, `device`, `notify` or
    `integration`), and `name` and `description` in Swedish and English.
 4. A source that needs a player installed adds `install.sh` (see `librespot/`). It downloads
