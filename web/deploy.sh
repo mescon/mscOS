@@ -19,8 +19,12 @@ if [ -e /etc/systemd/system/sotm-web.service ]; then
 fi
 rm -f /etc/systemd/system/mscos-panel.service   # now in /usr/lib/systemd/system
 mkdir -p /usr/lib/mscos /usr/share/mscos /var/lib/mscos /etc/mscos'
-rsync -a --delete "$STAGE/usr/lib/mscos/" "$HOST:/usr/lib/mscos/"
-rsync -a --delete "$STAGE/usr/share/mscos/" "$HOST:/usr/share/mscos/"
-rsync -a "$STAGE/usr/lib/systemd/system/" "$HOST:/usr/lib/systemd/system/"
-rsync -a "$STAGE/etc/mscos-release" "$HOST:/etc/mscos-release"
-ssh "$HOST" 'systemctl daemon-reload && systemctl enable mscos-panel.service >/dev/null 2>&1; systemctl restart mscos-panel.service; sleep 3; systemctl is-active mscos-panel.service'
+# Music may be playing on the device: copy at the lowest CPU and disk priority, and reload
+# systemd (seconds of work for PID 1 on a small board) only when a unit file changed.
+LOW=(--rsync-path="nice -n19 ionice -c3 rsync")
+UNITS=$(rsync -a "${LOW[@]}" --itemize-changes "$STAGE/usr/lib/systemd/system/" "$HOST:/usr/lib/systemd/system/")
+rsync -a "${LOW[@]}" --delete "$STAGE/usr/lib/mscos/" "$HOST:/usr/lib/mscos/"
+rsync -a "${LOW[@]}" --delete "$STAGE/usr/share/mscos/" "$HOST:/usr/share/mscos/"
+rsync -a "${LOW[@]}" "$STAGE/etc/mscos-release" "$HOST:/etc/mscos-release"
+if [ -n "$UNITS" ]; then ssh "$HOST" 'systemctl daemon-reload && systemctl enable mscos-panel.service >/dev/null 2>&1' || true; fi
+ssh "$HOST" 'systemctl restart mscos-panel.service; sleep 3; systemctl is-active mscos-panel.service'
