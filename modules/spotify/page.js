@@ -8,6 +8,8 @@ export default function page(api) {
   const M = { playback: {}, auth: {}, queue: {}, quality: {}, lastTest: null, tests: [] };
   let testSecs = 30;
   const current = () => api.srcId() === ID;
+  // the slider drives the amplifier only when there is an amplifier module to drive
+  const bridged = () => !!S.settings?.spotify_vol_to_amp && !!S.features?.amp && S.features.amp !== "none";
   const cmd = (command, extra = {}) => post("/api/soloist/command", { command, ...extra }).catch(() => {});
 
   // ---------------------------------------------------------------- the module's own parts of the page
@@ -133,7 +135,7 @@ export default function page(api) {
     const running = dac.state === "RUNNING", playing = p.status === "playing" && !elsewhere;
     const rate = running ? parseInt(dac.hw_params?.rate) || null : null;
     const vol = p.volume ?? 100, norm = solo.normalization, outName = api.outName();
-    const bridge = !!S.settings?.spotify_vol_to_amp, volDigital = vol < 100 && !bridge;  // with the bridge the slider is the amplifier's
+    const bridge = bridged(), volDigital = vol < 100 && !bridge;  // with the bridge the slider is the amplifier's
     const sinkUnity = sink.volume == null || Math.abs(sink.volume - 1) < 1e-6;
     const lt = M.lastTest, t = lt && (Date.now() / 1000 - lt.t) < 6 * 3600 && lt.verdict !== "silent" ? lt : null;
     const hourAgo = Date.now() / 1000 - 3600;
@@ -256,7 +258,7 @@ export default function page(api) {
     render() {
       const cur = current(), vol = M.playback.volume, ready = api.srcState(ID).installed !== false && api.srcState(ID).key_set !== false;
       $("#f-queue").hidden = !cur;
-      $("#vol-warn").hidden = !cur || !ready || !!S.settings?.spotify_vol_to_amp || !(typeof vol === "number" && vol < 100);
+      $("#vol-warn").hidden = !cur || !ready || bridged() || !(typeof vol === "number" && vol < 100);
       $("#vol-val").textContent = vol ?? "";
       $("#test-other").hidden = cur; $("#test-ctl").hidden = !cur;
       $("#auto-verify").checked = !!S.settings?.auto_verify;

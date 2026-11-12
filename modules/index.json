@@ -1,6 +1,6 @@
 {
  "format": 1,
- "serial": 1,
+ "serial": 2,
  "modules": [
   {
    "id": "arcam",
@@ -282,7 +282,7 @@
     },
     {
      "path": "page.js",
-     "sha256": "b73cad08af32e1326a9aa38d66742fbb7785c4d3e774b7688a699abec1b10aa9",
+     "sha256": "d8bc568ff8ecf818b59b5daf9a0ecb66f09dbcd398039ac386f7aeb95bd31a30",
      "exec": false
     },
     {

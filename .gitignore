@@ -12,3 +12,5 @@ __pycache__/
 *.pyc
 kernel/mscos-dsd/out/
 packaging/out/
+# crash dumps of tools run from here
+/core.[0-9]*
