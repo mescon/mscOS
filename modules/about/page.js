@@ -427,6 +427,13 @@ export default function page(api) {
   };
   return {
     route: wordsRoute,
+    // when albums first came out, for a player's list that does not say: [{artist, title}] -> [year or null]
+    years: async (albums) => {
+      try {
+        const r = await fetch("/api/about/years", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ albums }) });
+        return r.ok ? (await r.json()).years || [] : [];
+      } catch { return []; }
+    },
     // a sleeve for when the player has none: the album's front from the Cover Art Archive
     coverFor: (t) => `/api/about/cover?${new URLSearchParams({ artist: String(t.artist || "").split(/, | \/ /)[0], ...(t.album ? { album: t.album } : { title: t.title || "" }) })}`,
     // called whenever the page is drawn: ask when the track is another one

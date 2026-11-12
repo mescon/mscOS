@@ -265,6 +265,44 @@ async def spot(http, name: str, album_title: str = "", title: str = "", spotify_
         found = {"artist": await find_artist(http, name, "", title, spotify_id), "release": ""}
     return found if found["artist"] else {}
 
+def bare(title: str) -> str:
+    """The album's name without what an edition adds in brackets at its end:
+    "Revolver (2022 Mix)" and "Abbey Road (Super Deluxe Edition)" are Revolver and Abbey Road."""
+    t = (title or "").strip()
+    note = r"remaster|mix\b|edition|deluxe|version|anniversary|mono\b|stereo|expanded|bonus|reissue|\b(19|20)\d\d\b"
+    # (a bracket that says something else, "Take 1", "Rooftop Performance", belongs to the name)
+    while (m := re.search(r"\s*[\(\[]([^\(\)\[\]]*)[\)\]]\s*$", t)) and m.start() > 0 and re.search(note, m.group(1), re.I):
+        t = t[:m.start()]
+    return t
+
+
+async def album_years(http, artist: str, titles: list[str]) -> dict[str, int]:
+    """{folded album name: the year it first came out} for these albums of the artist's, in one
+    question to MusicBrainz. For the lists of a player that does not say when an album is from.
+    Where several albums share a name, the artist's own album before a collection or a
+    concert, and of those the earliest."""
+    names = list(dict.fromkeys(bare(t) for t in titles if bare(t)))[:40]
+    if not names:
+        return {}
+    best: dict[str, tuple] = {}
+    for _ in range(2):      # an artist much written about fills the first answer: what it missed is asked for once more
+        left = [n for n in names if _fold(n) not in best]
+        if not left:
+            break
+        d = await _mb(http, "release-group", query=f"artist:{_q(artist)} AND releasegroup:({' OR '.join(_q(n) for n in left)})", limit=100)
+        want, before = {_fold(n) for n in left}, len(best)
+        for g in d.get("release-groups", []):
+            year, key = str(g.get("first-release-date") or "")[:4], _fold(g.get("title", ""))
+            if not year.isdigit() or key not in want or not _credited([{**g, "score": 100}], artist):
+                continue
+            rank = (g.get("primary-type") != "Album", len(g.get("secondary-types") or []), int(year))
+            if key not in best or rank < best[key]:
+                best[key] = rank
+        if len(best) == before:
+            break
+    return {k: v[2] for k, v in best.items()}
+
+
 async def cover(http, artist: str, album: str = "", title: str = "") -> str:
     """The address of the album's sleeve at the Cover Art Archive (MusicBrainz' own store of
     sleeves), found by the album's name or else by a song on it; "" when it is not known.

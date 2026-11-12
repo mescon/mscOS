@@ -1,10 +1,10 @@
 {
  "format": 1,
- "serial": 55,
+ "serial": 61,
  "modules": [
   {
    "id": "about",
-   "version": "1.7.0",
+   "version": "1.8.0",
    "kind": "integration",
    "name": {
     "sv": "Om musiken",
@@ -17,22 +17,22 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "98ee554e97ff3c0475b1ff144b84fc765c2f5afd406c13c7aa92de49b6271e86",
+     "sha256": "83faeda1baa26816920673f76f10d7b5f9684ba47efd90f2b02391f818cd6fdf",
      "exec": false
     },
     {
      "path": "lookup.py",
-     "sha256": "7ceaf876a2c545078e7725437e34b055ba4897447f64c8e9392f4cab7c20efcb",
+     "sha256": "309a16e900ae649d8c10f0d4a121698fc5b122874f2c1449105ca59dfa0fde35",
      "exec": false
     },
     {
      "path": "module.json",
-     "sha256": "372adc9541b2c5c6a21d877ccdc312a6f1cfdbe7a1c826b84bd14d3378224ad0",
+     "sha256": "d07324700b7e7121f8447f83d31eeb20cb5d818b58548700b6a68eb4cc9a5c6b",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "370f81d850bc375772ee78329428726fd67ed2e734341d2221891375cc97d2ce",
+     "sha256": "3b758dea1aac0caf68fce80b7ba2a9c856e41d677302718c9ff4ff588b5f2a32",
      "exec": false
     },
     {
@@ -269,7 +269,7 @@
   },
   {
    "id": "roon",
-   "version": "1.8.0",
+   "version": "1.9.0",
    "kind": "source",
    "name": {
     "sv": "Roon Bridge",
@@ -282,7 +282,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "02c6c76ad2df0b6e91bf83c97d372667120f70d3d7423fb89142dee5e7965650",
+     "sha256": "184aa6932819dd2c77ce4148ad7dcd0a6f51b17b037d406f5bd241ae7377f4e2",
      "exec": false
     },
     {
@@ -292,12 +292,12 @@
     },
     {
      "path": "module.json",
-     "sha256": "608cd023dc87488e16e6f15d7d4eed6e762f6813a7b565698634e17feaa9fef7",
+     "sha256": "96c0042d6b2ba6985ade0430b6d2a2afbc97718f2f2e9583603a0908cc260d0b",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "1379331ae619676b51e3ac059e7f44541e9733fd7d56b09d734397ba85f7abc1",
+     "sha256": "dcdc64c7245b18e602d20670e8963694a396f956715c18e191e0241161dbdbf9",
      "exec": false
     },
     {
@@ -332,7 +332,7 @@
     },
     {
      "path": "i18n/en.json",
-     "sha256": "a75d11a3ade198630ef1177bdbd2fa65c8fac19cbe6f6d11e3f2f27e8ca56f7b",
+     "sha256": "4e8f03f86eada6f85cf9103258af0d22b016922d3144b3bce67083aece62e6a6",
      "exec": false
     },
     {
@@ -372,7 +372,7 @@
     },
     {
      "path": "page.js",
-     "sha256": "f4f81f2e4fe1b06b7433ab7f1771b1203065db23fba984d0b1ff7b254674478a",
+     "sha256": "7d9b6b6ca4e3f0a886bc8ad00e163ff2e909caa5436d32a7528326b70efc7024",
      "exec": false
     },
     {
@@ -402,7 +402,7 @@
     },
     {
      "path": "soloist.py",
-     "sha256": "476affe712b8e9395753c962e63e7a389afe4cede89d64f4d69ae60264f18668",
+     "sha256": "2dc48ae6c4603b459ca2f69f367b1a2f0848ec03540735b80055cf334365ac1a",
      "exec": false
     },
     {
@@ -462,7 +462,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "e4385b68b0ab221aabcc793fe0f7ccc6e9986d6f12bcc8c231aab650395935aa",
+     "sha256": "7cb49b1071187ad2d93b878a1121d5d54d82f588da4dfe041b05503f392072ef",
      "exec": false
     },
     {

@@ -9,7 +9,7 @@ import os
 import re
 
 import collect
-from collect import read, run, audio_uid
+from collect import read, run
 
 SOLOIST_HOME = collect.AUDIO_HOME
 SOLOIST_UNIT = f"{SOLOIST_HOME}/.config/systemd/user/soloist.service"

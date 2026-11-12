@@ -2,7 +2,7 @@
 // track's measured format, and the sample-exact verification with its log.
 // The panel loads this file while the module is on (docs/MODULES.md, "Page code").
 export default function page(api) {
-  const { $, $$, S, tr, esc, dec, khz, fmtWord, clock, stamp, post, toast, fv, MARK } = api;
+  const { $, S, tr, esc, dec, khz, fmtWord, clock, stamp, post, toast, fv, MARK } = api;
   const ID = "spotify";
   // Soloist's own state, as its events report it
   const M = { playback: {}, auth: {}, queue: {}, quality: {}, lastTest: null, tests: [] };

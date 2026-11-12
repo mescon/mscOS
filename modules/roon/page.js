@@ -79,7 +79,7 @@ export default function page(api) {
 
   // One step in Roon's lists, and the list that is there after it. True when a list was shown.
   // title: the name of the entry that was chosen (what the address is given for it).
-  async function go(step, title, newStep) {
+  async function go(step, title, newStep, through = 0) {
     const n = ++seq;
     let d;
     try {
@@ -91,6 +91,11 @@ export default function page(api) {
     if (d.action === "list") {
       const level = d.list?.level || 0;
       trail = step.pop_all ? [] : title != null && level > trail.length ? [...trail, title || "…"] : trail.slice(0, level);
+      // Roon puts a list of one between an album found by a search and its tracks: the album
+      // again, to go into. Nobody wants to stop there: straight on, into it.
+      const only = (d.items || []).filter((i) => !i.prompt);
+      if (level > 0 && through < 3 && only.length === 1 && only[0].hint === "list" && only[0].item_key && only[0].title === (d.list?.title || ""))
+        return go({ item_key: only[0].item_key }, only[0].title, newStep, through + 1);
       shown = d; draw();
       tell(newStep);
       return true;
@@ -125,10 +130,23 @@ export default function page(api) {
   const pic = (i, isRow) => {
     if (i.image) return `<img src="${esc(i.image)}" alt="" loading="lazy">`;
     const by = String(i.subtitle || "").split(/, | \/ /)[0];
-    const other = by && !/^\d+\s/.test(by) ? api.coverFor({ artist: by, [isRow ? "title" : "album"]: i.title }) : "";
+    const other = by && !/^\d+\s/.test(by) ? api.coverFor?.({ artist: by, [isRow ? "title" : "album"]: i.title }) : "";
     return other ? `<img src="${esc(other)}" alt="" loading="lazy" data-tried="1">` : `<span class="ph"></span>`;
   };
-  const card = (i, path) => `<li><button data-path="${path}" data-sub="${esc(i.subtitle || "")}">${pic(i, false)}<b>${esc(i.title)}</b>${i.subtitle && !/^0\s/.test(i.subtitle) ? `<span>${esc(i.subtitle)}</span>` : ""}</button></li>`;
+  // Roon's lists do not say when an album is from. An entry that is a list with an artist
+  // under its name is taken to be an album, and its year is asked for once the list is drawn.
+  const albumMark = (i) => (i.hint === "list" && i.subtitle && !/^\d+\s/.test(i.subtitle) ? ` data-yb="${esc(i.subtitle)}" data-yt="${esc(i.title)}"` : "");
+  async function addYears() {
+    const els = [...box.querySelectorAll("button[data-yb]:not([data-yd])")];
+    if (!els.length) return;
+    els.forEach((b) => { b.dataset.yd = "1"; });
+    const years = (await api.yearsFor?.(els.map((b) => ({ artist: b.dataset.yb, title: b.dataset.yt })))) || [];   // (a panel older than this module has no such thing)
+    els.forEach((b, n) => {
+      const line = b.isConnected && years[n] ? b.querySelector("span span, b + span") : null;
+      if (line) line.textContent = `${line.textContent} · ${years[n]}`;
+    });
+  }
+  const card = (i, path) => `<li><button data-path="${path}" data-sub="${esc(i.subtitle || "")}"${albumMark(i)}>${pic(i, false)}<b>${esc(i.title)}</b>${i.subtitle && !/^0\s/.test(i.subtitle) ? `<span>${esc(i.subtitle)}</span>` : ""}</button></li>`;
   const row = (i, path) => `<li><button class="go" data-path="${path}" data-sub="${esc(i.subtitle || "")}">${pic(i, true)}<span><b>${esc(i.title)}</b>${i.subtitle ? `<span>${esc(i.subtitle)}</span>` : ""}</span></button></li>`;
   function drawFound() {
     const d = found;
@@ -143,10 +161,14 @@ export default function page(api) {
         return `<section class="rm-sec"><div class="rm-sec-head"><h3>${esc(sec.title)}</h3>${sec.count > sec.items.length ? `<button class="rm-all" data-path="${pathAttr(sec.title)}">${esc(tr`Visa alla ${sec.count}`)}</button>` : ""}</div>
           <ul class="${rows ? "rm-list" : "rm-grid"}">${sec.items.map((i) => (rows ? row : card)(i, pathAttr(sec.title, i.title))).join("")}</ul></section>`;
       }).join("");
+    addYears();
   }
   // Follow an address: to the search or the top it names, then into each list by its name.
   // sub: what the last entry says under its name, when two entries are called the same.
-  async function follow(sub, hint, step) {
+  // (one address at a time: two walks through Roon's lists at once would lead each other astray)
+  let walks = Promise.resolve();
+  const follow = (sub, hint, step) => (walks = walks.then(() => followNow(sub, hint, step)).catch((e) => console.error(e)));
+  async function followNow(sub, hint, step) {
     const wantHier = sub[0] === "roon-search" ? "search" : "browse";
     const wantQ = wantHier === "search" ? String(sub[1] || "").slice(0, 120) : "";
     const want = sub[0] === "roon" ? sub.slice(1) : sub[0] === "roon-search" ? sub.slice(2) : [];
@@ -160,23 +182,25 @@ export default function page(api) {
     if (here && same(want, trail)) return;
     loaded = true; walking = true;
     try {
-      let rest = want, ok = true;
-      if (here && want.length < trail.length && same(want, trail.slice(0, want.length))) { ok = await go({ pop_levels: trail.length - want.length }); rest = []; }
-      else if (here && same(trail, want.slice(0, trail.length))) rest = want.slice(trail.length);
-      else { hier = wantHier; query = wantQ; $("#rm-find").value = wantQ; ok = await go({ pop_all: true, ...(wantQ ? { input: wantQ } : {}) }); }
-      for (const [n, name] of rest.entries()) {
-        if (!ok) break;
+      let ok = true;
+      if (here && want.length < trail.length && same(want, trail.slice(0, want.length))) ok = await go({ pop_levels: trail.length - want.length });
+      else if (!(here && same(trail, want.slice(0, trail.length)))) { hier = wantHier; query = wantQ; $("#rm-find").value = wantQ; ok = await go({ pop_all: true, ...(wantQ ? { input: wantQ } : {}) }); }
+      // on, a name at a time, for as long as the place is on the way to the address
+      for (let n = 0; ok && n < 16 && trail.length < want.length && same(trail, want.slice(0, trail.length)); n++) {
+        const name = want[trail.length], last = want.slice(trail.length).every((x) => x === name);
         const fits = (i) => i.title === name && i.item_key && i.hint !== "action";
-        const it = (n === rest.length - 1 && hint && (shown?.items || []).find((i) => fits(i) && i.subtitle === hint)) || (shown?.items || []).find(fits);
+        const it = (last && hint && (shown?.items || []).find((i) => fits(i) && i.subtitle === hint)) || (shown?.items || []).find(fits);
         ok = !!it && await go({ item_key: it.item_key }, name);
       }
     } finally { walking = false; }
     tell(step);    // where it could not be followed all the way, the address says how far it got
   }
   function draw() {
-    const d = shown, l = d.list || {}, level = l.level || 0;
+    const d = shown, l = d.list || {}, level = l.level || 0, none = /^0\s/.test(l.subtitle || "");
     const back = level > 0 ? `<button class="rm-back" data-back="1"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 6-6 6 6 6"/></svg>${esc(tr("Tillbaka"))}</button>` : "";
-    $("#rm-head").innerHTML = back + (level > 0 ? `<div class="rm-title">${l.image ? `<img src="${esc(l.image)}" alt="">` : ""}<div><h3>${esc(l.title)}</h3>${l.subtitle ? `<p>${esc(l.subtitle)}</p>` : ""}</div></div>` : "");
+    $("#rm-head").innerHTML = back + (level > 0 ? `<div class="rm-title">${l.image ? `<img src="${esc(l.image)}" alt="">` : ""}<div><h3>${esc(l.title)}</h3>${l.subtitle && !none ? `<p>${esc(l.subtitle)}</p>` : ""}</div></div>` : "")
+      // an artist Roon knows of but has nothing by in the library: say so, and offer the search
+      + (none ? `<p class="none">${esc(tr`Roon har inget av ${l.title} i biblioteket. En sökning visar vad som finns hos tjänsterna.`)}</p><p><button class="btn" data-seek="${esc(l.title)}">${esc(tr`Sök efter ${l.title}`)}</button></p>` : "");
     const items = (d.items || []).filter((i) => !i.prompt);
     if (!items.length) { $("#rm-list").innerHTML = `<p class="none">${esc(tr("Här finns inget."))}</p>`; return; }
     // a list of things to do with what was chosen (Play now, Queue, Start radio): as buttons
@@ -188,7 +212,8 @@ export default function page(api) {
     const pics = items.some((i) => i.image);
     $("#rm-list").innerHTML = `<ul class="rm-list">${items.map((i) => i.hint === "header" || !i.item_key
       ? `<li class="head">${esc(i.title)}</li>`
-      : `<li><button class="go${pics ? "" : " plain"}" data-key="${esc(i.item_key)}" data-title="${esc(i.title)}"${i.hint === "action" ? ' data-act="1"' : ""}>${pics ? (i.image ? `<img src="${esc(i.image)}" alt="" loading="lazy">` : `<span class="ph"></span>`) : ""}<span><b>${esc(i.title)}</b>${i.subtitle ? `<span>${esc(i.subtitle)}</span>` : ""}</span>${i.hint === "action" ? "" : chev}</button></li>`).join("")}</ul>`;
+      : `<li><button class="go${pics ? "" : " plain"}" data-key="${esc(i.item_key)}" data-title="${esc(i.title)}"${i.hint === "action" ? ' data-act="1"' : ""}${albumMark(i)}>${pics ? (i.image ? `<img src="${esc(i.image)}" alt="" loading="lazy">` : `<span class="ph"></span>`) : ""}<span><b>${esc(i.title)}</b>${i.subtitle ? `<span>${esc(i.subtitle)}</span>` : ""}</span>${i.hint === "action" ? "" : chev}</button></li>`).join("")}</ul>`;
+    addYears();
   }
   function search(text) {
     clearTimeout(timer);
@@ -206,19 +231,24 @@ export default function page(api) {
     // One try elsewhere first, when a module knows of sleeves: for a track its name and artist
     // ("Artist" or "Artist, Other"), for an album its name and artist.
     const b = img.closest("button"), name = b?.querySelector("b")?.textContent || "", by = (b?.dataset.sub ?? b?.querySelector("span span, b + span")?.textContent ?? "").split(/, | \/ /)[0];
-    const other = !img.dataset.tried && name && by && !/^\d+\s/.test(by) ? api.coverFor({ artist: by, [b.closest(".rm-list") ? "title" : "album"]: name }) : "";
+    const other = !img.dataset.tried && name && by && !/^\d+\s/.test(by) ? api.coverFor?.({ artist: by, [b.closest(".rm-list") ? "title" : "album"]: name }) : "";
     if (other) { img.dataset.tried = "1"; img.src = other; return; }
     if (img.closest(".rm-list, .rm-grid")) { const ph = document.createElement("span"); ph.className = "ph"; img.replaceWith(ph); } else img.remove();
   }, true);
   $("#rm-find").addEventListener("input", (e) => search(e.target.value));
   box.addEventListener("click", (e) => {
-    const b = e.target.closest("[data-key], [data-back], [data-path]"); if (!b) return;
+    const b = e.target.closest("[data-key], [data-back], [data-path], [data-seek]"); if (!b) return;
+    if (b.dataset.seek) { $("#rm-find").value = b.dataset.seek; results(b.dataset.seek.slice(0, 120), true); return; }
     if (b.dataset.path) {     // something found by the search: go to it, by its names
       let names = []; try { names = JSON.parse(b.dataset.path); } catch {}
       if (Array.isArray(names) && names.length) follow(["roon-search", query, ...names.map(String)], b.dataset.sub || "", true);
       return;
     }
-    if (b.dataset.back) api.back("v-music", subOf(trail.slice(0, -1)));
+    if (b.dataset.back) {    // one list up (past the list of one that was gone straight through)
+      let up = trail.slice(0, -1);
+      if (up.length && up[up.length - 1] === trail[trail.length - 1]) up = up.slice(0, -1);
+      api.back("v-music", subOf(up));
+    }
     // into a list: a step, named by the entry. Something done (Play now): no name, no step.
     else if (b.dataset.key) go({ item_key: b.dataset.key }, b.dataset.act || b.dataset.title == null ? null : b.dataset.title, true);
   });

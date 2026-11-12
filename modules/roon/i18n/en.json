@@ -47,5 +47,7 @@
  "Roon skickar 32 bit, mer än musikfiler innehåller. Det tyder på att servern bearbetar ljudet (DSP, volymutjämning eller Roons egen volym). Roons signalväg visar vad, och där stänger man av det för orört ljud. Roon Bridge lämnar det som kommer till DAC:en oförändrat.": "Roon sends 32 bit, more than music files hold. That suggests the server works on the audio (DSP, volume levelling or Roon's own volume). Roon's signal path shows what, and that is where to switch it off for untouched audio. Roon Bridge hands what arrives to the DAC unchanged.",
  "Söker…": "Searching…",
  "Inget i Roon heter {0}.": "Nothing in Roon is called {0}.",
- "Visa alla {0}": "Show all {0}"
+ "Visa alla {0}": "Show all {0}",
+ "Roon har inget av {0} i biblioteket. En sökning visar vad som finns hos tjänsterna.": "Roon has nothing by {0} in the library. A search shows what the services have.",
+ "Sök efter {0}": "Search for {0}"
 }

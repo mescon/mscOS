@@ -17,6 +17,17 @@ class Texts(unittest.TestCase):
         self.assertEqual(lookup.plain("Vapen & ammunition"), "Vapen & ammunition")
         self.assertEqual(lookup.plain("Live"), "Live", "nothing left: the title stays")
 
+    def test_an_albums_name_without_its_edition(self):
+        # for the year an album first came out: the edition goes, what belongs to the name stays
+        self.assertEqual(lookup.bare("Revolver (2022 Mix)"), "Revolver")
+        self.assertEqual(lookup.bare("Abbey Road (Super Deluxe Edition)"), "Abbey Road")
+        self.assertEqual(lookup.bare("The Beatles (White Album / Super Deluxe)"), "The Beatles")
+        self.assertEqual(lookup.bare("Help! (Remastered 2009) [Mono]"), "Help!")
+        self.assertEqual(lookup.bare("Michelle (Take 1)"), "Michelle (Take 1)")
+        self.assertEqual(lookup.bare("Get Back (Rooftop Performance)"), "Get Back (Rooftop Performance)")
+        self.assertEqual(lookup.bare("(What's the Story) Morning Glory?"), "(What's the Story) Morning Glory?")
+        self.assertEqual(lookup.bare("(Deluxe)"), "(Deluxe)", "nothing left: the name stays")
+
     def test_the_critics_section_is_found_under_another_heading(self):
         review = "The critics liked it very much indeed, and said it was among the best records of that year."
         intro, secs = lookup.sections(f"Intro.\n\n== Release ==\n{'x' * 90}\n\n=== Critical reception ===\n{review}\n\n== Legacy ==\n{'y' * 90}")

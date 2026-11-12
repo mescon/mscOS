@@ -4,7 +4,6 @@ import os
 import sys
 import unittest
 
-import tests
 from tests import ROOT
 
 spec = importlib.util.spec_from_file_location("mscos_test_upnp", os.path.join(ROOT, "modules", "upnp", "__init__.py"))

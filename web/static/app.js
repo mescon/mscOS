@@ -212,12 +212,29 @@ widePanels(); desktop.addEventListener("change", widePanels);
 
 // ------------------------------------------------------------------ socket
 let ws, retry = 1000;
+// The veil: over the page while something slow is done on the device (busy), and while the
+// page has not heard from the device, at first or because it is restarting (waiting). A page
+// with nothing in it yet looks broken; a ring and a line saying what is awaited does not.
+const VEIL = { busy: "", waiting: "" };
+function veil() {
+  const text = VEIL.busy || VEIL.waiting;
+  $("#busy-text").textContent = text;
+  $("#busy").hidden = !text;
+  document.body.classList.toggle("is-busy", !!text);
+}
+const waiting = (text) => { VEIL.waiting = text; veil(); };
+let heard = false, lostTimer = 0;
+waiting("\u00a0");   // (the ring alone at first: the words come if it takes more than a moment)
+setTimeout(() => { if (!heard && VEIL.waiting === "\u00a0") waiting(tr("Hämtar läget från enheten…")); }, 1500);
 function connect() {
   ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/ws`);
   ws.onopen = () => { retry = 1000; const l = $("#conn"); l.classList.add("on"); l.setAttribute("aria-label", tr("Ansluten till enheten")); };
   ws.onclose = () => {
     const l = $("#conn"); l.classList.remove("on"); l.setAttribute("aria-label", tr("Ingen kontakt med enheten"));
     $("#dev-sub").textContent = tr("– ingen kontakt, försöker igen…");
+    // (a moment's grace: a module switched on closes and opens the connection at once)
+    clearTimeout(lostTimer);
+    lostTimer = setTimeout(() => { if (!ws || ws.readyState !== 1) waiting(heard ? tr("Enheten svarar inte just nu, den kanske startar om. Sidan kommer tillbaka av sig själv.") : tr("Ingen kontakt med enheten. Försöker igen…")); }, 1500);
     setTimeout(connect, retry); retry = Math.min(retry * 2, 15000);
   };
   ws.onmessage = (e) => { const m = JSON.parse(e.data); inbox = inbox.then(() => handle(m)).catch((err) => console.error(err)); };
@@ -237,6 +254,12 @@ function coverFor(t) {
   for (const p of Object.values(PAGES)) { try { const u = p.coverFor?.(t); if (u) return u; } catch (e) { console.error(e); } }
   return "";
 }
+// When albums first came out, asked of a module that knows (its years(albums) hook): the years
+// in the same order, or nothing.
+async function yearsFor(albums) {
+  for (const p of Object.values(PAGES)) if (p.years) { try { return (await p.years(albums)) || []; } catch (e) { console.error(e); } }
+  return [];
+}
 function pageApi(id) {
   return { $, $$, S, tr, esc, dec, khz, fmtWord, fmtTime, clock, stamp, post, toast, fv, loc, MARK,
     outName, srcId, srcState, sigWord, usbStage,
@@ -246,6 +269,8 @@ function pageApi(id) {
     // a sleeve from elsewhere for {artist, album, title} when the player's own is missing or
     // broken: an address, or "" (a module offers it through a coverFor(track) hook)
     coverFor,
+    // the years albums first came out, for [{artist, title}]: a promise of [year or null] in the same order
+    yearsFor,
     lang: () => LANG,
     // where in the track the music is, how long the track is (milliseconds), and whether it plays
     position: () => posNow(), duration: () => durOf(), playing: () => isPlaying(),
@@ -346,6 +371,7 @@ function renderFeatures() {
   $("#net-speed").hidden = $("#net-note").hidden = !b.link_mbps;
 }
 async function handle(m) {
+  const hello = m.type === "hello";
   if (m.type === "hello" || (m.type === "settings" && m.features)) {
     // a module switched on while the page is open: ask for the whole state again, with its part
     if (await loadPages(m.features?.pages) && m.type === "settings") { ws.close(); return; }
@@ -355,6 +381,7 @@ async function handle(m) {
   pagesDo("render"); renderDock(); stageLayout();
   // the history names each source as the panel does: drawn again once the sources are known
   if (m?.type === "hello" && document.body.dataset.view === "v-music") loadListened();
+  if (hello) { heard = true; clearTimeout(lostTimer); waiting(""); }   // the device has said how things are: the page is whole
 }
 function handleMsg(m) {
   switch (m.type) {
@@ -467,7 +494,7 @@ function renderPlay() {
   if (!own && !S.now) transportState(false, false, "off");
   if (!own) {
     const s = SRC(), stt = srcState(), d = S.status.dac || {}, now = S.now;
-    const fe = $("#np-format"), cover = $("#np-cover");
+    const fe = $("#np-format");
     fe.classList.remove("lossy", "pending");
     if (!s) {  // no source module is on
       $("#np-title").textContent = tr("Ingen källa");
@@ -504,7 +531,7 @@ function renderPlay() {
     return;
   }
   // the source's own page code says what plays
-  const m = own() || {}, fe = $("#np-format"), img = $("#np-cover");
+  const m = own() || {}, fe = $("#np-format");
   $("#np-title").textContent = m.title || "";
   $("#np-artist").textContent = m.artist || "";
   $("#np-album").textContent = m.album || "";
@@ -666,11 +693,6 @@ function renderSysHead() {
   $("#sys-sum").textContent = issues.length
     ? issues.join(", ").replace(/^./, (c) => c.toUpperCase()) + "."
     : tr`${sname} igång${m.reachable ? tr(", förstärkaren ansluten") : ""}${S.settings?.alerts ? tr(", larm till telefonen på") : ""}. Drifttid ${fmtUptime(sys.uptime_s || 0)}.`;
-}
-function fmtDate(s) {
-  if (!s || s === "n/a") return "–";
-  const d = new Date(s.replace(/^\w+ /, "").replace(" CET", "+01:00").replace(" CEST", "+02:00").replace(" UTC", "Z").replace(" ", "T"));
-  return isNaN(d) ? s : d.toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" });
 }
 
 // ------------------------------------------------------------------ dropouts, 24 h
@@ -1190,11 +1212,7 @@ $$(".np-find").forEach((b) => b.addEventListener("click", () => {
 }));
 // ------------------------------------------------------------------ source switch
 // The veil over the page while something slow is done on the device; "" lifts it.
-function busy(text) {
-  $("#busy-text").textContent = text;
-  $("#busy").hidden = !text;
-  document.body.classList.toggle("is-busy", !!text);
-}
+function busy(text) { VEIL.busy = text; veil(); }
 $("#source").addEventListener("click", async (e) => {
   const b = e.target.closest("button"); if (!b || b.getAttribute("aria-checked") === "true") return;
   const src = b.dataset.v, seg = $("#source");

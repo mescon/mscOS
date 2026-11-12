@@ -276,7 +276,7 @@ class Roon(SourcePlugin):
             lst = d.get("list") or {}
             return web.json_response({
                 "action": d["action"], "message": str(d["message"])[:300], "is_error": d["is_error"],
-                "list": {"title": str(lst.get("title") or "")[:200], "subtitle": str(lst.get("subtitle") or "")[:200], "level": lst.get("level") or 0,
+                "list": {"title": _plain(lst.get("title")), "subtitle": _plain(lst.get("subtitle")), "level": lst.get("level") or 0,
                          "count": lst.get("count") or 0, "image": f"/api/roon/image/{lst['image_key']}" if ok_key(lst.get("image_key")) else None,
                          "hint": lst.get("hint")},
                 "items": [{"title": _plain(i.get("title")), "subtitle": _plain(i.get("subtitle")), "hint": i.get("hint"),
@@ -340,6 +340,8 @@ class Roon(SourcePlugin):
                 raise web.HTTPNotFound()
             if self.http is None:
                 self.http = ClientSession(timeout=ClientTimeout(total=8))
+            if key in self._no_image:
+                return web.Response(status=204)   # (asked before: Roon names it and does not have it)
             url = f"http://{self.server['host']}:{self.server['port']}/api/image/{key}"
             kinds = ("image/jpeg", "image/png", "image/webp")
             try:
@@ -364,7 +366,7 @@ class Roon(SourcePlugin):
                     if len(self._no_image) > 500:
                         self._no_image.clear()
             if status != 200 or len(data) > 4 * 1024 * 1024 or ctype not in kinds:
-                raise web.HTTPNotFound()
+                return web.Response(status=204)   # no picture: said plainly, and not as an error in the browser's log
             # whatever the server sent, the browser takes it as that picture and nothing else
             return web.Response(body=data, content_type=ctype, headers={
                 "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; sandbox"})

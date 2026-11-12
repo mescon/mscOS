@@ -195,6 +195,31 @@ class About(Plugin):
                 raise web.HTTPBadRequest()
             return web.json_response(await self.about(artist, album, title, lang, m.group(1) if m else "", part))
 
+        @routes.post("/api/about/years")
+        async def years(request):
+            """When albums first came out: [{"artist", "title"}] in, the years (or null) in the
+            same order out. One question to MusicBrainz for each artist, kept."""
+            try:
+                b = await request.json()
+                albums = [(" ".join(str(a.get("artist") or "").split())[:200], " ".join(str(a.get("title") or "").split())[:200]) for a in b.get("albums", [])[:120]]
+            except (ValueError, AttributeError, TypeError):
+                raise web.HTTPBadRequest()
+            if self.http is None:
+                self.http = ClientSession(timeout=ClientTimeout(total=15))
+            first = lambda a: re.split(r", | / ", a)[0]      # noqa: E731
+            by: dict[str, list[str]] = {}
+            for a, t in albums:
+                if a and t:
+                    by.setdefault(first(a), []).append(t)
+            known: dict[str, dict] = {}
+            for artist, titles in list(by.items())[:8]:      # (a list is seldom of more artists; the rest stay without)
+                names = sorted({lookup._fold(lookup.bare(t)) for t in titles})
+                try:
+                    known[artist] = await self._one(self._file("years3", artist, *names), lambda artist=artist, titles=titles: lookup.album_years(self.http, artist, titles)) or {}
+                except lookup.Unavailable:
+                    break
+            return web.json_response({"years": [known.get(first(a), {}).get(lookup._fold(lookup.bare(t))) for a, t in albums]})
+
         @routes.get("/api/about/cover")
         async def cover(request):
             """A sleeve for when the player has none to show (its own picture is missing or
@@ -211,13 +236,13 @@ class About(Plugin):
             except lookup.Unavailable:
                 raise web.HTTPServiceUnavailable()
             if not url:
-                raise web.HTTPNotFound()
+                return web.Response(status=204)   # no picture: said plainly, and not as an error in the browser's log
             try:
                 async with self.http.get(url, headers={"User-Agent": lookup.UA}) as r:
                     data = await collect.read_capped(r, 3 * 1024 * 1024)
                     ctype = r.headers.get("Content-Type", "").split(";")[0].strip().lower()
                     if r.status != 200 or len(data) > 3 * 1024 * 1024 or ctype not in ("image/jpeg", "image/png", "image/webp"):
-                        raise web.HTTPNotFound()
+                        return web.Response(status=204)   # no picture: said plainly, and not as an error in the browser's log
             except (OSError, asyncio.TimeoutError):
                 raise web.HTTPBadGateway()
             return web.Response(body=data, content_type=ctype, headers={

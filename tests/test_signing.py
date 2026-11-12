@@ -11,7 +11,6 @@ from aiohttp import web
 from aiohttp.test_utils import TestServer
 from aiohttp import ClientSession
 
-import tests
 from tests import ROOT
 
 import app as panel

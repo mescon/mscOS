@@ -11,7 +11,6 @@ import contextlib
 import collections
 import hashlib
 import json
-import ipaddress
 import logging
 import math
 import os
@@ -1598,7 +1597,7 @@ async def require_login(request, handler):
 @web.middleware
 async def cache_headers(request, handler):
     resp = await handler(request)
-    if request.path.startswith("/api/roon/image/"):
+    if request.path.startswith("/api/roon/image/") and resp.status == 200:
         resp.headers["Cache-Control"] = "private, max-age=604800, immutable"   # a picture under its own key: never another
     elif request.path.startswith("/api/about/cover") and resp.status == 200:
         pass                                            # (a sleeve found elsewhere: kept by the browser as the module says)

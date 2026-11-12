@@ -26,7 +26,6 @@ import asyncio
 import logging
 import time
 
-import collect
 
 log = logging.getLogger("volbridge")
 

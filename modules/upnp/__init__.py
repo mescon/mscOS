@@ -20,7 +20,6 @@ import re
 import socket
 import time
 from xml.etree import ElementTree
-from xml.sax.saxutils import escape
 
 from aiohttp import ClientSession, ClientTimeout
 

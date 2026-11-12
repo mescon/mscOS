@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
-import datetime as dt
 import glob
 import ipaddress
 import json
@@ -13,7 +11,7 @@ import shlex
 import socket
 
 import board
-from i18n import N_, T, decimal
+from i18n import T, decimal
 
 
 
@@ -608,7 +606,7 @@ async def dac_detail() -> dict:
     clock_valid = next((v for k, v in controls.items() if k.startswith("Clock Source") and "Validity" in k), None)
     raw = {}
     for title, cmd_ in (("aplay -l", "aplay -l"), ("lsusb", "lsusb"), ("lsusb -t", "lsusb -t"),
-                        ("/proc/asound/cards", f"cat /proc/asound/cards"), (f"{card}/stream0", f"cat {card}/stream0"),
+                        ("/proc/asound/cards", "cat /proc/asound/cards"), (f"{card}/stream0", f"cat {card}/stream0"),
                         ):
         _, out, _ = await run(cmd_, timeout=5)
         raw[title] = out
