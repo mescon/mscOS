@@ -20,6 +20,10 @@ const FMT = { S16_LE: "16 bit", S24_3LE: "24 bit", S24_LE: "24 bit", S32_LE: "32
 const fmtWord = (f) => FMT[f] || f || "";
 // a source's page code may know better what a format carries (24 bit in a 32-bit container)
 const fmtCarry = (f) => VIEW().carry?.(f) ?? fmtWord(f);
+// Native DSD reaches ALSA as 8, 16 or 32 one-bit samples per frame: the DSD rate is the frame rate times that.
+const dsdOf = (f, rate) => { const m = /^DSD_U(8|16|32)/.exec(f || ""); if (!m || !rate) return null; const hz = rate * +m[1]; return { hz, x: Math.round(hz / 44100) }; };
+// What the DAC is being sent, in words: "24 bit, 96,0 kHz" or "DSD64, 2,8 MHz, nativ".
+const sigWord = (f, rate) => { const d = dsdOf(f, rate); return d ? tr`DSD${d.x}, ${dec(d.hz / 1e6, 1)} MHz, nativ` : `${fmtWord(f)}, ${khz(rate)} kHz`; };
 const bitsOf = (fmt) => { const m = /S(\d+)/.exec(fmt || ""); return m ? (m[1] === "32" ? 32 : +m[1]) : null; };
 
 function spec(el, rows) {
@@ -312,7 +316,7 @@ function renderPlay() {
     // a source that opens the DAC itself (Roon, HQPlayer): the DAC shows what arrives
     const running = !s.pipewire && d.state === "RUNNING";
     $("#np-title").textContent = running ? tr`Spelar via ${s.label}` : s.label;
-    $("#np-artist").textContent = running ? tr`${fmtWord(d.hw_params?.format)}, ${khz(parseInt(d.hw_params?.rate) || 44100)} kHz till ${outName()}` : srcHint(s);
+    $("#np-artist").textContent = running ? tr`${sigWord(d.hw_params?.format, parseInt(d.hw_params?.rate) || 44100)} till ${outName()}` : srcHint(s);
     $("#np-album").textContent = ""; fe.hidden = true;
     cover.hidden = true; $("#cover-empty").hidden = false;
     return;
@@ -384,7 +388,7 @@ function chainSource() {
       facts: dac.present ? tr`Asynkron överföring, ${dac.usb_speed === "high" ? "USB 2.0" : "USB 1.1"}` : tr("Ingen DAC ansluten"),
       note: dac.present ? (dac.usb_speed === "high" ? tr("Upp till 192 kHz och DSD64 via DoP.") : tr`Upp till ${khz(dac.max_rate || 48000)} kHz. Högre upplösningar räknas om av källan.`) : tr("Kontrollera USB-kabeln") },
     { k: "dac", name: outName(), tag: tr("DAC"), state: !dac.present ? "bad" : running ? "ok" : "idle",
-      facts: running ? `${fmtWord(dac.hw_params.format)}, ${khz(rate)} kHz` : dac.present ? tr("Ansluten, vilar") : tr("Inte ansluten"),
+      facts: running ? sigWord(dac.hw_params.format, rate) : dac.present ? tr("Ansluten, vilar") : tr("Inte ansluten"),
       note: running ? (s.pipewire ? tr`Tar emot signalen från ${roon.name} via PipeWire` : tr`Tar emot signalen direkt från ${roon.name}`) : tr`Väntar på ${s.label}` },
   ];
   return { stages, running, playing: running, rate, issues: [], dac, roon, lossy, direct: !s.pipewire };
@@ -401,8 +405,10 @@ function renderSignal() {
   if (lit.length > 1) waveSet(!!c.running, (lit[0] + .5) / n, (lit[lit.length - 1] + .5) / n); else waveSet(false);
   // readout
   $(".display").classList.toggle("idle", !c.running);
-  $("#r-rate").textContent = c.rate ? khz(c.rate) : khz(44100);
-  $("#r-bits").textContent = c.bits || (c.running ? bitsOf(c.dac.hw_params?.format) : null) || "–";
+  const dsd = c.running ? dsdOf(c.dac.hw_params?.format, c.rate) : null;
+  $("#r-rate").textContent = dsd ? dec(dsd.hz / 1e6, 1) : c.rate ? khz(c.rate) : khz(44100);
+  $("#r-rate").nextElementSibling.textContent = dsd ? "MHz" : "kHz";
+  $("#r-bits").textContent = dsd ? 1 : c.bits || (c.running ? bitsOf(c.dac.hw_params?.format) : null) || "–";
   $("#r-gain").textContent = c.gain ?? dec(0);
   // seal
   const seal = $("#seal"); let head, sub, cls = "";
@@ -412,7 +418,7 @@ function renderSignal() {
     head = c.roon.active ? (c.running ? tr`${c.roon.label} spelar` : tr`${c.roon.label}, redo`) : tr`${c.roon.name} kör inte`;
     sub = !c.running ? srcHint() + "."
       : c.lossy ? tr`${CODEC[S.now.codec] || S.now.codec}${S.now.bitrate ? `, ${S.now.bitrate} kbit/s` : ""}: komprimerat ljud, inte Lossless.`
-      : c.direct ? tr`${c.roon.name} äger DAC:en: ${fmtWord(c.dac.hw_params?.format)}, ${khz(c.rate)} kHz.` : tr`${c.roon.name} spelar via PipeWire.`;
+      : c.direct ? tr`${c.roon.name} äger DAC:en: ${sigWord(c.dac.hw_params?.format, c.rate)}.` : tr`${c.roon.name} spelar via PipeWire.`;
     cls = c.roon.active ? "" : "warn";
   }
   seal.className = `seal ${cls}`;
