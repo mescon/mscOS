@@ -1,10 +1,10 @@
 {
  "format": 1,
- "serial": 39,
+ "serial": 41,
  "modules": [
   {
    "id": "about",
-   "version": "1.2.0",
+   "version": "1.3.0",
    "kind": "integration",
    "name": {
     "sv": "Om musiken",
@@ -17,7 +17,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "74bdb38bbfb3d819bf48120d62dac5acd182eb016a21c484cfdc70b0f6bce8ef",
+     "sha256": "4d336f74aae5d034e0b1075d5448662decfc41dc26013b0db5c8a2f85a2c27b9",
      "exec": false
     },
     {
@@ -27,17 +27,17 @@
     },
     {
      "path": "module.json",
-     "sha256": "33d7f9269f101d2d698cffb421884b29a0a0e7fe2fd527899e8e2233223f587b",
+     "sha256": "423ec8fbbf59ae3331b7285eb0a68d85f58bd522cba0fccf792dfca88a368668",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "13c23d1471100c991c2edaa1d4e6dc30f69da291d15444d8320dfc7fe2640adf",
+     "sha256": "6bc4dee1264708df941e439d2a340b79cd2f1d7ad4c6346127b7be8814f57167",
      "exec": false
     },
     {
      "path": "i18n/en.json",
-     "sha256": "2579d99836995649240d8d0fce9996f3e68d223990c41c3b6acdab1e58201c1c",
+     "sha256": "bd3297ebf5f9e5b7b56e916d4077c89424b792be9fed2221db583fdf248bb534",
      "exec": false
     }
    ]
@@ -269,7 +269,7 @@
   },
   {
    "id": "roon",
-   "version": "1.2.1",
+   "version": "1.3.0",
    "kind": "source",
    "name": {
     "sv": "Roon Bridge",
@@ -282,7 +282,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "1790a1801be0fb4245e6f41ad0ba8205f4e58f5fd1e8c0b3f73402e1edec98ce",
+     "sha256": "72c9cfc0bcb54aaacf0767a4f22f999c94547427f4c386401af47990e7df91e0",
      "exec": false
     },
     {
@@ -292,7 +292,7 @@
     },
     {
      "path": "module.json",
-     "sha256": "ee4b69db31590f90e6c90ffcb0b67ace990662c57592a693a1f003c3f4764197",
+     "sha256": "1be44112a7a15a7929a92f6a04940308602e5273b894af8d1f3e0b1e8ef6a7e5",
      "exec": false
     },
     {
@@ -312,7 +312,7 @@
     },
     {
      "path": "roonapi.py",
-     "sha256": "b54cd67a3bc6121406f4eaee314571d48ab80ee972a8edf9dd9d8ff1fad14eb9",
+     "sha256": "4f282105d23c66842f5f36befc2ad84c531e889530129320b811456c44df9e36",
      "exec": false
     },
     {

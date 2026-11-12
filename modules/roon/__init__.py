@@ -29,7 +29,7 @@ log = logging.getLogger("roon")
 API_FILE = os.path.join(collect.STATE_DIR, "roon-api.json")   # the servers' tokens, root only
 EXTENSION = {"extension_id": "org.mscos.panel", "display_name": "mscOS", "display_version": "1",
              "publisher": "mscOS", "email": "noreply@mscos.invalid",
-             "required_services": [roonapi.TRANSPORT], "optional_services": [],
+             "required_services": [roonapi.TRANSPORT], "optional_services": [roonapi.BROWSE],
              "provided_services": ["com.roonlabs.ping:1"]}
 LOOP = {"off": "disabled", "context": "loop", "track": "loop_one"}
 
@@ -143,7 +143,7 @@ class Roon(SourcePlugin):
         # found a server that has not let us in yet: that is what the listener has to do next
         waiting = api is not None and api.ws is not None and not api.registered and bool(self.hub.settings.get("roon_api"))
         self.hint = self.HINT_APPROVE if waiting else self.HINT
-        told = (waiting, tuple(sorted((api.zones if api else {}).keys())))
+        told = (waiting, tuple(sorted((api.zones if api else {}).keys())), bool(api and api.registered))
         if told != self._told:    # the hint and the list of zones are part of what the panel shows
             self._told = told
             asyncio.ensure_future(self.hub.broadcast({"type": "settings", "settings": self.hub.settings,
@@ -206,7 +206,49 @@ class Roon(SourcePlugin):
         except (RuntimeError, OSError, websockets.WebSocketException) as e:
             raise RuntimeError(T("Roon tog inte emot kommandot ({why}).", why=e))
 
+    def hello(self) -> dict:
+        return {"roon_ready": bool(self.api and self.api.registered)}
+
     def routes(self, routes) -> None:
+        @routes.post("/api/roon/browse")
+        async def browse(request):
+            """One step in Roon's own lists (its library, a search, a streaming service's shelves),
+            and what is there after it. An item that is an action (Play now, Queue) is done in this device's zone."""
+            if not (self.api and self.api.registered):
+                raise web.HTTPConflict(text=T("Godkänn mscOS i Roon under Inställningar, Tillägg."))
+            try:
+                b = await request.json()
+                hierarchy = b.get("hierarchy")
+                where = {}
+                if isinstance(b.get("item_key"), str) and re.fullmatch(r"[\w:.\-]{1,200}", b["item_key"]):
+                    where["item_key"] = b["item_key"]
+                if isinstance(b.get("input"), str) and b["input"].strip():
+                    where["input"] = " ".join(b["input"].split())[:120]
+                if b.get("pop_all") is True:
+                    where["pop_all"] = True
+                if isinstance(b.get("pop_levels"), int) and 0 < b["pop_levels"] < 20:
+                    where["pop_levels"] = b["pop_levels"]
+            except (ValueError, AttributeError):
+                raise web.HTTPBadRequest()
+            if hierarchy not in ("browse", "search") or ("item_key" in where and "pop_all" in where):
+                raise web.HTTPBadRequest()
+            zone = self._zone()
+            try:
+                d = await self.api.browse(hierarchy, zone["zone_id"] if zone else "", **where)
+            except (RuntimeError, OSError, websockets.WebSocketException) as e:
+                raise web.HTTPBadGateway(text=T("Roon tog inte emot kommandot ({why}).", why=e))
+            ok_key = lambda k: isinstance(k, str) and re.fullmatch(r"[A-Za-z0-9_-]{8,128}", k)   # noqa: E731
+            lst = d.get("list") or {}
+            return web.json_response({
+                "action": d["action"], "message": str(d["message"])[:300], "is_error": d["is_error"],
+                "list": {"title": str(lst.get("title") or "")[:200], "subtitle": str(lst.get("subtitle") or "")[:200], "level": lst.get("level") or 0,
+                         "count": lst.get("count") or 0, "image": f"/api/roon/image/{lst['image_key']}" if ok_key(lst.get("image_key")) else None,
+                         "hint": lst.get("hint")},
+                "items": [{"title": str(i.get("title") or "")[:300], "subtitle": str(i.get("subtitle") or "")[:300], "hint": i.get("hint"),
+                           "item_key": i.get("item_key") if isinstance(i.get("item_key"), str) else None,
+                           "image": f"/api/roon/image/{i['image_key']}" if ok_key(i.get("image_key")) else None,
+                           "prompt": bool(i.get("input_prompt"))} for i in d.get("items", [])[:200]]})
+
         @routes.get("/api/roon/image/{key}")
         async def image(request):
             """The sleeve, fetched from the Roon server for the page (the page is not let at the server itself)."""

@@ -23,6 +23,7 @@ import uuid
 SOOD_PORT, SOOD_GROUP = 9003, "239.255.90.90"
 ROON_SERVICE = "00720724-5143-4a9b-abac-0e50cba674bb"
 TRANSPORT = "com.roonlabs.transport:2"
+BROWSE = "com.roonlabs.browse:1"
 
 
 # ---- discovery
@@ -229,6 +230,19 @@ class Roon:
                     if z.get("now_playing") is not None:
                         z["now_playing"]["seek_position"] = s.get("seek_position")
         self.changed()
+
+    # ---- browse: Roon keeps the place in its lists; we say where to go and read what is there
+    async def browse(self, hierarchy: str, zone_id: str = "", count: int = 100, **where) -> dict:
+        """Go somewhere in a hierarchy ("browse" or "search") and read the list that is there:
+        where = item_key (an item chosen), input (a search), pop_all (to the top), pop_levels.
+        {"action", "message", "list": {...}, "items": [...]}"""
+        opts = {"hierarchy": hierarchy, "multi_session_key": "mscos", **({"zone_or_output_id": zone_id} if zone_id else {}), **where}
+        d = await self.request(f"{BROWSE}/browse", opts, timeout=15)
+        out = {"action": d.get("action"), "message": d.get("message") or "", "is_error": bool(d.get("is_error")), "list": d.get("list"), "items": []}
+        if d.get("action") == "list":
+            got = await self.request(f"{BROWSE}/load", {"hierarchy": hierarchy, "multi_session_key": "mscos", "offset": 0, "count": count}, timeout=15)
+            out["list"], out["items"] = got.get("list") or d.get("list"), got.get("items") or []
+        return out
 
     # ---- transport
     async def control(self, zone_id: str, what: str) -> None:

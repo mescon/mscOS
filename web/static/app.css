@@ -139,7 +139,8 @@ select { appearance: none; padding-right: 32px; background-image: linear-gradien
   background: var(--glass); border-radius: 2px; overflow: hidden;
   box-shadow: 0 1px 0 var(--hair-hi), 0 18px 40px -18px rgba(0, 0, 0, .55);
 }
-.cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* the whole sleeve, always: one that is not square gets bars, not a cut */
+.cover img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .cover-empty { position: absolute; inset: 22%; border-radius: 50%; border: 1px solid var(--g-hair);
   background: repeating-radial-gradient(circle, transparent 0 3px, rgba(207, 204, 196, .05) 3px 4px); }
 .cover-empty::after { content: ""; position: absolute; inset: 42%; border-radius: 50%; background: var(--red-dim); }

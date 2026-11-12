@@ -13,7 +13,6 @@
  "{0} av 5 ({1} röster)": "{0} of 5 ({1} votes)",
  "Mottagande": "Reception",
  "Låttext": "Lyrics",
- "Texten": "The words",
  "Instrumental": "Instrumental",
  "Medlemmar": "Members",
  "Utmärkelser": "Awards",
@@ -31,5 +30,7 @@
  "Mixning": "Mix",
  "Mastering": "Mastering",
  "Helskärm": "Full screen",
- "Stäng helskärm": "Leave full screen"
+ "Stäng helskärm": "Leave full screen",
+ "Låttext, tryck för att förstora": "Lyrics, press to enlarge",
+ "Låttext, tryck för att förminska": "Lyrics, press to make smaller"
 }

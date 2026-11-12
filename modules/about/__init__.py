@@ -109,7 +109,7 @@ class About(Plugin):
         try:
             async def who():
                 # "A, B" is several artists on one track: the first of them, when the whole is nobody's name
-                first = artist.split(", ")[0]
+                first = re.split(r", | / ", artist)[0]
                 return await lookup.find_artist(self.http, artist, album, title, spotify_artist) \
                     or (await lookup.find_artist(self.http, first, album, title) if first != artist else "")
             # Which artist: by the player's id for it when there is one, else by the name together
@@ -181,7 +181,7 @@ class About(Plugin):
                 raise web.HTTPBadRequest()
             if not artist or not title or not 0 <= dur < 4 * 3600 * 1000:
                 raise web.HTTPBadRequest()
-            return web.json_response(await self.lyrics(artist.split(", ")[0], title, album, dur))
+            return web.json_response(await self.lyrics(re.split(r", | / ", artist)[0], title, album, dur))
 
 
 PLUGIN = About

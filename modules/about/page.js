@@ -7,7 +7,6 @@ export default function page(api) {
   const lyr = api.slot("about", `<section class="lyrics" id="about-lyrics" aria-label="${esc(tr("Låttext"))}" hidden>
     <div class="ly-bg" aria-hidden="true"></div><div class="ly-shade" aria-hidden="true"></div>
     <div class="ly-top">
-      <span class="part">${esc(tr("Texten"))}</span>
       <p class="ly-what" id="ly-what"><b></b><span></span></p>
       <button class="ly-full" id="ly-full" aria-pressed="false" aria-label="${esc(tr("Helskärm"))}">
         <svg class="i-open" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 9.5v-5h5M19.5 9.5v-5h-5M4.5 14.5v5h5M19.5 14.5v5h-5"/></svg>
@@ -20,19 +19,25 @@ export default function page(api) {
       /* The words move as one column: the line that is sung stands in the middle, the one before
          goes up and out, the next comes up from below. One movement for all of it, in the time
          a line takes to arrive. */
-      .lyrics { position: relative; isolation: isolate; margin-top: 36px; border: 1px solid var(--hair); border-radius: 3px; background: var(--plate); overflow: hidden; }
-      .ly-top { display: flex; align-items: center; gap: 12px; padding: 12px 12px 0 20px; }
-      .lyrics .part { flex: 1; font-size: .8125rem; letter-spacing: .04em; color: var(--ink); opacity: .72; }
+      .lyrics { position: relative; isolation: isolate; margin-top: 28px; overflow: hidden; }
+      /* small: a strip of the song, to press for more */
+      .ly-top { display: none; align-items: center; justify-content: flex-end; gap: 12px; padding: 0 4px; }
+      .lyrics.big .ly-top, .lyrics.full .ly-top { display: flex; }
+      .lyrics .from { display: none; }
+      .lyrics.big .from, .lyrics.full .from { display: block; }
+      .ly-stage { cursor: pointer; }
+      .lyrics.big .ly-stage { height: min(46vh, 420px); }
+      .lyrics.big .ly-track li { font-size: 1.75rem; padding: 9px 0; }
       .ly-what { display: none; }
       .ly-full { appearance: none; width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: var(--engraved); cursor: pointer; }
       .ly-full:hover { color: var(--ink); }
       .ly-full svg { width: 20px; height: 20px; }
       .ly-full .i-close, .lyrics.full .ly-full .i-open { display: none; }
       .lyrics.full .ly-full .i-close { display: block; }
-      .ly-stage { position: relative; height: 172px; overflow: hidden;
+      .ly-stage { position: relative; height: 104px; overflow: hidden; transition: height .25s cubic-bezier(.3, .7, .2, 1);
         -webkit-mask-image: linear-gradient(to bottom, transparent, #000 24%, #000 76%, transparent); mask-image: linear-gradient(to bottom, transparent, #000 24%, #000 76%, transparent); }
       .ly-track { list-style: none; margin: 0; padding: 0 20px; transition: transform .6s cubic-bezier(.4, 0, .2, 1); will-change: transform; }
-      .ly-track li { padding: 7px 0; text-align: center; font-family: var(--serif); font-size: 1.5rem; line-height: 1.25; opacity: 0; transform: scale(.82);
+      .ly-track li { padding: 5px 0; text-align: center; font-family: var(--serif); font-size: 1.3125rem; line-height: 1.25; opacity: 0; transform: scale(.82);
         transition: opacity .6s cubic-bezier(.4, 0, .2, 1), transform .6s cubic-bezier(.4, 0, .2, 1), filter .6s; }
       .ly-track li.d0 { opacity: 1; transform: none; font-weight: 500; }
       .ly-track li.d1 { opacity: .5; }
@@ -41,24 +46,25 @@ export default function page(api) {
       .ly-track li span { white-space: pre-wrap; transition: opacity .18s ease-out; }
       .ly-track li.d0 span:not(.sung) { opacity: .42; }
       /* words without times: all of them, to read and scroll */
-      .lyrics.plain .ly-stage { overflow-y: auto; -webkit-mask-image: none; mask-image: none; height: 220px; }
+      .lyrics.plain .ly-stage { overflow: hidden; height: 104px; }
+      .lyrics.plain.big .ly-stage, .lyrics.plain.full .ly-stage { overflow-y: auto; -webkit-mask-image: none; mask-image: none; }
       .lyrics.plain .ly-track { transform: none !important; padding-bottom: 12px; }
       .lyrics.plain .ly-track li { opacity: .85; transform: none; font-size: 1.125rem; padding: 3px 0; }
-      .lyrics .from { font-size: .8125rem; color: var(--engraved); margin: 0 20px 12px; }
+      .lyrics .from { font-size: .8125rem; color: var(--engraved); margin: 4px 0 0; text-align: center; }
       .lyrics .from a { color: inherit; text-underline-offset: 3px; }
       @media (prefers-reduced-motion: reduce) { .ly-track, .ly-track li { transition: none; } }
       /* full screen: the sleeve behind, blurred, under half black, so that the words stand clear */
       .ly-bg, .ly-shade { display: none; }
-      .lyrics.full { position: fixed; inset: 0; z-index: 200; margin: 0; border: 0; border-radius: 0; background: #000; color: #fff; display: flex; flex-direction: column; }
+      .lyrics.full { position: fixed; inset: 0; z-index: 200; margin: 0; background: #000; color: #fff; display: flex; flex-direction: column; }
       .lyrics.full .ly-bg { display: block; position: absolute; inset: -48px; z-index: -2; background-size: cover; background-position: center; filter: blur(30px) saturate(1.15); }
       .lyrics.full .ly-shade { display: block; position: absolute; inset: 0; z-index: -1; background: rgba(0, 0, 0, .5); }
       .lyrics.full .ly-top { padding: calc(14px + env(safe-area-inset-top)) 14px 0 24px; }
-      .lyrics.full .part { display: none; }
+      .lyrics.full .ly-top { justify-content: space-between; }
       .lyrics.full .ly-what { display: block; flex: 1; min-width: 0; margin: 0; }
       .lyrics.full .ly-what b { display: block; font-family: var(--serif); font-weight: 500; font-size: 1.25rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .lyrics.full .ly-what span { display: block; font-size: .875rem; opacity: .7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .lyrics.full .ly-full { color: #fff; }
-      .lyrics.full .ly-stage { flex: 1; height: auto; -webkit-mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 82%, transparent); mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 82%, transparent); }
+      .lyrics.full .ly-stage { flex: 1; height: auto; cursor: default; -webkit-mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 82%, transparent); mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 82%, transparent); }
       .lyrics.full .ly-track { padding: 0 max(24px, 8vw); }
       .lyrics.full .ly-track li { font-size: clamp(1.75rem, 4.8vw, 3.5rem); padding: clamp(10px, 1.6vh, 20px) 0; text-shadow: 0 2px 24px rgba(0, 0, 0, .55); }
       .lyrics.full .ly-track li.d1 { opacity: .55; }
@@ -308,6 +314,18 @@ export default function page(api) {
     track.style.transition = "none"; lyTick(true); track.offsetHeight; track.style.transition = "";   // in place at once, not sliding in
   }
   lyr.querySelector("#ly-full").addEventListener("click", () => lyFull(!lyr.classList.contains("full")));
+  stage.setAttribute("role", "button"); stage.tabIndex = 0;
+  const lyBig = () => {
+    if (lyr.classList.contains("full")) return;
+    const on = lyr.classList.toggle("big");
+    stage.setAttribute("aria-expanded", String(on));
+    stage.setAttribute("aria-label", on ? tr("Låttext, tryck för att förminska") : tr("Låttext, tryck för att förstora"));
+    setTimeout(() => lyTick(true), 260);   // when the box has its new height
+    lyTick(true);
+  };
+  stage.setAttribute("aria-expanded", "false"); stage.setAttribute("aria-label", tr("Låttext, tryck för att förstora"));
+  stage.addEventListener("click", lyBig);
+  stage.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); lyBig(); } });
   document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement) lyFull(false); else lyTick(true); });
   addEventListener("keydown", (e) => { if (e.key === "Escape" && lyr.classList.contains("full")) lyFull(false); });
   async function askWords(t, k) {

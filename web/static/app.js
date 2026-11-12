@@ -293,7 +293,7 @@ function renderDock() {
   $("#ambient").style.backgroundImage = has ? `url("${img.src}")` : "";
   $("#dk-title").textContent = $("#np-title").textContent;
   $("#dk-artist").textContent = $("#np-artist").textContent;
-  const playing = !$("#i-pause").hidden;
+  const playing = !$("#i-pause").hasAttribute("hidden");
   $("#dk-i").setAttribute("d", playing ? DK.pause : DK.play);
   $("#dk-play").setAttribute("aria-label", playing ? tr("Pausa") : tr("Spela"));
   const v = S.status.system?.mscos; $("#rail-ver").textContent = v ? `mscOS ${v}` : ""; $("#about-ver").textContent = v || "";
@@ -325,7 +325,9 @@ function renderSource() {
 }
 // The transport buttons show what the source says, and only what it can do.
 function transportState(playing, shuffle, repeat) {
-  $("#i-play").hidden = playing; $("#i-pause").hidden = !playing;
+  // (the "hidden" attribute, not the property: an SVG element has no such property, and setting
+  // it does nothing, which left the play symbol showing whatever played)
+  $("#i-play").toggleAttribute("hidden", playing); $("#i-pause").toggleAttribute("hidden", !playing);
   $("#b-play").setAttribute("aria-label", playing ? tr("Pausa") : tr("Spela"));
   $("#b-shuffle").setAttribute("aria-pressed", shuffle);
   $("#b-repeat").setAttribute("aria-pressed", repeat !== "off");
