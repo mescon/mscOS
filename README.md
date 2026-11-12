@@ -23,6 +23,12 @@ in Swedish or English.
 - **No keys, no player binaries included.** Players are downloaded on the device from
   their publishers; keys and accounts are your own.
 
+![The signal chain in the panel: sample rate, bit depth and gain as measured, and a lamp per stage](docs/img/signal.png)
+
+| The first-start guide | Modules |
+|---|---|
+| ![The guide's third step: naming the DAC and the streamer](docs/img/guide.png) | ![The Modules view on a new installation](docs/img/modules.png) |
+
 It is Debian 13 with the mscOS packages on top, built into images with the Armbian
 framework. It started on a SOtM sMS-200ultra, which is still the only board it has been
 tested on; see [status](#status).
