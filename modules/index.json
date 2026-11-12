@@ -1,6 +1,6 @@
 {
  "format": 1,
- "serial": 12,
+ "serial": 13,
  "modules": [
   {
    "id": "about",
@@ -32,7 +32,7 @@
     },
     {
      "path": "page.js",
-     "sha256": "a9fde90fa803a38560ea26a162b69800f85f40371d3103a4871625e9d7d89f12",
+     "sha256": "c4e323a84594e1ca9ac83365cc30864bbe26601d841fc457c18382abc02d38d7",
      "exec": false
     },
     {

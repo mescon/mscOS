@@ -95,10 +95,7 @@ export default function page(api) {
       const art = a.querySelector(".art"), src = pic[a.dataset.part];
       if (src) art.style.backgroundImage = `url(${JSON.stringify(src)})`; else art.remove();
     }
-    for (const a of cols.children) {
-      a.classList.toggle("fits", full(a) <= CLOSED);   // all of it shows: nothing to open
-      if (open.has(a.dataset.part)) setOpen(a, true, false);
-    }
+    measure();
   }
   cols.addEventListener("click", (e) => {
     const a = e.target.closest("article"); if (!a) return;
@@ -106,7 +103,18 @@ export default function page(api) {
     if (e.target.closest(".head")) setOpen(a, !a.classList.contains("open"));
     else if (!a.classList.contains("open") && !e.target.closest("a")) setOpen(a, true);
   });
-  addEventListener("resize", () => { for (const a of cols.querySelectorAll("article.open")) a.style.height = `${full(a)}px`; });
+  // Which cards have more than shows, and how high the open ones are. Only while the cards are
+  // on screen: drawn in another view they have no height, and none would seem to need opening.
+  function measure() {
+    if (!cols.offsetParent) return;
+    for (const a of cols.children) {
+      a.classList.toggle("fits", full(a) <= CLOSED);   // all of it shows: nothing to open
+      if (a.classList.contains("open")) a.style.height = `${full(a)}px`;
+      else if (open.has(a.dataset.part)) setOpen(a, true, false);
+    }
+  }
+  // the cards get their size when Listen is shown, when the window changes, when the type loads
+  new ResizeObserver(measure).observe(cols);
   async function ask(t, k) {
     try {
       const r = await fetch("/api/about", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...t, lang: api.lang() }) });
