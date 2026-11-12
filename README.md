@@ -41,10 +41,13 @@ Debian 13 or Armbian system, install the packages instead.
 | x86-64 PCs | the image builds and starts in a virtual machine (first boot, board profile, kernel arguments, the guide); **not yet tested on hardware or with a DAC** |
 | Raspberry Pi 4/5, other boards | profiles and image targets exist, **not yet built or tested** |
 | Spotify Lossless (Soloist), Roon Bridge | in daily use on the SOtM |
-| Spotify Connect (go-librespot), HQPlayer NAA | install, start and source switching verified on the SOtM; **playback not yet tested** |
-| Native DSD for CM6632A | in use as a kernel patch; the DKMS package is **untested** |
+| Spotify Connect (go-librespot) | playback, transport, and the Spotify slider driving the amplifier verified on the SOtM |
+| HQPlayer NAA | install, start and source switching verified on the SOtM; **playback not yet tested** |
+| Native DSD for CM6632A | in use as a kernel patch (6.18); the DKMS package builds the driver for Debian 13's own kernel (6.12), **not yet tried with a DAC on that kernel** |
 | Panel in Swedish and English | complete |
-| Alerts through ntfy, modules of your own, updating mscOS from the panel | written; **not yet tested against a real ntfy topic, a published module or a release** |
+| A new installation from the packages | installs in an empty Debian 13 container; the guide and every view checked there |
+| Modules of your own, the module catalogue | installing, updating and removing verified on the SOtM against a test catalogue |
+| Alerts through ntfy, updating mscOS from the panel | written; **not yet tested against a real ntfy topic or a published release** |
 
 Planned: UPnP/OpenHome (Qobuz and Tidal through a control app), Squeezelite, AirPlay.
 Tidal Connect and Qobuz Connect are only offered to certified manufacturers and are not

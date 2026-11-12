@@ -15,6 +15,7 @@ rm -rf usb linux-sound-usb
 git -c advice.detachedHead=false clone --quiet --depth 1 --filter=blob:none --sparse --branch "v$V" "$REPO" linux-sound-usb
 git -C linux-sound-usb sparse-checkout set --no-cone /sound/usb
 mkdir -p a/sound && cp -r linux-sound-usb/sound/usb a/sound/usb
-(cd a && patch -p1 -s < ../mscos-dsd.patch)
+# -l: the same code is indented one step differently in older releases (6.12)
+(cd a && patch -p1 -s -l < ../mscos-dsd.patch)
 mv a/sound/usb usb && rm -rf a linux-sound-usb
 echo "mscos-dsd: sound/usb of v$V patched for $KVER"
