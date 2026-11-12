@@ -428,6 +428,10 @@ class Hub:
             self.settings.update(saved)
             if "language" not in saved:  # an install from before the panel had languages
                 self.settings["language"] = "sv"
+            # the keeping of what was played was first a setting of the Spotify module: whoever
+            # switched that off has the listening history off, not on by its default
+            if "listen_history" not in saved and saved.get("spotify_history") is False:
+                self.settings["listen_history"] = False
         except (OSError, ValueError):
             pass
 
