@@ -22,7 +22,7 @@ mkdir -p /usr/lib/mscos /usr/share/mscos /var/lib/mscos /etc/mscos'
 # Music may be playing on the device: copy at the lowest CPU and disk priority, and reload
 # systemd (seconds of work for PID 1 on a small board) only when a unit file changed.
 LOW=(--rsync-path="nice -n19 ionice -c3 rsync")
-UNITS=$(rsync -a "${LOW[@]}" --itemize-changes "$STAGE/usr/lib/systemd/system/" "$HOST:/usr/lib/systemd/system/")
+UNITS=$(rsync -a "${LOW[@]}" --itemize-changes "$STAGE/usr/lib/systemd/system/" "$HOST:/usr/lib/systemd/system/" | grep -v '/$' || true)
 rsync -a "${LOW[@]}" --delete "$STAGE/usr/lib/mscos/" "$HOST:/usr/lib/mscos/"
 rsync -a "${LOW[@]}" --delete "$STAGE/usr/share/mscos/" "$HOST:/usr/share/mscos/"
 rsync -a "${LOW[@]}" "$STAGE/etc/mscos-release" "$HOST:/etc/mscos-release"

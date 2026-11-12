@@ -33,6 +33,31 @@ class Messages(unittest.TestCase):
                      b"MOO/1 COMPLETE Success\nRequest-Id: 1\nContent-Length: 5\nContent-Type: application/json\n\n{bad}"):
             self.assertIsNone(roonapi.moo_parse(junk), junk)
 
+    def test_a_kept_token_goes_only_to_its_own_server(self):
+        sent = []
+
+        class Ws:
+            def __init__(self, frames):
+                self.frames = frames
+
+            async def send(self, raw):
+                sent.append(roonapi.moo_parse(raw))
+
+            def __aiter__(self):
+                async def gen():
+                    for f in self.frames:
+                        yield f
+                return gen()
+
+        info = roonapi.moo_encode("COMPLETE", "Success", 0, {"core_id": "core-A"})
+        tokens = {"core-A": "tok-A"}
+        for claimed, want in (("core-A", "tok-A"), ("core-B", None)):
+            sent.clear()
+            api = roonapi.Roon({"extension_id": "x"}, lambda: None, lambda cid: tokens.get(cid, ""))
+            asyncio.run(api.run(Ws([info.replace(b"core-A", claimed.encode())])))
+            reg = next(m["body"] for m in sent if m["name"].endswith("/register"))
+            self.assertEqual(reg.get("token"), want, claimed)
+
     def test_discovery_messages(self):
         q = roonapi.sood_query("tid-1")
         self.assertEqual(roonapi.sood_parse(q), {"_type": "Q", "query_service_id": roonapi.ROON_SERVICE, "_tid": "tid-1"})
@@ -70,7 +95,9 @@ class Extension(unittest.IsolatedAsyncioTestCase):
         changes = []
         async with websockets.serve(server, "127.0.0.1", 0) as srv:
             port = srv.sockets[0].getsockname()[1]
-            api = roonapi.Roon({"extension_id": "org.example.test", "display_name": "Test"}, lambda: changes.append(1))
+            asked = []
+            api = roonapi.Roon({"extension_id": "org.example.test", "display_name": "Test"}, lambda: changes.append(1),
+                               lambda core_id: asked.append(core_id) or "")
             async with websockets.connect(f"ws://127.0.0.1:{port}/api") as ws:
                 run = asyncio.ensure_future(api.run(ws))
                 await asyncio.sleep(0.3)
@@ -95,5 +122,6 @@ class Extension(unittest.IsolatedAsyncioTestCase):
         reg = next(b for v, n, b in seen if n.endswith("/register"))
         self.assertEqual(reg["extension_id"], "org.example.test")
         self.assertNotIn("token", reg, "no token the first time")
+        self.assertEqual(asked, ["core-1"], "the token is chosen by who the server says it is")
         self.assertIn(("COMPLETE", "Success", None), seen, "the server's ping is answered")
         self.assertIn(("COMPLETE", "InvalidRequest", None), seen, "a service we do not offer is refused")

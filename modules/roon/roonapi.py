@@ -82,8 +82,12 @@ async def discover(wait: float = 2.5) -> list[dict]:
             p = sood_parse(data)
             if not p or p.get("service_id") != ROON_SERVICE or not p.get("unique_id") or not str(p.get("http_port", "")).isdigit():
                 continue
-            found[p["unique_id"]] = {"host": p.get("_replyaddr") or addr[0], "port": int(p["http_port"]),
-                                     "id": p["unique_id"], "name": p.get("name") or ""}
+            port = int(p["http_port"])
+            if not 1 <= port <= 65535:
+                continue
+            # The server is where the answer came from. An address named inside the answer
+            # ("_replyaddr") is not used: anyone on the network could name any host there.
+            found[p["unique_id"]] = {"host": addr[0], "port": port, "id": p["unique_id"], "name": (p.get("name") or "")[:80]}
     except OSError:
         pass
     finally:
@@ -132,10 +136,12 @@ def moo_parse(frame: bytes) -> dict | None:
 
 class Roon:
     """One connection to a Roon server, as an extension. `changed()` is called whenever the
-    zones or the registration change; `token` is kept by the caller between connections."""
+    zones or the registration change. `token_for(core_id)` gives the token that server issued
+    earlier ("" for none): it is asked once the server has said who it is, so a token is
+    never offered to another server than its own."""
 
-    def __init__(self, info: dict, changed, token: str = ""):
-        self.info, self.changed, self.token = info, changed, token
+    def __init__(self, info: dict, changed, token_for=None):
+        self.info, self.changed, self.token_for, self.token = info, changed, token_for or (lambda core_id: ""), ""
         self.ws = None
         self.core: dict = {}            # the server's answer to the registration; {} until approved
         self.zones: dict[str, dict] = {}
@@ -184,6 +190,7 @@ class Roon:
                     ok = msg["name"] == "com.roonlabs.ping:1/ping"
                     await ws.send(moo_encode("COMPLETE", "Success" if ok else "InvalidRequest", rid))
                 elif rid == "0" and reg_id is None:
+                    self.token = str(self.token_for(str((msg.get("body") or {}).get("core_id") or "")) or "")
                     reg_id = await self._send("com.roonlabs.registry:1/register", {**self.info, **({"token": self.token} if self.token else {})})
                     self.changed()   # asked to be let in: until the server answers, the listener has to approve
                 elif rid == reg_id:

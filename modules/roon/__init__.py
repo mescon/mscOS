@@ -133,7 +133,7 @@ class Roon(SourcePlugin):
         """The server said something: keep its token, and tell the panel when what plays changed."""
         api = self.api
         if api and api.registered and api.token:
-            self._keep(api.core.get("core_id") or self.server.get("id", ""), api.token)
+            self._keep(str(api.core.get("core_id") or ""), api.token, self.server.get("host", ""))
         old, self.np = self.np, self._now()
         np = self.np
         keys = ("title", "artist", "album", "image", "playing", "duration_ms", "shuffle", "repeat")
@@ -159,11 +159,22 @@ class Roon(SourcePlugin):
         except (OSError, ValueError):
             return {}
 
-    def _keep(self, core_id: str, token: str) -> None:
+    def _token_for(self, host: str):
+        """The token a server issued, given only to that server: the same id at the same
+        address. A server that has moved, or one that only claims the id, gets none, and the
+        listener approves the extension again in Roon."""
+        def token(core_id: str) -> str:
+            t = (self._kept().get("tokens") or {}).get(core_id)
+            return t["token"] if isinstance(t, dict) and t.get("host") == host and isinstance(t.get("token"), str) else ""
+        return token
+
+    def _keep(self, core_id: str, token: str, host: str) -> None:
         d = self._kept()
-        if not core_id or (d.get("tokens") or {}).get(core_id) == token:
+        if not core_id or not host or (d.get("tokens") or {}).get(core_id) == {"token": token, "host": host}:
             return
-        d.setdefault("tokens", {})[core_id] = token
+        if not isinstance(d.get("tokens"), dict):
+            d["tokens"] = {}
+        d["tokens"][core_id] = {"token": token, "host": host}
         d["core"] = core_id
         try:
             fd = os.open(API_FILE + ".new", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -209,11 +220,14 @@ class Roon(SourcePlugin):
                 async with self.http.get(url, params={"scale": "fit", "width": 640, "height": 640, "format": "image/jpeg"}) as r:
                     data = await r.content.read(4 * 1024 * 1024 + 1)
                     ctype = r.headers.get("Content-Type", "")
-                    if r.status != 200 or len(data) > 4 * 1024 * 1024 or not ctype.startswith("image/"):
+                    ctype = ctype.split(";")[0].strip().lower()
+                    if r.status != 200 or len(data) > 4 * 1024 * 1024 or ctype not in ("image/jpeg", "image/png", "image/webp"):
                         raise web.HTTPNotFound()
             except (OSError, asyncio.TimeoutError):
                 raise web.HTTPBadGateway()
-            return web.Response(body=data, content_type=ctype.split(";")[0])
+            # whatever the server sent, the browser takes it as that picture and nothing else
+            return web.Response(body=data, content_type=ctype, headers={
+                "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; sandbox"})
 
     # ---- follow the Roon server while Roon is the source
     def _wanted(self) -> bool:
@@ -231,7 +245,7 @@ class Roon(SourcePlugin):
                     continue
                 kept = self._kept()
                 self.server = next((c for c in found if c["id"] == kept.get("core")), found[0])
-                api = roonapi.Roon(EXTENSION, self._changed, (kept.get("tokens") or {}).get(self.server["id"], ""))
+                api = roonapi.Roon(EXTENSION, self._changed, self._token_for(self.server["host"]))
                 async with websockets.connect(f"ws://{self.server['host']}:{self.server['port']}/api",
                                               open_timeout=6, ping_interval=None, max_size=8 * 1024 * 1024) as ws:
                     self.api = api

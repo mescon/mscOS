@@ -1,6 +1,6 @@
 {
  "format": 1,
- "serial": 19,
+ "serial": 20,
  "modules": [
   {
    "id": "about",
@@ -257,7 +257,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "8283e24fad34747b48739cfa0e1cf7a9ae298c048620c24b89c6537a7062888f",
+     "sha256": "705c55eb05d4540937ca4c3c8df4f1941a848d110bcfb2630f42f411e6e169a9",
      "exec": false
     },
     {
@@ -287,7 +287,7 @@
     },
     {
      "path": "roonapi.py",
-     "sha256": "0bb31da92ff5b24264c7476b1d006554b351377e494496148628fd8ff8e3d6b7",
+     "sha256": "b54cd67a3bc6121406f4eaee314571d48ab80ee972a8edf9dd9d8ff1fad14eb9",
      "exec": false
     },
     {
