@@ -735,3 +735,6 @@ body.in-setup .tabs, body.in-setup .masthead { display: none; }
   .stage.solo .deck { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: clamp(36px, 5vw, 72px); align-items: end; }
   .stage.solo .now { margin-top: 0; padding-bottom: 8px; max-width: 34rem; }
 }
+
+/* until the page knows whether this is a new installation, nothing of the panel flashes by */
+html.booting .shell, html.booting .tabs, html.booting .dock { visibility: hidden; }

@@ -17,6 +17,8 @@
 <link rel="stylesheet" href="app.css">
 <script>
   try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
+  document.documentElement.classList.add("booting");  // until app.js knows whether to show the first-start guide
+  setTimeout(function () { document.documentElement.classList.remove("booting"); }, 4000);  // never stuck
 </script>
 </head>
 <body>

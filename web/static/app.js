@@ -1055,7 +1055,9 @@ $("#source").addEventListener("click", async (e) => {
 // ------------------------------------------------------------------ boot
 function renderAll() { renderStatus(); renderPlay(); renderQueue(); renderSignal(); renderSpark(); renderTest(S.lastTest); renderPanels(); renderVlog(); renderSettings(); renderAmp(); if (desktop.matches) loadOpts(); if (dacVisible()) loadDac(); }
 document.body.classList.add("locked");
-refreshAuth().then(() => maybeSetup({ access: S.access || {}, post, toast })).catch(() => {});
+// the page stays covered until it is known whether this is a new installation (the guide)
+refreshAuth().then(() => maybeSetup({ access: S.access || {}, post, toast })).catch(() => {})
+  .finally(() => document.documentElement.classList.remove("booting"));
 connect();
 try {  // after the first-start guide: straight to the modules, where the chosen players are installed
   const f = localStorage.getItem("open-fold");
