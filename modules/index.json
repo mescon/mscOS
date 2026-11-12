@@ -1,6 +1,6 @@
 {
  "format": 1,
- "serial": 35,
+ "serial": 36,
  "modules": [
   {
    "id": "about",
@@ -189,7 +189,7 @@
   },
   {
    "id": "listenbrainz",
-   "version": "1.0.0",
+   "version": "1.0.1",
    "kind": "integration",
    "name": {
     "sv": "ListenBrainz",
@@ -202,12 +202,12 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "34a5273874407312a5bd10dfd0ce9f7aeb2eecd30f163b6818ee48508b14437b",
+     "sha256": "4d1822b719f083aeb044282bcfbee2bb3c2053a068b0b2263caf36da75b83530",
      "exec": false
     },
     {
      "path": "module.json",
-     "sha256": "95b58dca335a1b502831e1663330cf1fd50c5d64e1dbd57f96d3f72a595294be",
+     "sha256": "6360ca6b655e236472428d86f780fdd8b29707738d00eb682fd77c51d833dd7d",
      "exec": false
     }
    ]

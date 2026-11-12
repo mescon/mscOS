@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 
 from aiohttp import ClientSession, ClientTimeout
 
@@ -73,15 +74,40 @@ class ListenBrainz(Plugin):
             log.warning("ListenBrainz: %s", type(e).__name__)
             return False
 
+    async def _count(self, entry: dict, wait: float) -> None:
+        """Once the track has played long enough, and is still the one that plays: a listen."""
+        await asyncio.sleep(max(0.0, wait))
+        heard = self.hub.listened()
+        if heard and heard[-1] is entry and not entry.get("lb") and await self._send(payload("single", entry)):
+            entry["lb"] = 1
+
     async def on_listened(self, entry: dict) -> None:
         """A track began here (the hub's listening history). Announce it, and count it once it has played long enough."""
         if not entry.get("artist") or not entry.get("title") or not self.hub.secret("listenbrainz_token"):
             return
-        await self._send(payload("playing_now", entry))
-        await asyncio.sleep(listen_after(entry.get("duration_ms")))
+        # The one before, if it played long enough and was not counted (its own timer was
+        # lost to a restart of the panel): the time between the two starts says so.
         heard = self.hub.listened()
-        if heard and heard[-1] is entry:   # still the track that plays: not skipped
-            await self._send(payload("single", entry))
+        prev = heard[-2] if len(heard) > 1 and heard[-1] is entry else None
+        if prev and not prev.get("lb") and prev.get("artist") and entry["t"] - prev["t"] >= listen_after(prev.get("duration_ms")) \
+                and entry["t"] - prev["t"] < 6 * 3600 and await self._send(payload("single", prev)):
+            prev["lb"] = 1
+        await self._send(payload("playing_now", entry))
+        await self._count(entry, listen_after(entry.get("duration_ms")))
+
+    async def _resume(self):
+        """The panel started while a track played: its timer starts again where it was."""
+        await asyncio.sleep(20)   # the sources have said what plays by now
+        heard = self.hub.listened()
+        e = heard[-1] if heard else None
+        if not e or e.get("lb") or not e.get("artist") or not self.hub.secret("listenbrainz_token"):
+            return
+        played = time.time() - e["t"]
+        if played < (e.get("duration_ms") or 600000) / 1000:   # it can still be playing
+            await self._count(e, listen_after(e.get("duration_ms")) - played)
+
+    def tasks(self) -> list:
+        return [self._resume()]
 
 
 PLUGIN = ListenBrainz
