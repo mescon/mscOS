@@ -138,6 +138,7 @@ export default function page(api) {
         .m-hero h3 { margin: 4px 0 2px; font-size: clamp(1.5rem, 4vw, 2.25rem); line-height: 1.1; overflow-wrap: anywhere; }
         .m-hero .by { margin: 0 0 14px; color: var(--engraved); }
         .m-hero .btn { margin-top: 12px; }
+        .music .m-about { max-width: 62ch; margin: 0 0 6px; font-size: .9375rem; line-height: 1.5; }
       </style>
     </section>`);
   let played = null, playedAt = 0, playedFor = "";
@@ -165,8 +166,11 @@ export default function page(api) {
   const trackList = (tracks, numbered) => `<ol class="m-tracks">${tracks.map((t) =>
     `<li><button class="go" data-play="${esc(t.uri)}" data-name="${esc(t.name)}">${numbered ? `<span class="n">${esc(t.n ?? "")}</span>` : img(t.cover)}<span><b>${esc(t.name)}</b><span>${esc([t.artist, numbered ? "" : t.album].filter(Boolean).join(" · "))}</span></span></button>
        ${t.duration_ms ? `<span class="len">${esc(api.fmtTime(t.duration_ms))}</span>` : ""}<button class="q" data-queue="${esc(t.uri)}" data-name="${esc(t.name)}">${esc(tr("Kö"))}</button></li>`).join("")}</ol>`;
+  const playlistList = (lists) => `<ul class="m-albums">${lists.map((p) =>
+    `<li><button data-playlist="${esc(p.id || idOf(p.uri))}" data-name="${esc(p.name)}">${img(p.cover)}<b>${esc(p.name)}</b><span>${esc([p.owner, p.count != null ? tr`${p.count} låtar` : ""].filter(Boolean).join(" · "))}</span></button></li>`).join("")}</ul>`;
   const sections = (d, few) => (d.albums.length ? `<h3>${esc(tr("Album"))}</h3>${albumList(d.albums.slice(0, few))}` : "")
     + (d.artists.length ? `<h3>${esc(tr("Artister"))}</h3>${artistList(d.artists.slice(0, few))}` : "")
+    + ((d.playlists || []).length ? `<h3>${esc(tr("Spellistor"))}</h3>${playlistList(d.playlists.slice(0, few))}` : "")
     + (d.tracks.length ? `<h3>${esc(tr("Låtar"))}</h3>${trackList(d.tracks.slice(0, few * 2))}` : "");
 
   let found = null, findSeq = 0, findTimer = 0, page = null;   // the search's answer; the album or artist that is open
@@ -201,10 +205,16 @@ export default function page(api) {
   function pageHtml(pg) {
     const d = pg.data, back = `<button class="m-back" data-back="1"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 6-6 6 6 6"/></svg>${esc(tr("Tillbaka"))}</button>`;
     if (!d) return back + `<p class="none">${esc(pg.error || tr("Hämtar…"))}</p>`;
+    const kindLine = pg.kind === "album" ? [KIND.album, d.year, d.label].filter(Boolean).join(" · ")
+      : pg.kind === "playlist" ? [KIND.playlist, d.count != null ? tr`${d.count} låtar` : ""].filter(Boolean).join(" · ") : KIND.artist;
     const hero = `<div class="m-hero ${pg.kind}">${img(d.cover)}<div>
-        <p class="part">${esc(pg.kind === "album" ? [KIND.album, d.year, d.label].filter(Boolean).join(" · ") : KIND.artist)}</p>
-        <h3>${esc(d.name)}</h3>${pg.kind === "album" ? `<p class="by">${esc(d.artist)}</p>` : ""}
+        <p class="part">${esc(kindLine)}</p>
+        <h3>${esc(d.name)}</h3>${pg.kind === "album" ? `<p class="by">${esc(d.artist)}</p>` : pg.kind === "playlist" ? `<p class="by">${esc(d.owner)}</p>` : ""}
         <button class="btn primary" data-play="${esc(d.uri)}" data-name="${esc(d.name)}">${esc(tr("Spela"))}</button></div></div>`;
+    if (pg.kind === "playlist") {
+      return back + hero + (d.about ? `<p class="m-about">${esc(d.about)}</p>` : "")
+        + `<p class="none">${esc(tr("Spotify låter inte den här sortens app se vilka låtar en spellista innehåller, bara spela den. Låtarna visas under Härnäst när listan spelar."))}</p>`;
+    }
     return back + hero + (pg.kind === "album" ? trackList(d.tracks, true) : (d.albums.length ? `<h3>${esc(tr("Album"))}</h3>${albumList(d.albums)}` : ""));
   }
   async function openPage(kind, id) {
@@ -229,7 +239,7 @@ export default function page(api) {
         d = r.ok ? await r.json() : { error: (await r.text()) || tr("Spotify svarar inte.") };
       } catch { d = { error: tr("Spotify svarar inte.") }; }
       if (n !== findSeq) return;             // a later question has been asked since
-      found = { q: text, albums: [], artists: [], tracks: [], ...d };
+      found = { q: text, albums: [], artists: [], playlists: [], tracks: [], ...d };
       drawMusic();
     }, 220);
   }
@@ -244,10 +254,11 @@ export default function page(api) {
   }
   $("#sp-find").addEventListener("input", find);
   music.addEventListener("click", (e) => {
-    const b = e.target.closest("[data-play], [data-queue], [data-album], [data-artist], [data-back]"); if (!b) return;
+    const b = e.target.closest("[data-play], [data-queue], [data-album], [data-artist], [data-playlist], [data-back]"); if (!b) return;
     if (b.dataset.back) { page = null; drawMusic(); }
     else if (b.dataset.album) openPage("album", b.dataset.album);
     else if (b.dataset.artist) openPage("artist", b.dataset.artist);
+    else if (b.dataset.playlist) openPage("playlist", b.dataset.playlist);
     else if (b.dataset.play) playUri(b.dataset.play, b.dataset.name);
     else queueUri(b.dataset.queue, b.dataset.name);
   });

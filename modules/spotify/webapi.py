@@ -49,6 +49,15 @@ def track_row(t: dict, album: dict | None = None) -> dict:
             "album_id": al.get("id"), "cover": image(al.get("images"), 64), "duration_ms": t.get("duration_ms"), "n": t.get("track_number")}
 
 
+def playlist_row(p: dict) -> dict:
+    """A playlist as the search and its own page give it. Spotify tells an app like this one what
+    a public playlist is called, whose it is and how long, but not what is in it."""
+    count = (p.get("items") or p.get("tracks") or {}).get("total")
+    return {"uri": p.get("uri"), "id": p.get("id"), "name": p.get("name", ""), "owner": (p.get("owner") or {}).get("display_name") or "",
+            "count": count if isinstance(count, int) else None, "cover": image(p.get("images")),
+            "about": re.sub(r"<[^>]+>", "", p.get("description") or "")[:400]}
+
+
 def artist_row(a: dict) -> dict:
     return {"uri": a.get("uri"), "id": a.get("id"), "name": a.get("name", ""), "cover": image(a.get("images"), 160)}
 
@@ -117,10 +126,16 @@ class WebApi:
         raise WebApiError("credentials")
 
     async def search(self, q: str) -> dict:
-        d = await self.get("search", q=q, type="album,artist,track", limit=8)
+        d = await self.get("search", q=q, type="album,artist,track,playlist", limit=8)
         items = lambda k: [x for x in ((d.get(k) or {}).get("items") or []) if isinstance(x, dict) and x.get("uri")]   # noqa: E731
         return {"artists": [artist_row(a) for a in items("artists")][:6], "albums": [album_row(a) for a in items("albums")],
-                "tracks": [track_row(t) for t in items("tracks")]}
+                "playlists": [playlist_row(p) for p in items("playlists")], "tracks": [track_row(t) for t in items("tracks")]}
+
+    async def playlist(self, playlist_id: str) -> dict | None:
+        d = await self.get(f"playlists/{playlist_id}")
+        if not d.get("uri"):
+            return None
+        return {**playlist_row(d), "cover": image(d.get("images"), 640), "followers": (d.get("followers") or {}).get("total")}
 
     async def album(self, album_id: str) -> dict | None:
         d = await self.get(f"albums/{album_id}")

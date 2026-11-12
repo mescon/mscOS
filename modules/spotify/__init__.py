@@ -889,13 +889,13 @@ class Spotify(SourcePlugin):
             except webapi.WebApiError as e:
                 raise failed(e)
 
-        @routes.get("/api/spotify/{kind:album|artist}/{sid}")
+        @routes.get("/api/spotify/{kind:album|artist|playlist}/{sid}")
         async def spotify_item(request):
             sid = request.match_info["sid"]
             if not webapi.ID.fullmatch(sid):
                 raise web.HTTPBadRequest()
             try:
-                d = await (sp.web.album(sid) if request.match_info["kind"] == "album" else sp.web.artist(sid))
+                d = await getattr(sp.web, request.match_info["kind"])(sid)
             except webapi.WebApiError as e:
                 raise failed(e)
             if d is None:

@@ -117,5 +117,8 @@
  "Senast spelat": "Recently played",
  "Tillbaka": "Back",
  "Hämtar…": "Fetching…",
- "Spotify svarar inte.": "Spotify does not answer."
+ "Spotify svarar inte.": "Spotify does not answer.",
+ "Spellistor": "Playlists",
+ "{0} låtar": "{0} tracks",
+ "Spotify låter inte den här sortens app se vilka låtar en spellista innehåller, bara spela den. Låtarna visas under Härnäst när listan spelar.": "Spotify does not let an app of this kind see which tracks a playlist holds, only play it. The tracks show under Up next while the list plays."
 }

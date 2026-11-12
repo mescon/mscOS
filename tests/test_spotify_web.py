@@ -31,6 +31,13 @@ class Rows(unittest.TestCase):
         self.assertEqual(webapi.track_row(track, album)["album"], "An album", "an album's own tracks carry no album: it is given")
         self.assertEqual(webapi.track_row(track, album)["n"], 3)
 
+    def test_a_playlist(self):
+        p = {"uri": "spotify:playlist:" + "p" * 22, "id": "p" * 22, "name": "Morning", "owner": {"display_name": "Someone"},
+             "items": {"total": 29}, "images": IMAGES, "description": 'Calm <a href="x">music</a> for mornings'}
+        self.assertEqual(webapi.playlist_row(p), {"uri": p["uri"], "id": "p" * 22, "name": "Morning", "owner": "Someone", "count": 29,
+                                                  "cover": "https://i.example/300", "about": "Calm music for mornings"})
+        self.assertIsNone(webapi.playlist_row({"uri": "x"})["count"])
+
     def test_ids(self):
         self.assertTrue(webapi.ID.fullmatch("4LH4d3cOWNNsVw41Gqt2kv"))
         for bad in ("", "../albums", "4LH4d3cOWNNsVw41Gqt2k", "4LH4d3cOWNNsVw41Gqt2kv/x"):
