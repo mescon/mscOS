@@ -619,5 +619,6 @@
  "Steg": "Steps",
  "Det namn enheten får i Spotify-appen och andra appar som hittar den i nätverket.": "The name the device gets in the Spotify app and other apps that find it on the network.",
  "Acoustics": "Acoustics",
- "vivajAcoustics": "vivajAcoustics"
+ "vivajAcoustics": "vivajAcoustics",
+ "Spelarna är aktuella. Modulkatalogen kunde inte nås.": "The players are up to date. The module catalogue could not be reached."
 }

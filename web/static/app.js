@@ -1234,7 +1234,8 @@ $("#mods-check").addEventListener("click", async (e) => {
   try {
     MODS = await post("/api/plugins/check"); renderMods();
     const n = MODS.plugins.filter((p) => modUpdate(p) || p.module_latest).length;
-    toast(n ? (n === 1 ? tr("En uppdatering finns.") : tr`${n} uppdateringar finns.`) : (MODS.failed || []).length ? tr("Kunde inte nå alla utgivare. Försök igen senare.") : tr("Alla moduler är aktuella."));
+    toast(n ? (n === 1 ? tr("En uppdatering finns.") : tr`${n} uppdateringar finns.`) : (MODS.failed || []).length ? ((MODS.failed.length === 1 && MODS.failed[0] === "catalogue")
+        ? tr("Spelarna är aktuella. Modulkatalogen kunde inte nås.") : tr("Kunde inte nå alla utgivare. Försök igen senare.")) : tr("Alla moduler är aktuella."));
   } catch {}
   b.disabled = false; b.textContent = tr("Sök uppdateringar");
 });
