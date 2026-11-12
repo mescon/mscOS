@@ -841,9 +841,9 @@ html { -webkit-tap-highlight-color: transparent; }
 .listened li span span { display: block; font-size: .8125rem; color: var(--engraved); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .listened li small { font-size: .75rem; color: var(--engraved); white-space: nowrap; }
 
-/* The menu and the playing-now bar let the page show through as it scrolls under them: 85 %
+/* The menu and the playing-now bar let the page show through as it scrolls under them: two thirds
    of their own colour over a light blur. (On a wide screen the menu is a rail, with nothing under it.) */
 @media (max-width: 1023px) {
-  .tabs { background: color-mix(in srgb, var(--chassis) 85%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  .tabs { background: color-mix(in srgb, var(--chassis) 68%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
 }
-.dock { background: color-mix(in srgb, var(--glass) 85%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.dock { background: color-mix(in srgb, var(--glass) 68%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
