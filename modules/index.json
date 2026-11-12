@@ -1,43 +1,43 @@
 {
  "format": 1,
- "serial": 30,
+ "serial": 32,
  "modules": [
   {
    "id": "about",
-   "version": "1.0.0",
+   "version": "1.1.0",
    "kind": "integration",
    "name": {
     "sv": "Om musiken",
     "en": "About the music"
    },
    "description": {
-    "sv": "Text om artisten, albumet och låten som spelas, från Wikipedia, Discogs och MusicBrainz. Enheten frågar de tjänsterna om det som spelas.",
-    "en": "Notes on the artist, the album and the song that is playing, from Wikipedia, Discogs and MusicBrainz. The device asks those services about what is playing."
+    "sv": "Text om artisten, albumet och låten som spelas, vilka som medverkar, och låttexten i takt med musiken. Från Wikipedia, MusicBrainz, Wikidata, Discogs, Last.fm och LRCLIB. Enheten frågar de tjänsterna om det som spelas.",
+    "en": "Notes on the artist, the album and the song that is playing, who plays on it, and the words in time with the music. From Wikipedia, MusicBrainz, Wikidata, Discogs, Last.fm and LRCLIB. The device asks those services about what is playing."
    },
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "d13d54b37211524e2f5e5d9edc8e82dbc2a7759767e42f7556cc8d5593dee684",
+     "sha256": "e7869a8787aab4abc894d9bec9b85f002ee3c8272cb5a3ec2e241b0bbd3ca90a",
      "exec": false
     },
     {
      "path": "lookup.py",
-     "sha256": "68f343c0ea2e9d031dc1b017425ad31b027c66eea8acd4db46bae2fd9a0692a1",
+     "sha256": "0d8c5ee4409a871a22260f6c77d401fc3fc7268cc009277b241bb0e88505c3f4",
      "exec": false
     },
     {
      "path": "module.json",
-     "sha256": "e36b155b5bd4c756fe66ed77e685494778306637aff1ba5b0532b710026edbe4",
+     "sha256": "173e7d0379ae4ec47c73f5f7bb7ed401108bfbc2d5a4e5358fc0fea6c92eb553",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "25696cde8c29e220404ce876d7f476e2d943ead20a4d9ab3623d03c974eb576e",
+     "sha256": "de4eecfa4f9a15e9fff97c7fa2844ec05a12797e10377ce3df9b25066fc9ede8",
      "exec": false
     },
     {
      "path": "i18n/en.json",
-     "sha256": "d6aa75e987c4b6eb142b450b069e6e98ae348ae9a985c361391925013155506f",
+     "sha256": "7d9ab4dcba66ebfe7d198127c49c85b7f3b9e67561cc728852969e9d44e49fa7",
      "exec": false
     }
    ]
@@ -188,6 +188,31 @@
    ]
   },
   {
+   "id": "listenbrainz",
+   "version": "1.0.0",
+   "kind": "integration",
+   "name": {
+    "sv": "ListenBrainz",
+    "en": "ListenBrainz"
+   },
+   "description": {
+    "sv": "Skickar det som spelas här till ditt ListenBrainz-konto, från alla källor.",
+    "en": "Sends what is played here to your ListenBrainz account, from every source."
+   },
+   "files": [
+    {
+     "path": "__init__.py",
+     "sha256": "34a5273874407312a5bd10dfd0ce9f7aeb2eecd30f163b6818ee48508b14437b",
+     "exec": false
+    },
+    {
+     "path": "module.json",
+     "sha256": "95b58dca335a1b502831e1663330cf1fd50c5d64e1dbd57f96d3f72a595294be",
+     "exec": false
+    }
+   ]
+  },
+  {
    "id": "naa",
    "version": "1.0.0",
    "kind": "source",
@@ -304,7 +329,7 @@
   },
   {
    "id": "spotify",
-   "version": "1.6.0",
+   "version": "1.6.1",
    "kind": "source",
    "name": {
     "sv": "Spotify Lossless (Soloist)",
@@ -317,7 +342,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "a4b04cc0a1ced50113ec51481eeedeafcf8c5dac442acd35bdd8d486721fa830",
+     "sha256": "1dd697646981bb727dd516026aafd02dbafed1e760b19ad7ceed1ea1cd65c3a8",
      "exec": false
     },
     {
@@ -327,7 +352,7 @@
     },
     {
      "path": "module.json",
-     "sha256": "3d23d496921a136e1ae2070e40ba9828adb57b1bfa465bea71be5d95e2563223",
+     "sha256": "73a7ca53cf801eb1cf68b6f9a8858f5195d486293a3b4699f83377bbb41c011f",
      "exec": false
     },
     {

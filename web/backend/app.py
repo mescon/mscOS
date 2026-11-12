@@ -269,7 +269,7 @@ class Hub:
                 self._listened = []
         return self._listened
 
-    def note_listened(self, source: str, title, artist="", album="") -> None:
+    def note_listened(self, source: str, title, artist="", album="", duration_ms=None) -> None:
         """A track began to play here. Kept as the owner has set it (settings: listen_history)."""
         try:
             title, artist, album = (" ".join(str(x or "").split())[:200] for x in (title, artist, album))
@@ -280,7 +280,12 @@ class Hub:
             if (last.get("source"), last.get("title"), last.get("artist"), last.get("album")) == (source, title, artist, album) \
                     and time.time() - last.get("t", 0) < 6 * 3600:
                 return   # the same track still (paused and resumed, the panel restarted)
-            h.append({"t": int(time.time()), "source": source, "title": title, "artist": artist, "album": album})
+            entry = {"t": int(time.time()), "source": source, "title": title, "artist": artist, "album": album}
+            if isinstance(duration_ms, (int, float)) and duration_ms > 0:
+                entry["duration_ms"] = int(duration_ms)
+            h.append(entry)
+            for p in self.plugins.values():   # modules that pass it on (a listening diary elsewhere)
+                asyncio.ensure_future(p.on_listened(entry))
             del h[:-5000]
             with open(self.LISTENED + ".new", "w", encoding="utf-8") as f:
                 json.dump(h, f, ensure_ascii=False)
@@ -305,7 +310,7 @@ class Hub:
         if np is not None:
             self._set_playing(bool(np.get("playing")))
             if np.get("playing") and np.get("title"):
-                self.note_listened(plugin.id, np.get("title"), np.get("artist"), np.get("album"))
+                self.note_listened(plugin.id, np.get("title"), np.get("artist"), np.get("album"), np.get("duration_ms"))
         asyncio.ensure_future(self.broadcast({"type": "now", "source": plugin.id, "now": np}))
 
     @property

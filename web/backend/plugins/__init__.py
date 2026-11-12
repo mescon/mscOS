@@ -83,6 +83,10 @@ class Plugin:
         """After a settings change was saved (only called when one of its keys changed)."""
 
     # ---- events from the core
+    async def on_listened(self, entry: dict) -> None:
+        """A track began to play here: {"t", "source", "title", "artist", "album", "duration_ms"?}
+        (the listening history's entry; only called while the owner keeps that history)."""
+
     async def on_play_start(self, force: bool = False) -> None:
         """Playback started on this device (or was asked for explicitly, force=True)."""
 

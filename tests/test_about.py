@@ -40,3 +40,30 @@ class Texts(unittest.TestCase):
                            {"type": "discogs", "url": {"resource": "https://www.discogs.com/master/10362"}},
                            {"type": "official homepage", "url": {"resource": "https://example.org/"}}]}
         self.assertEqual(lookup._rels(d), {"wikidata": "Q2306", "discogs": "master/10362"})
+
+    def test_other_places_to_read(self):
+        d = {"relations": [{"type": "allmusic", "url": {"resource": "https://www.allmusic.com/artist/mn0000346336"}},
+                           {"type": "official homepage", "url": {"resource": "https://example.org/"}},
+                           {"type": "other databases", "url": {"resource": "https://rateyourmusic.com/artist/x"}},
+                           {"type": "official homepage", "url": {"resource": "http://plain.example.org/"}},
+                           {"type": "lyrics", "url": {"resource": "https://genius.com/artists/X"}},
+                           {"type": "social network", "url": {"resource": "https://twitter.example/x"}}]}
+        self.assertEqual([l["name"] for l in lookup.out_links(d)], ["AllMusic", "site", "Rate Your Music", "Genius"])
+
+    def test_credits_by_person_and_by_role(self):
+        rels = [{"type": "instrument", "attributes": ["electric guitar"], "artist": {"name": "A"}},
+                {"type": "vocal", "attributes": ["lead vocals"], "artist": {"name": "A"}},
+                {"type": "producer", "attributes": [], "artist": {"name": "B"}},
+                {"type": "phonographic copyright", "artist": {"name": "Label"}},
+                {"type": "performance", "work": {"relations": [{"type": "composer", "artist": {"name": "C"}}, {"type": "lyricist", "artist": {"name": "C"}}]}}]
+        self.assertEqual(lookup.credits_of(rels), {"people": [["A", "electric guitar, lead vocals"]],
+                                                   "roles": [["composer", "C"], ["lyricist", "C"], ["producer", "B"]]})
+
+    def test_timed_words(self):
+        self.assertEqual(lookup.lrc_lines("[00:17.69] Money\n[00:20.26] \n[01:02.5]Get away\nno time here\n[10:00] end"),
+                         [[17690, "Money"], [20260, ""], [62500, "Get away"], [600000, "end"]])
+
+    def test_lastfm_text_without_its_link(self):
+        html = 'A band from <b>somewhere</b> &amp; elsewhere. <a href="https://www.last.fm/music/X">Read more on Last.fm</a>. User-contributed text…'
+        self.assertEqual(lookup.lastfm_clean(html), "A band from somewhere & elsewhere.")
+

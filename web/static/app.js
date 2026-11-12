@@ -141,6 +141,8 @@ function pageApi(id) {
   return { $, $$, S, tr, esc, dec, khz, fmtWord, fmtTime, clock, stamp, post, toast, fv, loc, MARK,
     outName, srcId, srcState,
     lang: () => LANG,
+    // where in the track the music is, how long the track is (milliseconds), and whether it plays
+    position: () => posNow(), duration: () => durOf(), playing: () => isPlaying(),
     // what is playing, whichever source plays it: {title, artist, album} or null
     track: () => VIEW().track?.() ?? (S.now?.title ? { title: S.now.title, artist: S.now.artist || "", album: S.now.album || "" } : null),
     render: () => { renderPlay(); renderSignal(); renderSysHead(); },

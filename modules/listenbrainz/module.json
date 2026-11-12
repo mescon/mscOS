@@ -1,0 +1,13 @@
+{
+ "id": "listenbrainz",
+ "version": "1.0.0",
+ "kind": "integration",
+ "name": {
+  "sv": "ListenBrainz",
+  "en": "ListenBrainz"
+ },
+ "description": {
+  "sv": "Skickar det som spelas här till ditt ListenBrainz-konto, från alla källor.",
+  "en": "Sends what is played here to your ListenBrainz account, from every source."
+ }
+}

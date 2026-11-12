@@ -4,6 +4,36 @@
 export default function page(api) {
   const { $, tr, esc } = api;
   const CLOSED = 248;   // px: every card is this high until it is opened
+  const lyr = api.slot("about", `<section class="lyrics" id="about-lyrics" aria-label="${esc(tr("Låttext"))}" hidden>
+    <button class="ly-head" id="ly-head" aria-expanded="false" aria-controls="ly-all">
+      <span class="part">${esc(tr("Texten"))}</span>
+      <svg class="chev" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9.5 6 6 6-6"/></svg>
+    </button>
+    <div class="ly-now" id="ly-now" aria-live="off"><p class="prev"></p><p class="cur"></p><p class="next"></p></div>
+    <ol class="ly-all" id="ly-all" hidden></ol>
+    <p class="from"><a href="https://lrclib.net/" target="_blank" rel="noopener noreferrer">LRCLIB</a></p>
+    <style>
+      .lyrics { margin-top: 36px; border: 1px solid var(--hair); border-radius: 3px; background: var(--plate); }
+      .lyrics .ly-head { appearance: none; display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 16px 20px 0;
+        border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+      .lyrics .part { font-size: .8125rem; letter-spacing: .04em; color: var(--ink); opacity: .72; }
+      .lyrics .chev { width: 18px; height: 18px; color: var(--engraved); transition: transform .3s; }
+      .lyrics.open .chev { transform: rotate(180deg); }
+      .ly-now { padding: 6px 20px 4px; min-height: 124px; display: grid; align-content: center; gap: 4px; cursor: pointer; }
+      .ly-now p { margin: 0; font-family: var(--serif); line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .ly-now .prev, .ly-now .next { font-size: 1.0625rem; color: var(--engraved); opacity: .6; min-height: 1.3em; }
+      .ly-now .cur { font-size: 1.625rem; font-weight: 500; white-space: normal; min-height: 1.25em; }
+      .lyrics.open .ly-now { display: none; }
+      .ly-all { list-style: none; margin: 8px 0 0; padding: 0 20px; max-height: min(60vh, 520px); overflow-y: auto; overscroll-behavior: contain; scroll-behavior: smooth; }
+      @media (prefers-reduced-motion: reduce) { .ly-all { scroll-behavior: auto; } }
+      .ly-all li { padding: 5px 0; font-family: var(--serif); font-size: 1.1875rem; line-height: 1.3; color: var(--engraved); transition: color .25s; }
+      .ly-all li.on { color: var(--ink); font-weight: 600; }
+      .ly-all li[data-ms] { cursor: pointer; }
+      .ly-all li:empty::before { content: "♪"; opacity: .5; }
+      .lyrics .from { font-size: .8125rem; color: var(--engraved); margin: 8px 20px 14px; }
+      .lyrics .from a { color: inherit; text-underline-offset: 3px; }
+    </style>
+  </section>`);
   const box = api.slot("about", `<section class="about" id="about" aria-label="${esc(tr("Om musiken"))}" hidden>
     <div class="about-cols" id="about-cols"></div>
     <style>
@@ -45,6 +75,16 @@ export default function page(api) {
       .about .from { font-size: .8125rem; color: var(--engraved); margin-top: 14px; }
       .about .from a { color: inherit; text-underline-offset: 3px; margin-right: 14px; }
       .about .from a:hover { color: var(--ink); }
+      .about .from { line-height: 2; }
+      .about .srcs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 10px; }
+      .about .srcs button { appearance: none; min-height: 36px; padding: 0 12px; border: 1px solid var(--hair); border-radius: 18px; background: none;
+        color: var(--engraved); font: inherit; font-size: .8125rem; cursor: pointer; }
+      .about .srcs button[aria-selected="true"] { color: var(--chassis); background: var(--ink); border-color: var(--ink); }
+      .about .more-at { margin-top: 8px; font-size: .8125rem; }
+      .about .more-at a { color: var(--engraved); text-underline-offset: 3px; }
+      .about .more-at a:hover { color: var(--ink); }
+      .about dl.cred dt { color: var(--ink); }
+      .about dl.cred dd { color: var(--engraved); }
       .about article { scroll-margin-top: 14px; }
       /* the title, the artist and the album above lead to their cards */
       [data-about] { cursor: pointer; }
@@ -53,16 +93,36 @@ export default function page(api) {
   </section>`);
   const cols = box.querySelector("#about-cols");
   const PART = { track: tr("Låten"), album: tr("Albumet"), artist: tr("Artisten") };
-  const FACT = { from: tr("Från"), born: tr("Född"), active: tr("Aktiv sedan"), genre: tr("Genre"), released: tr("Utgiven"), label: tr("Skivbolag"), discogs: tr("Betyg på Discogs") };
+  const FACT = { from: tr("Från"), born: tr("Född"), active: tr("Aktiv sedan"), genre: tr("Genre"), released: tr("Utgiven"), label: tr("Skivbolag"), discogs: tr("Betyg på Discogs"),
+    members: tr("Medlemmar"), awards: tr("Utmärkelser") };
+  const ROLE = { composer: tr("Kompositör"), lyricist: tr("Textförfattare"), writer: tr("Låtskrivare"), arranger: tr("Arrangör"), conductor: tr("Dirigent"),
+    producer: tr("Producent"), engineer: tr("Tekniker"), mix: tr("Mixning"), mastering: tr("Mastering") };
+  const CARDS = {};   // what each card was drawn from, for the choice of source
+  // the source last chosen is the one shown first where it has something to say
+  const liked = () => { try { return localStorage.getItem("about:source") || ""; } catch { return ""; } };
+  const safe = (u) => (/^https:\/\/[^\s"<>]+$/.test(u || "") ? u : "");   // (it goes into an attribute through esc())
   let key = "", timer = 0;
   const open = new Set();   // the cards the reader opened stay open from track to track
 
   const paras = (t) => String(t || "").split(/\n+/).filter((p) => p.trim()).map((p) => `<p>${esc(p.trim())}</p>`).join("");
   const fact = ([k, v, n]) => `<dt>${esc(FACT[k] || k)}</dt><dd>${esc(k === "discogs" ? tr`${v} av 5 (${n} röster)` : v)}</dd>`;
+  const chosen = (d) => { const t = d.texts || []; return Math.max(0, t.findIndex((x) => x.source === liked())); };
+  function textOf(d, i) {
+    const t = (d.texts || [])[i];
+    return t ? `<div class="txt">${paras(t.text)}</div>${safe(t.url) ? `<p class="more-at"><a href="${esc(safe(t.url))}" target="_blank" rel="noopener noreferrer">${esc(tr`Läs mer hos ${t.source}`)}</a></p>` : ""}` : "";
+  }
+  function credits(c) {
+    if (!c || !((c.people || []).length || (c.roles || []).length)) return "";
+    return `<h4>${esc(tr("Medverkande"))}</h4><dl class="cred">${(c.people || []).map(([n, w]) => `<dt>${esc(n)}</dt><dd>${esc(w)}</dd>`).join("")}${
+      (c.roles || []).map(([k, n]) => `<dt>${esc(ROLE[k] || k)}</dt><dd>${esc(n)}</dd>`).join("")}</dl>`;
+  }
   function part(kind, d) {
-    if (!d || !(d.text || d.review || (d.facts || []).length)) return "";
-    const links = [...(d.links || [])];
-    if (d.review?.url && !links.some((l) => l.url === d.review.url)) links.push({ name: "Wikipedia (en)", url: d.review.url });
+    const texts = (d && d.texts) || [];
+    if (!d || !(texts.length || d.review || (d.facts || []).length || d.credits)) return "";
+    CARDS[kind] = d;
+    const links = (d.links || []).filter((l) => safe(l.url)).map((l) => ({ ...l, name: l.name === "site" ? tr("Webbplats") : l.name }));
+    if (safe(d.review?.url) && !links.some((l) => l.url === d.review.url)) links.push({ name: "Wikipedia (en)", url: d.review.url });
+    const at = chosen(d);
     return `<article data-part="${kind}">
       <div class="art" aria-hidden="true"></div>
       <button class="head" aria-expanded="false" aria-controls="about-${kind}">
@@ -71,7 +131,10 @@ export default function page(api) {
       </button>
       <div class="body" id="about-${kind}">
         ${(d.facts || []).length ? `<dl>${d.facts.map(fact).join("")}</dl>` : ""}
-        ${d.text ? `<div class="txt">${paras(d.text)}</div>` : ""}
+        ${texts.length > 1 ? `<div class="srcs" role="tablist" aria-label="${esc(tr("Källa"))}">${texts.map((t, i) =>
+          `<button role="tab" aria-selected="${i === at}" data-src="${i}">${esc(t.source)}</button>`).join("")}</div>` : ""}
+        <div class="said">${textOf(d, at)}</div>
+        ${credits(d.credits)}
         ${d.review ? `<h4>${esc(tr("Mottagande"))}</h4><div class="txt">${paras(d.review.text)}</div>` : ""}
         ${links.length ? `<p class="from">${links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.name)}</a>`).join("")}</p>` : ""}
       </div>
@@ -129,6 +192,16 @@ export default function page(api) {
   }
   cols.addEventListener("click", (e) => {
     const a = e.target.closest("article"); if (!a) return;
+    const tab = e.target.closest(".srcs button");
+    if (tab) {
+      const d = CARDS[a.dataset.part], i = +tab.dataset.src;
+      if (!d || !(d.texts || [])[i]) return;
+      try { localStorage.setItem("about:source", d.texts[i].source); } catch {}
+      a.querySelectorAll(".srcs button").forEach((x) => x.setAttribute("aria-selected", x === tab));
+      a.querySelector(".said").innerHTML = textOf(d, i);
+      if (!a.classList.contains("open")) setOpen(a, true); else measure();
+      return;
+    }
     // the heading opens and closes; a closed card opens wherever it is pressed
     if (e.target.closest(".head")) setOpen(a, !a.classList.contains("open"));
     else if (!a.classList.contains("open") && !e.target.closest("a")) setOpen(a, true);
@@ -145,7 +218,64 @@ export default function page(api) {
   }
   // the cards get their size when Listen is shown, when the window changes, when the type loads
   new ResizeObserver(measure).observe(cols);
+  // ---- the words: the line that is sung now between the one before and the one after
+  let words = null, wordsAt = -2, wordsFor = "";
+  const lyOpen = () => lyr.classList.contains("open");
+  function lyDraw() {
+    const all = lyr.querySelector("#ly-all"), w = words;
+    lyr.hidden = !w || !!w.none;
+    if (lyr.hidden) return;
+    const lines = w.synced.length ? w.synced : (w.plain || "").split("\n").map((x) => [null, x]);
+    all.innerHTML = w.instrumental && !lines.length ? `<li>${esc(tr("Instrumental"))}</li>`
+      : lines.map(([ms, x]) => `<li${ms != null ? ` data-ms="${ms}"` : ""}>${esc(x)}</li>`).join("");
+    wordsAt = -2;
+    if (!w.synced.length) {   // no times: the first lines as a taste, the rest when opened
+      const said = lines.map((l) => l[1]).filter(Boolean), now = lyr.querySelector("#ly-now").children;
+      const none = w.instrumental && !said.length;
+      now[0].textContent = none ? "" : tr("Texten är inte tidssatt");
+      now[1].textContent = none ? tr("Instrumental") : said[0] || "";
+      now[2].textContent = none ? "" : said[1] || "";
+    }
+    lyTick();
+  }
+  function lyTick() {
+    const w = words;
+    if (!w || lyr.hidden || !w.synced.length) return;
+    const pos = api.position() + 250;
+    let i = -1;
+    for (let n = 0; n < w.synced.length && w.synced[n][0] <= pos; n++) i = n;
+    if (i === wordsAt) return;
+    wordsAt = i;
+    const line = (n) => (w.synced[n] ? w.synced[n][1] : "");
+    const now = lyr.querySelector("#ly-now").children;
+    now[0].textContent = line(i - 1); now[1].textContent = line(i) || (i < 0 ? "…" : "♪"); now[2].textContent = line(i + 1);
+    const all = lyr.querySelector("#ly-all");
+    all.querySelector("li.on")?.classList.remove("on");
+    const li = all.children[i];
+    if (li) { li.classList.add("on"); if (lyOpen()) all.scrollTop = li.offsetTop - all.offsetTop - all.clientHeight / 2 + li.offsetHeight / 2; }
+  }
+  setInterval(lyTick, 300);
+  function lyToggle(on) {
+    lyr.classList.toggle("open", on);
+    lyr.querySelector("#ly-all").hidden = !on;
+    lyr.querySelector("#ly-head").setAttribute("aria-expanded", String(on));
+    wordsAt = -2; lyTick();
+  }
+  lyr.querySelector("#ly-head").addEventListener("click", () => lyToggle(!lyOpen()));
+  lyr.querySelector("#ly-now").addEventListener("click", () => lyToggle(true));
+  async function askWords(t, k) {
+    if (!api.S.settings?.about_lyrics) { words = null; lyr.hidden = true; return; }
+    if (wordsFor === k && words) return;
+    try {
+      const r = await fetch("/api/about/lyrics", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: t.title, artist: t.artist, album: t.album, duration_ms: Math.round(api.duration() || 0) }) });
+      const d = r.ok ? await r.json() : null;
+      if (k !== key) return;
+      words = d; wordsFor = k; lyDraw();
+    } catch { if (k === key) { words = null; lyr.hidden = true; } }
+  }
   async function ask(t, k) {
+    askWords(t, k);
     try {
       const r = await fetch("/api/about", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...t, lang: api.lang() }) });
       if (!r.ok) throw new Error(r.status);
@@ -164,7 +294,8 @@ export default function page(api) {
       const k = ok ? [t.artist, t.album, t.title].join("\u0001") : "";
       if (k === key) return;
       key = k; clearTimeout(timer);
-      if (!ok) { box.hidden = true; cols.innerHTML = ""; links(); return; }
+      if (!ok) { box.hidden = true; cols.innerHTML = ""; links(); words = null; lyr.hidden = true; return; }
+      if (wordsFor !== k) { words = null; lyr.hidden = true; }   // another track: its words are not these
       box.classList.add("stale");
       timer = setTimeout(() => ask({ title: t.title, artist: t.artist, album: t.album || "", artist_uri: t.artist_uri || "" }, k), 1200);  // not for every skipped track
     },

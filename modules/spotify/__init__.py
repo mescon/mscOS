@@ -137,6 +137,12 @@ class Spotify(SourcePlugin):
                             cooldown=24 * 3600)
 
     options = (
+        {"key": "spotify_client_id", "type": "secret", "label": {"sv": "Webb-API: Client ID", "en": "Web API: Client ID"},
+         "help": {"sv": "För att söka i hela Spotify under Musik. Skapa en app i Spotifys utvecklarportal (Web API) och klistra in dess Client ID här och dess Client secret nedan.",
+                  "en": "For searching all of Spotify under Music. Create an app in Spotify's developer dashboard (Web API) and paste its Client ID here and its Client secret below."},
+         "link": {"url": "https://developer.spotify.com/dashboard", "label": {"sv": "Spotifys utvecklarportal", "en": "Spotify's developer dashboard"}}},
+        {"key": "spotify_client_secret", "type": "secret", "label": {"sv": "Webb-API: Client secret", "en": "Web API: Client secret"},
+         "help": {"sv": "Sparas bara på enheten och visas inte igen.", "en": "Kept on the device only and not shown again."}},
         {"key": "soloist_normalization", "type": "toggle", "label": {"sv": "Normalisera volymen", "en": "Normalize the volume"},
          "help": {"sv": "Av ger bitperfekt ljud. Spotify-appens reglage når inte Soloist, så det styrs här. Soloist startas om när du ändrar.",
                   "en": "Off gives bit-perfect audio. The Spotify app's own switch does not reach Soloist, so it is set here. Soloist restarts when you change it."}},
@@ -165,11 +171,14 @@ class Spotify(SourcePlugin):
             await self.apply_normalization(upd["soloist_normalization"])
 
     async def set_secret(self, key: str, value: str) -> None:
-        if key == "soloist_key" and value:
-            await self.set_key(value)
+        if key == "soloist_key":       # Soloist's own key lives in its own file
+            if value:
+                await self.set_key(value)
+        else:
+            await super().set_secret(key, value)
 
     def secret_set(self, key: str) -> bool:
-        return so.api_key_info()["set"]
+        return so.api_key_info()["set"] if key == "soloist_key" else super().secret_set(key)
 
     async def action(self, name: str) -> dict | None:
         if name == "restart":
@@ -424,7 +433,8 @@ class Spotify(SourcePlugin):
             if not SPOTIFY_URI.fullmatch(uri) or self.auth.get("is_active") is False or not self.hub.settings.get("listen_history", True):
                 return
             who = ", ".join(name(c.get("entity")) for c in (deco(item).get("creators") or [])[:6] if name(c.get("entity")))
-            self.hub.note_listened(self.id, name(item), who, name((deco(item).get("parent") or {}).get("entity")))
+            self.hub.note_listened(self.id, name(item), who, name((deco(item).get("parent") or {}).get("entity")),
+                                   (deco(item).get("playback") or {}).get("duration_ms"))
             h = self._history()
             if h and h[-1].get("uri") == uri:
                 return
