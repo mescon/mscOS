@@ -82,6 +82,7 @@ function showView(id) {
   const tab = id === "v-mods" ? "v-sys" : id;   // Modules is a page under System
   $$(".tabs a").forEach((a) => { const on = a.getAttribute("href") === `#${tab}`; a.classList.toggle("on", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   document.body.dataset.view = id;
+  requestAnimationFrame(fitListen);
   if (id === "v-signal") { loadOpts(); loadDac(); requestAnimationFrame(() => { renderSpark(); if (S.dacd?.clock_avg) renderClockChart(S.dacd.clock_avg.series || []); }); }
   if (id === "v-mods") loadMods();
   if (id === "v-signal") waveSet(WAVE.on);
@@ -190,7 +191,19 @@ function renderNames() {
 }
 // Only what this installation has: no amplifier driver, no amplifier parts; no Arcam, no Arcam row.
 // Nothing beside the sleeve (no amplifier module, no cards, no queue): the text takes that place.
+// On a phone the sleeve gives way in height so that the buttons are in view above the menu:
+// --listen-rest is the height of everything in Listen's top part except the sleeve, as it is now
+// (a long title takes more lines), and the style sheet takes it from the screen's height.
+function fitListen() {
+  if (desktop.matches || document.body.dataset.view !== "v-play") return;
+  const c = document.querySelector(".cover"), last = [".transport", "#scrub", ".now"].map((q) => document.querySelector(q)).find((el) => el && el.offsetParent);
+  if (!c || !last) return;
+  const rest = last.getBoundingClientRect().bottom + scrollY - c.offsetHeight + document.querySelector(".tabs").offsetHeight + 12;
+  document.documentElement.style.setProperty("--listen-rest", `${Math.round(rest)}px`);
+}
+addEventListener("resize", fitListen);
 function stageLayout() {
+  requestAnimationFrame(fitListen);
   const col = document.querySelector(".console-col");
   const empty = ![...$$("#v-play .console-col [data-page-of]")].some((el) => !el.hidden);
   // Controls: the amplifier's input and power, and the modules' own cards. No tab when there are none.

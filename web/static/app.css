@@ -804,3 +804,19 @@ html.booting .shell, html.booting .tabs, html.booting .dock { visibility: hidden
 /* A press on a phone: no blue flash from the browser; the tab shows the press in the page's own colours. */
 html { -webkit-tap-highlight-color: transparent; }
 .tabs a:active { color: var(--ink); background: var(--hair); }
+
+/* ============================================================ Listen: the format beside the album, the buttons in view
+   The measured format is a small note on the album's line, not a row of its own. On a phone the
+   sleeve gives way in height, so that the titles, the position and the buttons are all in view
+   above the menu without scrolling. */
+.np-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; margin-top: 2px; }
+.np-meta .np-album { margin-top: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-meta .np-format { flex: none; margin: 0; padding: 0; border: 0; background: none; font-size: .75rem; letter-spacing: .03em; color: var(--engraved); white-space: nowrap; }
+.np-meta .np-format.lossy { color: var(--red); }
+@media (max-width: 1023px) {
+  .sleeve { justify-items: center; }
+  .cover { width: min(100%, 440px, max(150px, calc(100dvh - var(--listen-rest, 420px)))); }
+  .now { margin-top: 18px; }
+  .scrub { margin-top: 14px; }
+  .transport { margin: 8px auto 2px; }
+}
