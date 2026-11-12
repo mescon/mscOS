@@ -83,7 +83,11 @@ export default function page(api) {
       .about article { position: relative; isolation: isolate; height: ${CLOSED}px; overflow: hidden; border: 1px solid var(--hair);
         border-radius: 3px; background: var(--plate); transition: height .2s cubic-bezier(.3, .7, .2, 1), opacity .3s; }
       @media (prefers-reduced-motion: reduce) { .about article { transition: none; } }
-      .about.stale article[data-part="track"] { opacity: .4; }
+      .about article.wait .head { display: grid; gap: 2px; padding: 18px 20px 0; }
+      .about article.wait .body { display: grid; place-items: center; height: 130px; padding: 0; }
+      .about .spin { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--hair); border-top-color: var(--engraved); animation: about-turn .9s linear infinite; }
+      @keyframes about-turn { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .about .spin { animation-duration: 2.6s; } }
       /* a picture behind each card, blurred and fading out downwards: the sleeve for the album and
          the song, the artist's portrait for the artist */
       .about .art { position: absolute; inset: -24px -24px auto; height: 250px; z-index: -1; background-size: cover; background-position: center;
@@ -182,7 +186,7 @@ export default function page(api) {
   }
   const full = (a) => a.querySelector(".head").offsetHeight + a.querySelector(".body").offsetHeight + 2;
   function setOpen(a, on, animate = true) {
-    if (a.classList.contains("fits")) return;
+    if (a.classList.contains("fits") || a.classList.contains("wait")) return;
     if (!animate) a.style.transition = "none";
     a.classList.toggle("open", on);
     a.querySelector(".head").setAttribute("aria-expanded", String(on));
@@ -190,18 +194,50 @@ export default function page(api) {
     if (!animate) { a.offsetHeight; a.style.transition = ""; }
     on ? open.add(a.dataset.part) : open.delete(a.dataset.part);
   }
-  function draw(d) {
-    cols.innerHTML = part("track", d.track) + part("album", d.album) + part("artist", d.artist);
+  // A card that waits for its answer: its place and its heading are there at once, with a small
+  // ring turning, so that the page does not jump when the answer comes.
+  const first = (name) => String(name || "").split(/, | \/ /)[0];
+  const waiting = (kind, name) => `<article data-part="${kind}" class="wait" data-name="${esc(name)}">
+      <div class="head"><span class="part">${esc(PART[kind])}</span><h3>${esc(name)}</h3></div>
+      <div class="body"><span class="spin" role="status" aria-label="${esc(tr("Hämtar…"))}"></span></div>
+    </article>`;
+  function drawWaiting(t) {
+    const want = { track: t.title, album: t.album, artist: first(t.artist) };
+    let html = "";
+    for (const kind of ["track", "album", "artist"]) {
+      if (!want[kind]) continue;
+      const old = cols.querySelector(`article[data-part="${kind}"]`);
+      // the album and the artist are often the same from track to track: their cards stay as they are
+      html += old && !old.classList.contains("wait") && old.querySelector("h3")?.textContent === want[kind] ? old.outerHTML : waiting(kind, want[kind]);
+    }
+    cols.innerHTML = html;
     box.hidden = !cols.children.length;
-    box.classList.remove("stale");
+    for (const a of cols.children) if (a.classList.contains("open")) a.style.height = "";   // (measured again below)
+    measure(); links();
+  }
+  function draw(d) {
     const cover = $("#np-cover"), sleeve = cover && !cover.hidden && cover.src ? cover.src : "";
     // the pictures the device found come from Wikimedia: nothing else is put on the page
     const wiki = (u) => (/^https:\/\/(upload\.wikimedia\.org|commons\.wikimedia\.org\/wiki\/Special:FilePath)\/[^"'()\s]+$/.test(u || "") ? u : "");
     const pic = { track: wiki(d.track?.image) || sleeve, album: sleeve, artist: wiki(d.artist?.image) };
-    for (const a of cols.children) {
-      const art = a.querySelector(".art"), src = pic[a.dataset.part];
-      if (src) art.style.backgroundImage = `url(${JSON.stringify(src)})`; else art.remove();
+    // Card by card: one that already shows this very answer is left alone, the others are put in
+    // the place of what was there (the waiting card, or the last track's).
+    let before = null;
+    for (const kind of ["track", "album", "artist"]) {
+      const old = cols.querySelector(`article[data-part="${kind}"]`), sig = JSON.stringify(d[kind] || null);
+      if (old && !old.classList.contains("wait") && old.dataset.sig === sig) { before = old; continue; }
+      const t = document.createElement("template");
+      t.innerHTML = part(kind, d[kind]);
+      const fresh = t.content.firstElementChild;
+      if (!fresh) { old?.remove(); continue; }   // nothing is known of it: its card goes
+      fresh.dataset.sig = sig;
+      const art = fresh.querySelector(".art");
+      if (pic[kind]) art.style.backgroundImage = `url(${JSON.stringify(pic[kind])})`; else art.remove();
+      if (old) old.replaceWith(fresh); else if (before) before.after(fresh); else cols.prepend(fresh);
+      before = fresh;
     }
+    box.hidden = !cols.children.length;
+    box.classList.remove("stale");
     measure();
     links();
   }
@@ -211,7 +247,7 @@ export default function page(api) {
     for (const [kind, sel] of LINK) {
       const el = $(sel);
       if (!el) continue;
-      if (cols.isConnected && !box.hidden && cols.querySelector(`article[data-part="${kind}"]`)) {
+      if (cols.isConnected && !box.hidden && cols.querySelector(`article[data-part="${kind}"]:not(.wait)`)) {
         el.dataset.about = kind; el.tabIndex = 0; el.setAttribute("role", "link");
       } else if (el.dataset.about) {
         delete el.dataset.about; el.removeAttribute("tabindex"); el.removeAttribute("role");
@@ -219,7 +255,7 @@ export default function page(api) {
     }
   }
   function go(kind) {
-    const a = cols.isConnected && cols.querySelector(`article[data-part="${kind}"]`);
+    const a = cols.isConnected && cols.querySelector(`article[data-part="${kind}"]:not(.wait)`);
     if (!a) return;
     setOpen(a, true, false);   // at its full height at once, so the scroll ends where the card begins
     a.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
@@ -231,7 +267,7 @@ export default function page(api) {
     el.addEventListener("keydown", (e) => { if (e.key === "Enter" && el.dataset.about) go(kind); });
   }
   cols.addEventListener("click", (e) => {
-    const a = e.target.closest("article"); if (!a) return;
+    const a = e.target.closest("article"); if (!a || a.classList.contains("wait")) return;
     const tab = e.target.closest(".srcs button");
     if (tab) {
       const d = CARDS[a.dataset.part], i = +tab.dataset.src;
@@ -349,7 +385,7 @@ export default function page(api) {
       if (k === key) draw(d);
     } catch {   // the device did not answer: once more in a while, not at every redraw
       if (k !== key) return;
-      box.hidden = true; links();
+      cols.innerHTML = ""; box.hidden = true; links();
       timer = setTimeout(() => { if (k === key) key = ""; }, 30000);
     }
   }
@@ -362,7 +398,7 @@ export default function page(api) {
       key = k; clearTimeout(timer);
       if (!ok) { box.hidden = true; cols.innerHTML = ""; links(); words = null; lyr.hidden = true; return; }
       if (wordsFor !== k) { words = null; lyr.hidden = true; }   // another track: its words are not these
-      box.classList.add("stale");
+      drawWaiting(t);
       timer = setTimeout(() => ask({ title: t.title, artist: t.artist, album: t.album || "", artist_uri: t.artist_uri || "" }, k), 1200);  // not for every skipped track
     },
   };
