@@ -12,7 +12,11 @@ in Swedish or English.
   - Spotify Lossless (Soloist, with your own developer key),
   - Spotify Connect without a key (go-librespot, 320 kbit/s),
   - Roon Bridge,
-  - HQPlayer NAA.
+  - HQPlayer NAA,
+  - a UPnP and OpenHome renderer (MPD with upmpdcli): Qobuz, Tidal and your own files from
+    apps such as mconnect and BubbleUPnP.
+- **About the music.** Notes on the song, the album and the artist that is playing, from
+  Wikipedia, Discogs and MusicBrainz (a module, off by default).
 - **Your equipment as modules.** Amplifier volume and inputs over the network (Mark
   Levinson Nº585/585.5), an Arcam AV receiver, alerts to your phone (ntfy, Home Assistant),
   native DSD for C-Media CM6632A DACs, and modules of your own. The core needs none of
@@ -50,6 +54,7 @@ Debian 13 or Armbian system, install the packages instead.
 | Spotify Lossless (Soloist), Roon Bridge | in daily use on the SOtM |
 | Spotify Connect (go-librespot) | playback, transport, and the Spotify slider driving the amplifier verified on the SOtM |
 | HQPlayer NAA | install, start and source switching verified on the SOtM; **playback not yet tested** |
+| UPnP renderer | the module's code verified against MPD and upmpdcli in a container (a track sent as an app would, with a null output); **not yet played through a DAC** |
 | Native DSD for CM6632A | in use as a kernel patch (6.18); the DKMS package builds the driver for Debian 13's own kernel (6.12), **not yet tried with a DAC on that kernel** |
 | Panel in Swedish and English | complete |
 | A new installation from the packages | installs in an empty Debian 13 container; the guide and every view checked there |

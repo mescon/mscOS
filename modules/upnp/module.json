@@ -1,0 +1,13 @@
+{
+ "id": "upnp",
+ "version": "1.0.0",
+ "kind": "source",
+ "name": {
+  "sv": "UPnP-mottagare",
+  "en": "UPnP renderer"
+ },
+ "description": {
+  "sv": "Enheten som utgång för UPnP- och OpenHome-appar: Qobuz, Tidal och egna filer från t.ex. mconnect eller BubbleUPnP. Alla format DAC:en klarar, även DSD.",
+  "en": "This device as an output for UPnP and OpenHome apps: Qobuz, Tidal and your own files from e.g. mconnect or BubbleUPnP. Every format the DAC takes, DSD too."
+ }
+}

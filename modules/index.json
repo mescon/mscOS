@@ -1,6 +1,6 @@
 {
  "format": 1,
- "serial": 10,
+ "serial": 11,
  "modules": [
   {
    "id": "about",
@@ -393,6 +393,36 @@
     {
      "path": "module.json",
      "sha256": "fc041154a38360e609b070448aaa538349f381cb0a0a6d1022a65313ed979dd7",
+     "exec": false
+    }
+   ]
+  },
+  {
+   "id": "upnp",
+   "version": "1.0.0",
+   "kind": "source",
+   "name": {
+    "sv": "UPnP-mottagare",
+    "en": "UPnP renderer"
+   },
+   "description": {
+    "sv": "Enheten som utgång för UPnP- och OpenHome-appar: Qobuz, Tidal och egna filer från t.ex. mconnect eller BubbleUPnP. Alla format DAC:en klarar, även DSD.",
+    "en": "This device as an output for UPnP and OpenHome apps: Qobuz, Tidal and your own files from e.g. mconnect or BubbleUPnP. Every format the DAC takes, DSD too."
+   },
+   "files": [
+    {
+     "path": "__init__.py",
+     "sha256": "e4385b68b0ab221aabcc793fe0f7ccc6e9986d6f12bcc8c231aab650395935aa",
+     "exec": false
+    },
+    {
+     "path": "install.sh",
+     "sha256": "f7ad6503e726422c787f85a552f838e7b286fd11312e3787bc14c02f86163d51",
+     "exec": true
+    },
+    {
+     "path": "module.json",
+     "sha256": "0a8c2e485b76d39b3d87ccfc197ced952c54b67fc9068735ccfb3d498b47a070",
      "exec": false
     }
    ]
