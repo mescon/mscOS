@@ -748,7 +748,20 @@ html.booting .shell, html.booting .tabs, html.booting .dock { visibility: hidden
 .amp { position: relative; flex: none; padding: 0; overflow: visible; border-radius: 0; background: none; box-shadow: none; color: var(--ink); }
 .amp::before { content: none; }
 .amp[hidden] { display: none; }
-.vol-slot { margin-top: 22px; display: flex; }
+/* in Listen: on the transport's own row, to the right of the buttons */
+.t-row { display: flex; align-items: center; gap: 10px; }
+.t-row .transport { flex: 1 1 auto; min-width: 0; margin-left: 0; margin-right: 0; gap: 6px; }
+.t-row .transport button { flex: none; }   /* round stays round when the row is narrow */
+.vol-slot { flex: none; display: flex; margin: 8px 0 0 auto; }
+/* a phone: the five buttons a size smaller, so the level fits beside them */
+@media (max-width: 479px) {
+  .t-row { gap: 6px; }
+  .t-row .transport { gap: 4px; justify-content: flex-start; }
+  .t-row .t-aux { width: 36px; height: 36px; }
+  .t-row .t-skip { width: 44px; height: 44px; }
+  .t-row .t-main { width: 60px; height: 60px; }
+}
+@media (max-width: 479px) { .vol-slot .vol-btn { padding: 0 8px; gap: 5px; } .vol-slot .vol-btn svg { width: 18px; height: 18px; } }
 .vol-slot:empty { display: none; }
 .vol-btn { appearance: none; cursor: pointer; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px 0 10px;
   border: 1px solid var(--hair); border-radius: 3px; background: var(--plate); box-shadow: inset 0 1px 0 var(--hair-hi); color: var(--engraved); font: inherit; }
@@ -763,7 +776,7 @@ html.booting .shell, html.booting .tabs, html.booting .dock { visibility: hidden
   border: 1px solid var(--hair); border-radius: 3px; background: var(--plate); color: var(--ink);
   box-shadow: inset 0 1px 0 var(--hair-hi), 0 -14px 40px -18px rgba(0, 0, 0, .6); }
 /* in Listen it opens downwards, clear of the transport buttons above it */
-.vol-slot .vol-pop { right: auto; left: 0; bottom: auto; top: calc(100% + 10px); box-shadow: inset 0 1px 0 var(--hair-hi), 0 18px 40px -18px rgba(0, 0, 0, .6); }
+.vol-slot .vol-pop { bottom: auto; top: calc(100% + 10px); box-shadow: inset 0 1px 0 var(--hair-hi), 0 18px 40px -18px rgba(0, 0, 0, .6); }
 .vol-pop[hidden] { display: none; }
 .vol-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0 4px; }
 .vol-pop #ml-step:not([hidden]) { display: contents; }
