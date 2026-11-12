@@ -1,6 +1,6 @@
 {
  "id": "roon",
- "version": "1.2.0",
+ "version": "1.2.1",
  "kind": "source",
  "name": {
   "sv": "Roon Bridge",

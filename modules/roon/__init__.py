@@ -231,7 +231,10 @@ class Roon(SourcePlugin):
 
     # ---- follow the Roon server while Roon is the source
     def _wanted(self) -> bool:
-        return self.hub.settings.get("source") == self.id and bool(self.hub.settings.get("roon_api"))
+        # Whichever source is chosen: the listener approves the extension in Roon while it is
+        # there to be seen, and Roon is ready the moment it is chosen. (What plays is shown
+        # only while Roon is the source: the core takes it from the current source alone.)
+        return bool(self.hub.settings.get("roon_api"))
 
     async def _follow(self):
         while True:
@@ -251,7 +254,7 @@ class Roon(SourcePlugin):
                     self.api = api
                     log.info("Roon server %s found", self.server.get("name") or self.server["host"])
 
-                    async def leave():   # another source was chosen, or the option was switched off
+                    async def leave():   # the option was switched off
                         while self._wanted():
                             await asyncio.sleep(3)
                         await ws.close()

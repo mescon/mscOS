@@ -1,6 +1,6 @@
 {
  "format": 1,
- "serial": 38,
+ "serial": 39,
  "modules": [
   {
    "id": "about",
@@ -269,7 +269,7 @@
   },
   {
    "id": "roon",
-   "version": "1.2.0",
+   "version": "1.2.1",
    "kind": "source",
    "name": {
     "sv": "Roon Bridge",
@@ -282,7 +282,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "705c55eb05d4540937ca4c3c8df4f1941a848d110bcfb2630f42f411e6e169a9",
+     "sha256": "1790a1801be0fb4245e6f41ad0ba8205f4e58f5fd1e8c0b3f73402e1edec98ce",
      "exec": false
     },
     {
@@ -292,7 +292,7 @@
     },
     {
      "path": "module.json",
-     "sha256": "46c409d5c43a858b6d4af9fc377f1e0deb9d99061a333de79dab5a87a3b0f084",
+     "sha256": "ee4b69db31590f90e6c90ffcb0b67ace990662c57592a693a1f003c3f4764197",
      "exec": false
     },
     {
