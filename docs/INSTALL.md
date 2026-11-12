@@ -102,6 +102,8 @@ project's signature. The public keys come with mscOS (`/usr/share/mscos/keys/`);
 key is the maintainer's and is kept neither in the repository nor with the build service, so
 a release or a catalogue published by someone who has taken the repository over is refused.
 A release shows as "published but not signed yet" until the maintainer has signed it.
+An older edition is not accepted again either: the catalogue carries a serial number inside
+what is signed, and a release's signed list names each package with its version.
 
 To check packages you downloaded by hand, get `SHA256SUMS` and `SHA256SUMS.sig` from the same
 release and a public key from `core/keys/` in the repository:

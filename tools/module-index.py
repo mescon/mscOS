@@ -42,11 +42,20 @@ def build() -> dict:
                     files.append({"path": os.path.relpath(p, d), "sha256": hashlib.sha256(f.read()).hexdigest(),
                                   "exec": os.access(p, os.X_OK)})
         mods.append({**{k: man[k] for k in ("id", "version", "kind", "name", "description")}, "files": files})
-    return {"format": 1, "modules": mods}
+    return mods
 
 
-text = json.dumps(build(), ensure_ascii=False, indent=1) + "\n"
+# The serial counts the catalogue's editions: it is part of what is signed, and a device
+# refuses a catalogue older than one it has already accepted (an old edition, replayed).
 path = os.path.join(ROOT, "index.json")
+try:
+    with open(path) as f:
+        old = json.load(f)
+except (OSError, ValueError):
+    old = {}
+mods = build()
+serial = int(old.get("serial", 0)) + (0 if old.get("modules") == mods and old.get("serial") else 1)
+text = json.dumps({"format": 1, "serial": serial, "modules": mods}, ensure_ascii=False, indent=1) + "\n"
 if "--check" in sys.argv:
     cur = open(path).read() if os.path.exists(path) else ""
     sys.exit(0 if cur == text else "modules/index.json is not current: run tools/module-index.py")

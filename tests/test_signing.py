@@ -85,7 +85,7 @@ class Signatures(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn("PRIVATE", s, n)
 
     async def test_the_catalogue_must_be_signed(self):
-        cat = json.dumps({"modules": [{"id": "demo", "version": "1.0.0", "kind": "device", "files": []}]}).encode()
+        cat = json.dumps({"serial": 7, "modules": [{"id": "demo", "version": "1.0.0", "kind": "device", "files": []}]}).encode()
         served = {"/index.json": cat}
 
         async def handler(request):
@@ -110,6 +110,19 @@ class Signatures(unittest.IsolatedAsyncioTestCase):
                 served["/index.json"] = cat.replace(b"1.0.0", b"9.0.0")  # changed after it was signed
                 with self.assertRaises(PermissionError):
                     await panel.fetch_catalogue(http)
+                # an older edition, validly signed, played back: refused once a newer one was accepted
+                newer = cat.replace(b'"serial": 7', b'"serial": 8')
+                served["/index.json"], served["/index.json.sig"] = newer, sign(self.key, newer)
+                await panel.fetch_catalogue(http)
+                served["/index.json"], served["/index.json.sig"] = cat, sign(self.key, cat)
+                with self.assertRaises(PermissionError) as old:
+                    await panel.fetch_catalogue(http)
+                self.assertEqual(str(old.exception), "older")
+                noserial = b'{"modules": []}'                       # and one without a serial at all
+                served["/index.json"], served["/index.json.sig"] = noserial, sign(self.key, noserial)
+                with self.assertRaises(PermissionError):
+                    await panel.fetch_catalogue(http)
+                served["/index.json"] = cat.replace(b"1.0.0", b"9.0.0")
                 os.environ["MSCOS_ALLOW_UNSIGNED"] = "1"            # the owner's own choice on their device
                 self.assertEqual((await panel.fetch_catalogue(http))[0]["version"], "9.0.0")
         finally:

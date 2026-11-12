@@ -540,5 +540,7 @@
  " Gula markeringar: strömmen missade {0} cykler, oftast vid låtbyte eller volymändring, utan luckor i signalen.": " Yellow marks: the stream missed {0} cycles, usually at a track change or volume change, without gaps in the signal.",
  "Spelaren": "The player",
  "Katalogen bär inte mscOS-projektets signatur. Inget hämtades.": "The catalogue does not carry the mscOS project's signature. Nothing was downloaded.",
- "mscOS {0} är publicerad men inte signerad än. Du har {1}. Försök igen senare.": "mscOS {0} is published but not signed yet. You have {1}. Try again later."
+ "mscOS {0} är publicerad men inte signerad än. Du har {1}. Försök igen senare.": "mscOS {0} is published but not signed yet. You have {1}. Try again later.",
+ "Katalogen är äldre än den enheten redan har godkänt. Inget hämtades.": "The catalogue is older than one this device has already accepted. Nothing was downloaded.",
+ "Modulen på enheten är nyare än katalogens. Inget ändrades.": "The module on the device is newer than the catalogue's. Nothing was changed."
 }

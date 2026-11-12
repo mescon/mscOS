@@ -61,9 +61,9 @@ if [ -z "$SUMS" ] && [ "${MSCOS_ALLOW_UNSIGNED:-}" != 1 ]; then
     exit 1
 fi
 [ -n "$SUMS" ] || echo "Unsigned release, allowed by MSCOS_ALLOW_UNSIGNED."
-python3 - "$tmp/rel.json" "$REPO" "$SUMS" > "$tmp/assets" <<'PY'
+python3 - "$tmp/rel.json" "$REPO" "$SUMS" "$LATEST" > "$tmp/assets" <<'PY'
 import json, re, sys
-repo, sums = sys.argv[2], {}
+repo, sums, latest = sys.argv[2], {}, sys.argv[4]
 if sys.argv[3]:
     for line in open(sys.argv[3]):
         m = re.fullmatch(r"([0-9a-f]{64})  ([\w.+~-]+)\n?", line)
@@ -72,6 +72,10 @@ if sys.argv[3]:
 for a in json.load(open(sys.argv[1])).get("assets", []):
     n, u, d = a.get("name", ""), a.get("browser_download_url", ""), a.get("digest") or ""
     if not re.fullmatch(r"mscos[a-z-]*_[0-9A-Za-z.+~-]+_all\.deb", n):
+        continue
+    # the signed list names each package with its version: only this release's own packages,
+    # so the signature of an older release cannot be attached to a newer tag
+    if n.split("_")[1] != latest:
         continue
     if repo and not u.startswith(f"https://github.com/{repo}/releases/download/"):
         continue

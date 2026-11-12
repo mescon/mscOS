@@ -1055,6 +1055,12 @@ _catalogue: tuple[float, list] = (0.0, [])
 MSCOS_VERIFY = os.path.join(collect.LIB, "bin", "mscos-verify")
 
 
+def catalogue_refused(e: Exception) -> str:
+    if str(e) == "older":
+        return T("Katalogen är äldre än den enheten redan har godkänt. Inget hämtades.")
+    return T("Katalogen bär inte mscOS-projektets signatur. Inget hämtades.")
+
+
 def signed_by_project(data: bytes, sig: bytes) -> bool:
     """Does `sig` (base64 Ed25519) over `data` match one of this installation's keys?"""
     import tempfile
@@ -1089,6 +1095,16 @@ async def fetch_catalogue(http) -> list[dict]:
         if not sig or not await asyncio.to_thread(signed_by_project, raw, sig):
             raise PermissionError("unsigned")
     d = json.loads(raw)
+    if env("ALLOW_UNSIGNED") != "1":
+        # an old edition is validly signed too: never go back from one already accepted
+        serial, seen_file = d.get("serial"), os.path.join(STATE_DIR, "catalogue-serial")
+        seen = int(collect.read(seen_file).strip() or 0) if collect.read(seen_file).strip().isdigit() else 0
+        if not isinstance(serial, int) or isinstance(serial, bool) or serial < 1 or serial < seen:
+            raise PermissionError("older")
+        if serial > seen:
+            with open(seen_file + ".new", "w") as f:
+                f.write(f"{serial}\n")
+            os.replace(seen_file + ".new", seen_file)
     mods = [m for m in d.get("modules", []) if isinstance(m, dict) and extmods.ID.fullmatch(str(m.get("id", "")))
             and extmods.VERSION.fullmatch(str(m.get("version", ""))) and isinstance(m.get("files"), list)]
     _catalogue = (time.time(), mods)
@@ -1116,8 +1132,8 @@ async def plugins_catalogue(request):
     try:
         async with ClientSession(timeout=ClientTimeout(total=20)) as http:
             mods = await fetch_catalogue(http)
-    except PermissionError:
-        raise web.HTTPBadGateway(text=T("Katalogen bär inte mscOS-projektets signatur. Inget hämtades."))
+    except PermissionError as e:
+        raise web.HTTPBadGateway(text=catalogue_refused(e))
     except (OSError, ValueError, asyncio.TimeoutError) as e:
         raise web.HTTPBadGateway(text=T("Katalogen kunde inte hämtas: {why}", why=e if isinstance(e, OSError) else type(e).__name__))
     out = []
@@ -1144,6 +1160,9 @@ async def plugins_install(request):
                 m = next((x for x in await fetch_catalogue(http) if x["id"] == b["id"]), None)
                 if m is None:
                     raise web.HTTPNotFound(text=T("Modulen finns inte i katalogen."))
+                have = hub.available_plugins.get(m["id"])
+                if have and pluginlib._vkey(m["version"]) < pluginlib._vkey(have.module_version):
+                    raise web.HTTPConflict(text=T("Modulen på enheten är nyare än katalogens. Inget ändrades."))
                 base, files, total = catalogue_url().rsplit("/", 1)[0], [], 0
                 for f in m["files"][:200]:
                     path, want = str(f.get("path", "")), str(f.get("sha256", ""))
@@ -1160,8 +1179,8 @@ async def plugins_install(request):
             await asyncio.to_thread(extmods.install_files, m["id"], m["version"], "catalogue", files)
         except ValueError as e:
             raise web.HTTPBadRequest(text=T("Modulen kunde inte installeras: {why}", why=e))
-        except PermissionError:
-            raise web.HTTPBadGateway(text=T("Katalogen bär inte mscOS-projektets signatur. Inget hämtades."))
+        except PermissionError as e:
+            raise web.HTTPBadGateway(text=catalogue_refused(e))
         except (OSError, asyncio.TimeoutError) as e:
             raise web.HTTPBadGateway(text=T("Modulen kunde inte hämtas: {why}", why=type(e).__name__))
         log.info("module %s %s installed from the catalogue", m["id"], m["version"])
