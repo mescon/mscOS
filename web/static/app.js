@@ -1034,17 +1034,26 @@ $("#ml-vol").addEventListener("change", (e) => amp({ volume_db: +e.target.value 
 $("#ml-src").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) amp({ input: b.dataset.src }); });
 
 // ------------------------------------------------------------------ source switch
+// The veil over the page while something slow is done on the device; "" lifts it.
+function busy(text) {
+  $("#busy-text").textContent = text;
+  $("#busy").hidden = !text;
+  document.body.classList.toggle("is-busy", !!text);
+}
 $("#source").addEventListener("click", async (e) => {
   const b = e.target.closest("button"); if (!b || b.getAttribute("aria-checked") === "true") return;
   const src = b.dataset.v, seg = $("#source");
   seg.classList.add("busy");
   const to = sources().find((s) => s.id === src);
-  toast(tr`Byter källa till ${loc(to?.name) || src}…`);
+  // One player stops and another starts, which takes the device a while: the page waits
+  // under a veil that says so, instead of showing the old source as if nothing happened.
+  busy(tr`Byter källa till ${loc(to?.name) || src}…`);
   try {
     const r = await post("/api/source", { source: src });
     S.settings = { ...S.settings, source: r.source }; S.now = null;
     toast(tr`${to.label} är aktivt. ${srcHint(to)}.`);
   } catch {}
+  busy("");
   seg.classList.remove("busy");
   renderPlay(); renderSignal();
 });

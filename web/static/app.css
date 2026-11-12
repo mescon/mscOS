@@ -847,3 +847,15 @@ html { -webkit-tap-highlight-color: transparent; }
   .tabs { background: color-mix(in srgb, var(--chassis) 68%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
 }
 .dock { background: color-mix(in srgb, var(--glass) 68%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+
+/* ============================================================ the veil while the device does something slow
+   The page behind is blurred and out of reach; a ring turns and a line says what is going on. */
+.busy { position: fixed; inset: 0; z-index: 300; display: grid; place-content: center; justify-items: center; gap: 18px; padding: 24px;
+  background: color-mix(in srgb, var(--chassis) 55%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  animation: busy-in .25s ease-out; }
+.busy[hidden] { display: none; }
+.busy p { margin: 0; font-family: var(--serif); font-size: 1.375rem; text-align: center; color: var(--ink); max-width: 28ch; }
+.busy-ring { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--btn-line); border-top-color: var(--red); animation: busy-turn .9s linear infinite; }
+@keyframes busy-turn { to { transform: rotate(360deg); } }
+@keyframes busy-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .busy { animation: none; } .busy-ring { animation-duration: 2.4s; } }

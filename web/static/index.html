@@ -457,6 +457,12 @@
 </div>
 
 <!-- what plays and the volume, at hand from every other view -->
+<!-- shown over the page while the device changes source: that takes a while -->
+<div class="busy" id="busy" role="status" aria-live="polite" hidden>
+  <span class="busy-ring" aria-hidden="true"></span>
+  <p id="busy-text"></p>
+</div>
+
 <aside class="dock" id="dock" aria-label="Spelas nu">
   <!-- the way to Listen: the menu has no entry for it -->
   <a class="dock-now" href="#v-play" aria-label="Lyssna: det som spelas nu">
