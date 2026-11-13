@@ -152,7 +152,7 @@ class Spotify(SourcePlugin):
                             cooldown=24 * 3600)
 
     options = (
-        {"key": "spotify_client_id", "type": "secret", "label": {"sv": "Webb-API: Client ID", "en": "Web API: Client ID"},
+        {"key": "spotify_client_id", "type": "secret", "needed": True, "label": {"sv": "Webb-API: Client ID", "en": "Web API: Client ID"},
          "help": {"sv": "För att söka i hela Spotify under Musik. Skapa en app i Spotifys utvecklarportal (Web API) och klistra in dess Client ID här och dess Client secret nedan.",
                   "en": "For searching all of Spotify under Music. Create an app in Spotify's developer dashboard (Web API) and paste its Client ID here and its Client secret below."},
          "link": {"url": "https://developer.spotify.com/dashboard", "label": {"sv": "Spotifys utvecklarportal", "en": "Spotify's developer dashboard"}}},
@@ -162,7 +162,7 @@ class Spotify(SourcePlugin):
         {"key": "soloist_normalization", "type": "toggle", "label": {"sv": "Normalisera volymen", "en": "Normalize the volume"},
          "help": {"sv": "Av ger bitperfekt ljud. Spotify-appens reglage når inte Soloist, så det styrs här. Soloist startas om när du ändrar.",
                   "en": "Off gives bit-perfect audio. The Spotify app's own switch does not reach Soloist, so it is set here. Soloist restarts when you change it."}},
-        {"key": "soloist_key", "type": "secret", "label": {"sv": "Utvecklarnyckel", "en": "Developer key"},
+        {"key": "soloist_key", "type": "secret", "needed": True, "label": {"sv": "Soloist: utvecklarnyckel", "en": "Soloist: developer key"},
          "placeholder": {"sv": "Klistra in en ny nyckel", "en": "Paste a new key"},
          "help": {"sv": "Nyckeln lagras bara på enheten och visas aldrig. Efter bytet startas Soloist om och kontrolleras, vilket tar ungefär 15 sekunder. Startar den inte, återställs den tidigare nyckeln.",
                   "en": "The key is stored on the device only and never shown. After the change Soloist is restarted and checked, which takes about 15 seconds. If it does not start, the previous key is put back."},
@@ -172,9 +172,14 @@ class Spotify(SourcePlugin):
     actions = (
         {"name": "restart", "label": {"sv": "Starta om Soloist", "en": "Restart Soloist"}},
         {"name": "update", "label": {"sv": "Sök ny version", "en": "Look for a new version"}},
-        {"name": "login", "label": {"sv": "Logga in med Spotify", "en": "Sign in with Spotify"}},
-        {"name": "logout", "label": {"sv": "Logga ut från Spotify", "en": "Sign out of Spotify"}},
+        # ("account": shown under Profile too, with the keys)
+        {"name": "login", "account": True, "label": {"sv": "Logga in med Spotify", "en": "Sign in with Spotify"}},
+        {"name": "logout", "account": True, "label": {"sv": "Logga ut från Spotify", "en": "Sign out of Spotify"}},
     )
+
+    def actions_now(self) -> list[dict]:
+        gone = "login" if self.web.signed_in() else "logout"      # (one of the two at a time)
+        return [a for a in self.actions if a["name"] != gone]
 
     def update_settings(self, b: dict, upd: dict) -> None:
         if "auto_verify" in b:
@@ -250,7 +255,7 @@ class Spotify(SourcePlugin):
         return [
             {"label": {"sv": "Tjänst", "en": "Service"}, **yes(solo.get("service") == "active", "Igång", "Running", str(solo.get("service") or "Okänd"), str(solo.get("service") or "Unknown"))},
             {"label": {"sv": "Spotify", "en": "Spotify"}, **yes(bool(self.auth.get("logged_in")), "Inloggad", "Signed in", "Inte inloggad: välj enheten i Spotify-appen", "Not signed in: choose the device in the Spotify app")},
-            {"label": {"sv": "Spotify-konto", "en": "Spotify account"}, "state": "good" if self.web.signed_in() else "",
+            {"label": {"sv": "Spotify-konto", "en": "Spotify account"}, "account": True, "state": "good" if self.web.signed_in() else "",
              "value": ({"sv": f"Inloggad{' som ' + who if who else ''}", "en": f"Signed in{' as ' + who if who else ''}"} if self.web.signed_in()
                        else {"sv": "Inte inloggad: Musik visar inte ditt bibliotek", "en": "Not signed in: Music does not show your library"})},
             {"label": {"sv": "Realtidsprioritet", "en": "Realtime priority"}, **yes(solo.get("rt_watcher") == "active", "Aktiv", "On", "Av", "Off")},

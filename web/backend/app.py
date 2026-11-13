@@ -998,7 +998,7 @@ async def _plugin_list() -> list[dict]:
                                 else {**o, "value": hub.settings.get(o["key"])} for o in opts]
             d["log"] = hub.plugins[pid].log()
             d["facts"] = hub.plugins[pid].facts()
-            d["actions"] = list(hub.plugins[pid].actions)
+            d["actions"] = hub.plugins[pid].actions_now()
         if cls.kind == "source":  # its player is installed on the device, from its publisher
             d.update(terms=cls.terms, terms_url=cls.terms_url, updates=cls.updates,
                      installed=await hub.plugins[pid].installed() if pid in hub.plugins else None)

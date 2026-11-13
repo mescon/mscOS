@@ -133,6 +133,10 @@ class Plugin:
     # Buttons in its card: ({"name", "label": {sv, en}}, ...); a press calls action(name).
     actions: tuple[dict, ...] = ()
 
+    def actions_now(self) -> list[dict]:
+        """Those of its actions that apply right now (all of them, unless it says otherwise)."""
+        return list(self.actions)
+
     async def action(self, name: str) -> dict | None:
         """Do it. Return {"toast": {sv, en}} to tell the user, or start a job (hub.run_job),
         whose output the panel shows. Raise RuntimeError with a text when it cannot be done."""

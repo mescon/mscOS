@@ -85,7 +85,7 @@ function showView(id) {
   setTimeout(() => pagesDo("view", id));   // (after this file has run: the first view is shown before the modules' code exists)
   requestAnimationFrame(fitListen);
   if (id === "v-signal") { loadOpts(); loadDac(); requestAnimationFrame(() => { renderSpark(); if (S.dacd?.clock_avg) renderClockChart(S.dacd.clock_avg.series || []); }); }
-  if (id === "v-mods") loadMods();
+  if (id === "v-mods" || id === "v-me") loadMods();
   if (id === "v-music") setTimeout(loadListened);
   if (id === "v-signal") waveSet(WAVE.on);
 }
@@ -1342,6 +1342,7 @@ function modCard(p, open) {
   </li>`;
 }
 function renderMods() {
+  renderAccounts();
   const box = $("#mods");
   if (box.contains(document.activeElement) && /^(text|password|number)$/.test(document.activeElement.type || "")) return;
   const open = new Set([...box.querySelectorAll("details[open]")].map((d) => d.closest("li").dataset.id));
@@ -1364,10 +1365,13 @@ function renderMods() {
   showMod();   // the card the address names, now that the cards are drawn
 }
 // A module's own settings (declared by the module), saved one at a time as they change.
-function modOptions(p) {
-  if (!p.options || !p.running) return "";
-  return `<div class="mod-opts admin">${p.options.map((o) => {
-    const id = `mo-${o.key}`, v = o.value ?? "", key = `data-opt="${esc(o.key)}"`;
+// only: which of the options (all of them in the module's card; the keys alone under Profile).
+// pre: what the fields' ids begin with (the same option stands in both places).
+function modOptions(p, only = () => true, pre = "mo") {
+  const opts = p.running ? (p.options || []).filter(only) : [];
+  if (!opts.length) return "";
+  return `<div class="mod-opts admin">${opts.map((o) => {
+    const id = `${pre}-${o.key}`, v = o.value ?? "", key = `data-opt="${esc(o.key)}"`;
     const help = (o.help ? `<p class="fine">${esc(loc(o.help))}</p>` : "")
       + (o.link ? `<p class="fine"><a href="${esc(o.link.url)}" target="_blank" rel="noopener noreferrer">${esc(loc(o.link.label))}</a></p>` : "");
     const ph = esc(typeof o.placeholder === "object" ? loc(o.placeholder) : o.placeholder || "");
@@ -1388,9 +1392,32 @@ async function saveOpt(i) {
   if (i.dataset.secret) { if (!val) return; toast(tr("Sparar och kontrollerar…")); }
   try { await post("/api/settings", { [i.dataset.opt]: val }); toast(tr("Sparat")); if (i.dataset.secret) { i.value = ""; i.blur(); } loadMods(); } catch { if (!i.dataset.secret) loadMods(); }
 }
-$("#mods").addEventListener("change", (e) => { const i = e.target.closest("[data-opt]"); if (i && !i.dataset.secret) saveOpt(i); });
-$("#mods").addEventListener("click", (e) => { const b = e.target.closest("[data-save-secret]"); if (b) saveOpt(document.getElementById(b.dataset.saveSecret)); });
-$("#mods").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.dataset?.secret) { e.preventDefault(); saveOpt(e.target); } });
+// (the module's card and Accounts and keys under Profile show the same fields and buttons)
+for (const box of ["#mods", "#accounts"]) {
+  $(box).addEventListener("change", (e) => { const i = e.target.closest("[data-opt]"); if (i && !i.dataset.secret) saveOpt(i); });
+  $(box).addEventListener("click", (e) => { const b = e.target.closest("[data-save-secret]"); if (b) saveOpt(document.getElementById(b.dataset.saveSecret)); });
+  $(box).addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.dataset?.secret) { e.preventDefault(); saveOpt(e.target); } });
+  $(box).addEventListener("click", (e) => modAct(e));
+}
+// Everything that is the listener's own, gathered from the modules that run: their keys, and
+// the sign-ins and facts a module marks as an account's ("account": true). One place to set up
+// what a module needs from its owner.
+function renderAccounts() {
+  const box = $("#accounts");
+  if (box.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return;
+  const isKey = (o) => o.type === "secret";
+  const mine = (MODS.plugins || []).filter((p) => p.running && ((p.options || []).some(isKey) || (p.actions || []).some((a) => a.account)));
+  const missing = mine.reduce((n, p) => n + (p.options || []).filter((o) => isKey(o) && !o.set && o.needed).length, 0);
+  box.innerHTML = mine.map((p) => {
+    const facts = (p.facts || []).filter((f) => f.account), acts = (p.actions || []).filter((a) => a.account);
+    return `<section class="acct" data-id="${esc(p.id)}"><h4 class="sub">${esc(loc(p.name))}</h4>
+      ${facts.length ? `<dl class="spec">${facts.map((f) => `<dt>${esc(locs(f.label))}</dt><dd${f.state ? ` class="${esc(f.state)}"` : ""}>${esc(locs(f.value))}</dd>`).join("")}</dl>` : ""}
+      ${acts.length ? `<div class="row wrap admin">${acts.map((a) => `<button class="btn" data-act="${esc(a.name)}">${esc(locs(a.label))}</button>`).join("")}</div>` : ""}
+      ${modOptions(p, isKey, "ac")}</section>`;
+  }).join("") || `<p class="fine">${esc(tr("Ingen modul som är på behöver något konto eller någon nyckel."))}</p>`;
+  $("#accounts-locked").hidden = !document.body.classList.contains("locked") || !mine.length;
+  fv("accounts", !mine.length ? tr("Inget behövs") : missing ? (missing === 1 ? tr("En nyckel saknas") : tr`${missing} nycklar saknas`) : tr("Inställt"), missing > 0);
+}
 // A source's player is not part of mscOS: it is downloaded to the device from its publisher.
 function modInstall(p) {
   if (p.kind !== "source" || !p.running || p.installed !== false) return "";
@@ -1403,14 +1430,14 @@ $("#mods").addEventListener("click", (e) => {
   const p = MODS.plugins.find((x) => x.id === b.dataset.install);
   startJob("/api/sources/install", b.dataset.update ? tr`Uppdaterar ${loc(p?.name)}…` : tr`Installerar ${loc(p?.name)}…`, { id: b.dataset.install });
 });
-$("#mods").addEventListener("click", async (e) => {  // a button the module describes
+async function modAct(e) {  // a button the module describes
   const b = e.target.closest("button[data-act]"); if (!b) return;
   b.disabled = true;
-  try { const r = await post("/api/plugins/action", { id: b.closest("li").dataset.id, name: b.dataset.act }); if (r.toast) toast(locs(r.toast));
+  try { const r = await post("/api/plugins/action", { id: b.closest("[data-id]").dataset.id, name: b.dataset.act }); if (r.toast) toast(locs(r.toast));
     if (/^https:\/\//.test(r.open || "")) { location.href = r.open; return; }    // (a sign-in at the service the module is for)
   } catch {}
   b.disabled = false; setTimeout(loadMods, 1500);
-});
+}
 // modules that do not come with mscOS: install from the publisher's module.json, update, remove
 async function extInstall(url) {
   try { const r = await post("/api/plugins/install", { url }); toast(tr`${r.id} ${r.version} är installerad. Starta om panelen för att ladda den.`); $("#mod-add-url").value = ""; } catch {}

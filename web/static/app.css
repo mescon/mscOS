@@ -899,6 +899,8 @@ body::before { content: ""; position: fixed; inset: 0; z-index: 0; pointer-event
 body.no-dock { --dock-h: 0px; }
 body.no-dock .dock { display: none; }
 
+.acct + .acct { margin-top: 26px; padding-top: 4px; border-top: 1px solid var(--hair); }
+.acct .spec { margin-bottom: 12px; }
 /* a key in a module's card: hidden like a password, saved by its button */
 .mo-secret { display: flex; gap: 8px; align-items: stretch; }
 .mo-secret input { flex: 1 1 auto; min-width: 0; }
