@@ -76,6 +76,7 @@ class Rows(unittest.TestCase):
         w.sign_in_address("https://panel.example/api/spotify/callback")
         with self.assertRaises(webapi.WebApiError):
             asyncio.run(w.finish("a code", "not the state"))
-        self.assertIsNone(w.pending, "one try: the sign-in is begun again after that")
+        self.assertIsNotNone(w.pending, "someone else's guess does not end the sign-in that was begun")
         with self.assertRaises(webapi.WebApiError):
-            asyncio.run(w.finish("a code", ""))
+            asyncio.run(w.finish("", w.pending[0]))
+        self.assertIsNone(w.pending, "the right state is good once")

@@ -948,6 +948,10 @@ class Spotify(SourcePlugin):
 
         @routes.get("/api/spotify/library")
         async def spotify_library(request):
+            """The signed-in listener's own playlists, saved albums and liked tracks: for
+            someone logged in to the panel, not for everyone on the network."""
+            if not hub.logged_in(request):
+                raise web.HTTPUnauthorized(text=T("Logga in under Profil för att göra det här."))
             if not sp.web.signed_in():
                 raise web.HTTPConflict(text=T("Logga in med Spotify under Moduler, Spotify Lossless."))
             try:
@@ -969,7 +973,8 @@ class Spotify(SourcePlugin):
             if not webapi.ID.fullmatch(sid):
                 raise web.HTTPBadRequest()
             try:
-                d = await getattr(sp.web, request.match_info["kind"])(sid)
+                # (a playlist's contents are the signed-in listener's own: for someone logged in to the panel)
+                d = await (sp.web.playlist(sid, items=hub.logged_in(request)) if request.match_info["kind"] == "playlist" else getattr(sp.web, request.match_info["kind"])(sid))
             except webapi.WebApiError as e:
                 raise failed(e)
             if d is None:

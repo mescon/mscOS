@@ -461,6 +461,11 @@ class Hub:
 
     # ---- secrets: addresses with tokens, keys. A root-only file; never in the settings
     # (those are sent to the panel) and never sent anywhere but to the service they are for.
+    def logged_in(self, request) -> bool:
+        """Whether the request comes from someone logged in to the panel: for a module's own
+        routes that give out what is the owner's alone."""
+        return AUTH.valid(_token(request))
+
     def secret(self, key: str) -> str:
         if not hasattr(self, "_secrets"):
             try:

@@ -111,8 +111,11 @@ class WebApi:
 
     async def finish(self, code: str, state: str) -> None:
         """The code Spotify sent back, traded for the tokens. Only for the sign-in that was begun here."""
-        p, self.pending = self.pending, None
-        if not p or not secrets.compare_digest(p[0], state or "") or time.time() > p[3] or not code:
+        p = self.pending
+        if not p or not secrets.compare_digest(p[0], state or ""):
+            raise WebApiError("credentials")       # (not the sign-in that was begun: it stays as it was)
+        self.pending = None
+        if time.time() > p[3] or not code:
             raise WebApiError("credentials")
         if self.http is None:
             self.http = ClientSession(timeout=ClientTimeout(total=10))
@@ -217,13 +220,14 @@ class WebApi:
         return {"artists": [artist_row(a) for a in items("artists")][:6], "albums": [album_row(a) for a in items("albums")],
                 "playlists": [playlist_row(p) for p in items("playlists")], "tracks": [track_row(t) for t in items("tracks")]}
 
-    async def playlist(self, playlist_id: str) -> dict | None:
+    async def playlist(self, playlist_id: str, items: bool = False) -> dict | None:
+        """items: also what is in it, for the owner (asked as the signed-in listener)."""
         d = await self.get(f"playlists/{playlist_id}", keep=60)
         if not d.get("uri"):
             return None
         out = {**playlist_row(d), "cover": image(d.get("images"), 640), "followers": (d.get("followers") or {}).get("total")}
         # what is in it: Spotify says so for the signed-in listener's own playlists only
-        if self.signed_in():
+        if items and self.signed_in():
             rows, total = [], None
             for offset in range(0, 300, 50):
                 try:

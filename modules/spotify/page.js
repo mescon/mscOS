@@ -306,9 +306,10 @@ export default function page(api) {
   async function loadLib(force) {
     if (!M.user || (!force && lib && Date.now() - libAt < 120000)) return;
     libAt = Date.now();
-    try { const r = await fetch("/api/spotify/library"); if (r.ok) { lib = await r.json(); drawMusic(); } } catch {}
+    // (one's own library is shown to someone logged in to the panel; others are told so)
+    try { const r = await fetch("/api/spotify/library"); if (r.ok) lib = await r.json(); else if (r.status === 401) { lib = { locked: true }; libAt = 0; } drawMusic(); } catch {}
   }
-  const libHtml = () => (!M.user || !lib ? "" : ((lib.playlists || []).length ? `<h3>${esc(tr("Dina spellistor"))}</h3>${playlistList(lib.playlists)}` : "")
+  const libHtml = () => (!M.user || !lib ? "" : lib.locked ? `<p class="none">${esc(tr("Logga in under Profil för att se dina spellistor, sparade album och gillade låtar här."))}</p>` : ((lib.playlists || []).length ? `<h3>${esc(tr("Dina spellistor"))}</h3>${playlistList(lib.playlists)}` : "")
     + ((lib.albums || []).length ? `<h3>${esc(tr("Sparade album"))}</h3>${albumList(lib.albums)}` : "")
     + ((lib.tracks || []).length ? `<h3>${esc(tr("Gillade låtar"))}</h3>${trackList(lib.tracks.slice(0, 20))}` : ""));
   async function loadMusic(force) {
