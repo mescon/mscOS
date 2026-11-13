@@ -74,6 +74,24 @@ class Texts(unittest.TestCase):
         self.assertEqual(lookup.lrc_lines("[00:17.69] Money\n[00:20.26] \n[01:02.5]Get away\nno time here\n[10:00] end"),
                          [[17690, "Money"], [20260, ""], [62500, "Get away"], [600000, "end"]])
 
+    def test_the_timed_words_of_the_same_song_are_preferred(self):
+        import asyncio
+        exact = {"id": 1, "trackName": "A Song", "artistName": "Someone", "duration": 200, "plainLyrics": "la la", "syncedLyrics": None}
+        others = [{"id": 2, "trackName": "A Song", "artistName": "Someone", "duration": 240, "syncedLyrics": "[00:01.00] another cut"},
+                  {"id": 3, "trackName": "A Song", "artistName": "Other", "duration": 200, "syncedLyrics": "[00:01.00] a cover"},
+                  {"id": 4, "trackName": "A Song", "artistName": "someone", "duration": 201, "plainLyrics": "la la", "syncedLyrics": "[00:01.00] la la"}]
+
+        async def fake(http, url, params=None, headers=None, missing=None):
+            return exact if url.endswith("/get") else others
+        real, lookup._json = lookup._json, fake
+        try:
+            got = asyncio.run(lookup.lyrics(None, "Someone", "A Song", "An Album", 200000))
+            self.assertEqual(got["synced"], [[1000, "la la"]], "the same artist and length, with times: not the other cut, not the cover")
+            others.pop()
+            self.assertEqual(asyncio.run(lookup.lyrics(None, "Someone", "A Song", "An Album", 200000))["synced"], [], "none that fits: the words without times")
+        finally:
+            lookup._json = real
+
     def test_lastfm_text_without_its_link(self):
         html = 'A band from <b>somewhere</b> &amp; elsewhere. <a href="https://www.last.fm/music/X">Read more on Last.fm</a>. User-contributed text…'
         self.assertEqual(lookup.lastfm_clean(html), "A band from somewhere & elsewhere.")

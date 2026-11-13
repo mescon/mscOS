@@ -178,7 +178,7 @@ class About(Plugin):
     async def lyrics(self, artist: str, title: str, album: str, duration_ms: int) -> dict:
         if self.http is None:
             self.http = ClientSession(timeout=ClientTimeout(total=15))
-        v = await self._one(self._file("words", artist, title, album), lambda: lookup.lyrics(self.http, artist, title, album, duration_ms))
+        v = await self._one(self._file("words2", artist, title, album), lambda: lookup.lyrics(self.http, artist, title, album, duration_ms))
         return v or {"synced": [], "plain": "", "instrumental": False, "none": True}
 
     def routes(self, routes) -> None:

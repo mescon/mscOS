@@ -1,10 +1,10 @@
 {
  "format": 1,
- "serial": 78,
+ "serial": 79,
  "modules": [
   {
    "id": "about",
-   "version": "1.10.1",
+   "version": "1.10.2",
    "kind": "integration",
    "name": {
     "sv": "Om musiken",
@@ -17,17 +17,17 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "f50bd2540db1caace66e461f634264a41536c8023f730df155c0ae9980c3cfb2",
+     "sha256": "f95623253b41c84609bf0ad3d4bb07ba292b33a80d0da64c9bf0d08fdcce153f",
      "exec": false
     },
     {
      "path": "lookup.py",
-     "sha256": "309a16e900ae649d8c10f0d4a121698fc5b122874f2c1449105ca59dfa0fde35",
+     "sha256": "3253271ea68fe8128fa6905c6acf273de1b0196ac2fb1b9de7e91253c2fc24aa",
      "exec": false
     },
     {
      "path": "module.json",
-     "sha256": "a4f03c8196d212bef29af9f0548e36b69f986f679acece9290d412a0644485e5",
+     "sha256": "c6b3518d647b670c93b143ad1da1bd9d4d30a975cdeff552093c7233e9f90835",
      "exec": false
     },
     {

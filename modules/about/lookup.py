@@ -697,6 +697,17 @@ async def lyrics(http, artist_name: str, title: str, album_title: str = "", dura
             hits = [h for h in hits if abs((h.get("duration") or 0) * 1000 - duration_ms) < 4000]
         hits.sort(key=lambda h: not h.get("syncedLyrics"))
         d = hits[0] if hits else None
+    elif not d.get("syncedLyrics") and not d.get("instrumental"):
+        # The words under exactly this album have no times. Someone may have timed the same
+        # song under another album or edition: the same title, the same artist and (within two
+        # seconds) the same length, so that the times fit this recording too.
+        hits = await _json(http, "https://lrclib.net/api/search", q, missing=[]) or []
+        length = (d.get("duration") or 0) * 1000 or duration_ms
+        timed = [h for h in hits if isinstance(h, dict) and h.get("syncedLyrics") and _fold(h.get("trackName")) == _fold(plain(title))
+                 and _fold(h.get("artistName")) == _fold(d.get("artistName") or artist_name)
+                 and length and abs((h.get("duration") or 0) * 1000 - length) < 2000]
+        if timed:
+            d = min(timed, key=lambda h: abs((h.get("duration") or 0) * 1000 - length))
     if not d:
         return None
     synced, words = lrc_lines(d.get("syncedLyrics") or ""), None
