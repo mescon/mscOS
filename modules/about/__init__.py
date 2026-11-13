@@ -178,7 +178,25 @@ class About(Plugin):
     async def lyrics(self, artist: str, title: str, album: str, duration_ms: int) -> dict:
         if self.http is None:
             self.http = ClientSession(timeout=ClientTimeout(total=15))
-        v = await self._one(self._file("words2", artist, title, album), lambda: lookup.lyrics(self.http, artist, title, album, duration_ms))
+        # Other modules that run may know the words with their times (a `words()` of their own):
+        # they are asked only when LRCLIB has none, and which of them there are is part of what
+        # the answer is kept under, so that turning one on asks again.
+        others = sorted((p for p in self.hub.plugins.values() if p is not self and callable(getattr(p, "words", None))), key=lambda p: p.id)
+
+        async def find():
+            v = await lookup.lyrics(self.http, artist, title, album, duration_ms)
+            if (v and (v.get("synced") or v.get("instrumental"))) or not others:
+                return v
+            for p in others:
+                try:
+                    w = await p.words(artist, title, album, duration_ms)
+                except Exception:                      # (another module's trouble is not this one's)
+                    log.exception("words from %s", p.id)
+                    w = None
+                if w and w.get("synced"):
+                    return w
+            return v
+        v = await self._one(self._file("words2" + "".join("+" + p.id for p in others), artist, title, album), find)
         return v or {"synced": [], "plain": "", "instrumental": False, "none": True}
 
     def routes(self, routes) -> None:

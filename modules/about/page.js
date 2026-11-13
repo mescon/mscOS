@@ -15,7 +15,7 @@ export default function page(api) {
     </div>
     <div class="ly-stage" id="ly-stage"><ol class="ly-track" id="ly-track"></ol></div>
     <p class="ly-note" id="ly-note" hidden>${esc(tr("Texten har inga tider, så den följer inte musiken. Bläddra i den själv."))}</p>
-    <p class="from"><a href="https://lrclib.net/" target="_blank" rel="noopener noreferrer">LRCLIB</a></p>
+    <p class="from"><a id="ly-from" href="https://lrclib.net/" target="_blank" rel="noopener noreferrer">LRCLIB</a></p>
     <style>
       /* The words move as one column: the line that is sung stands in the middle, the one before
          goes up and out, the next comes up from below. One movement for all of it, in the time
@@ -312,6 +312,9 @@ export default function page(api) {
     lyr.classList.toggle("plain", !timed);
     lyr.querySelector("#ly-note").hidden = timed || (w.instrumental && !lines.join("").trim());
     stage.scrollTop = 0;
+    // where the words are from: LRCLIB, unless another module had them with their times
+    const from = lyr.querySelector("#ly-from"), other = w.from && /^https:\/\//.test(w.from.url || "") ? w.from : null;
+    from.textContent = other ? other.name : "LRCLIB"; from.href = other ? other.url : "https://lrclib.net/";
     // where every word has its time, each word is its own piece, to light as it is sung
     const line = (x, n) => { const ws = timed && w.words && w.words[n]; return ws && ws.length > 1 ? ws.map(([ms, t]) => `<span data-ms="${+ms}">${esc(t)}</span>`).join("") : esc(x); };
     track.innerHTML = !timed && w.instrumental && !lines.join("").trim() ? `<li>${esc(tr("Instrumental"))}</li>` : lines.map((x, n) => `<li>${line(x, n)}</li>`).join("");

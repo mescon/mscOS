@@ -1,10 +1,10 @@
 {
  "format": 1,
- "serial": 79,
+ "serial": 81,
  "modules": [
   {
    "id": "about",
-   "version": "1.10.2",
+   "version": "1.11.0",
    "kind": "integration",
    "name": {
     "sv": "Om musiken",
@@ -17,7 +17,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "f95623253b41c84609bf0ad3d4bb07ba292b33a80d0da64c9bf0d08fdcce153f",
+     "sha256": "596cdffce38afa503e984dfcb11e9f15ef95606783e3ac1b5b4ae647e296d609",
      "exec": false
     },
     {
@@ -27,12 +27,12 @@
     },
     {
      "path": "module.json",
-     "sha256": "c6b3518d647b670c93b143ad1da1bd9d4d30a975cdeff552093c7233e9f90835",
+     "sha256": "3eca6863ee8d14eb858a7eed75a5c727704a1b4c391fbb427e913ff4ccfe3305",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "8ebb71a30066e046417c9c1aad2ca9c960faae9ca632a664f2f4c9ede69a8fcf",
+     "sha256": "29b19ed2ec4207e234d8f748c66b2bb2b2ffab4a76051a98b6d0dfdf011d7b23",
      "exec": false
     },
     {
@@ -238,6 +238,31 @@
     {
      "path": "module.json",
      "sha256": "bd80e5dfb14d4a48901490f892faa63fb8b7e8523dc54fa4a8ba1990a85bdf2b",
+     "exec": false
+    }
+   ]
+  },
+  {
+   "id": "netease",
+   "version": "1.0.0",
+   "kind": "integration",
+   "name": {
+    "sv": "Låttexter från NetEase",
+    "en": "Lyrics from NetEase"
+   },
+   "description": {
+    "sv": "Hämtar låttexter med tider från NetEase Cloud Music när LRCLIB saknar dem. Enheten berättar då för NetEase (en kinesisk musiktjänst) vilken låt som spelas. Gränssnittet är inofficiellt och kan sluta fungera. Kräver Om musiken.",
+    "en": "Fetches lyrics with times from NetEase Cloud Music when LRCLIB has none. The device then tells NetEase (a Chinese music service) which song is playing. The interface is unofficial and may stop working. Needs About the music."
+   },
+   "files": [
+    {
+     "path": "__init__.py",
+     "sha256": "3203dbc664896641d01a64b9f0ed0d48fc110593279506c8d7e0fa8c4df07e08",
+     "exec": false
+    },
+    {
+     "path": "module.json",
+     "sha256": "3050b2b488dc46770db9b381c98121665af034a2e6349302310e22c375e6d711",
      "exec": false
     }
    ]
