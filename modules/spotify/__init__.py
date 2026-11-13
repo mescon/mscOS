@@ -208,8 +208,8 @@ class Spotify(SourcePlugin):
                             cooldown=24 * 3600)
 
     options = (
-        {"key": "spotify_client_id", "type": "secret", "needed": True, "guide": {"sv": ["Öppna [Spotifys utvecklarportal](https://developer.spotify.com/dashboard) och logga in med ditt Spotify-konto.", "Tryck Create app.", "Skriv ett namn och en beskrivning. Vad som helst går bra, till exempel mscOS.", "Under Redirect URIs, skriv `{panel}/api/spotify/callback` och tryck Add. Adressen måste stämma tecken för tecken.", "Börjar adressen ovan med http och inte https godtar Spotify den inte. Skriv då `http://127.0.0.1:8888/callback` i stället: sökningen fungerar, men inte Logga in med Spotify.", "Under frågan om vilka API:er du tänker använda, kryssa i Web API.", "Godkänn villkoren och tryck Save.", "Öppna appens Settings. Kopiera Client ID till fältet här.", "Tryck View client secret och kopiera den till fältet Client secret här under.", "Tryck Spara ändringar. Tryck sedan Logga in med Spotify och godkänn hos Spotify."],
-                   "en": ["Open [Spotify's developer dashboard](https://developer.spotify.com/dashboard) and log in with your Spotify account.", "Press Create app.", "Enter a name and a description. Anything will do, mscOS for example.", "Under Redirect URIs, enter `{panel}/api/spotify/callback` and press Add. The address must match character for character.", "If the address above begins with http and not https, Spotify does not take it. Enter `http://127.0.0.1:8888/callback` instead: the search works, but Sign in with Spotify does not.", "Under the question of which APIs you plan to use, tick Web API.", "Accept the terms and press Save.", "Open the app's Settings. Copy the Client ID into the field here.", "Press View client secret and copy it into the Client secret field below.", "Press Save changes. Then press Sign in with Spotify and approve at Spotify."]},
+        {"key": "spotify_client_id", "type": "secret", "needed": True, "guide": {"sv": ["Öppna [Spotifys utvecklarportal](https://developer.spotify.com/dashboard) och logga in med ditt Spotify-konto.", "Tryck Create app.", "Skriv ett namn och en beskrivning. Vad som helst går bra, till exempel mscOS.", "Under Redirect URIs, skriv `{panel}/api/spotify/callback` och tryck Add. Adressen måste stämma tecken för tecken.", "Börjar adressen ovan med http och inte https godtar Spotify den inte. Skriv då `http://127.0.0.1:8888/callback` i stället. Inloggningen fungerar ändå, med ett extra steg som panelen visar.", "Under frågan om vilka API:er du tänker använda, kryssa i Web API.", "Godkänn villkoren och tryck Save.", "Öppna appens Settings. Kopiera Client ID till fältet här.", "Tryck View client secret och kopiera den till fältet Client secret här under.", "Tryck Spara ändringar. Tryck sedan Logga in med Spotify och godkänn hos Spotify."],
+                   "en": ["Open [Spotify's developer dashboard](https://developer.spotify.com/dashboard) and log in with your Spotify account.", "Press Create app.", "Enter a name and a description. Anything will do, mscOS for example.", "Under Redirect URIs, enter `{panel}/api/spotify/callback` and press Add. The address must match character for character.", "If the address above begins with http and not https, Spotify does not take it. Enter `http://127.0.0.1:8888/callback` instead. Signing in works all the same, with one more step that the panel shows.", "Under the question of which APIs you plan to use, tick Web API.", "Accept the terms and press Save.", "Open the app's Settings. Copy the Client ID into the field here.", "Press View client secret and copy it into the Client secret field below.", "Press Save changes. Then press Sign in with Spotify and approve at Spotify."]},
          "label": {"sv": "Webb-API: Client ID", "en": "Web API: Client ID"},
          "help": {"sv": "För att söka i hela Spotify under Musik. Skapa en app i Spotifys utvecklarportal (Web API) och klistra in dess Client ID här och dess Client secret nedan.",
                   "en": "For searching all of Spotify under Music. Create an app in Spotify's developer dashboard (Web API) and paste its Client ID here and its Client secret below."},
@@ -280,17 +280,50 @@ class Spotify(SourcePlugin):
             # Spotify sends the answer back to an address it has been told of beforehand, and
             # takes none but https ones: the panel's own, when it is reached over https.
             public = os.environ.get("MSCOS_PUBLIC_URL", "").strip().rstrip("/")
-            if not public.lower().startswith("https://"):
-                raise RuntimeError(T("Inloggning med Spotify fungerar bara när panelen har en adress som börjar med https."))
             if not (self.hub.secret("spotify_client_id") or "").strip():
                 raise RuntimeError(T("Ange appens Client ID först, här ovanför."))
-            return {"open": self.web.sign_in_address(public + "/api/spotify/callback")}
+            if public.lower().startswith("https://"):
+                return {"open": self.web.sign_in_address(public + "/api/spotify/callback")}
+            # Without https the answer cannot come back to the panel by itself. Spotify does send
+            # it to an address on the listener's own computer or phone; nothing answers there, but
+            # the address it was sent to holds the answer, and the listener brings it here.
+            return {"ask": {"link": {"url": self.web.sign_in_address(webapi.LOOPBACK), "label": {"sv": "Öppna Spotify och godkänn", "en": "Open Spotify and approve"}},
+                            "steps": {"sv": ["Tryck på länken här ovanför. Spotify öppnas i en ny flik.",
+                                             "Logga in om du blir ombedd, och tryck Godkänn.",
+                                             "Sidan som kommer sedan går inte att öppna. Det är som det ska.",
+                                             "Kopiera hela adressen från webbläsarens adressfält. Den börjar med `http://127.0.0.1:8888/callback`.",
+                                             "Gå tillbaka hit, klistra in adressen i fältet och tryck Klar."],
+                                      "en": ["Press the link above. Spotify opens in a new tab.",
+                                             "Log in if you are asked to, and press Agree.",
+                                             "The page that comes next cannot be opened. That is as it should be.",
+                                             "Copy the whole address from the browser's address field. It begins with `http://127.0.0.1:8888/callback`.",
+                                             "Come back here, paste the address into the field and press Done."]},
+                            "label": {"sv": "Klar", "en": "Done"}, "placeholder": "http://127.0.0.1:8888/callback?code=…"}}
         if name == "logout":
             self.web.sign_out()
             await self.hub.broadcast({"type": "spotify_user", "on": False})
             return {"toast": {"sv": "Utloggad från Spotify på den här enheten", "en": "Signed out of Spotify on this device"}}
         await self.hub.run_job("soloist-update", ["/usr/local/sbin/soloist-update"])
         return None
+
+    async def answer(self, name: str, value: str) -> dict | None:
+        if name != "login":
+            raise RuntimeError("?")
+        code, state, error = webapi.answer_parts(value)
+        if error:
+            raise RuntimeError(T("Spotify godkände inte inloggningen. Börja om med Logga in med Spotify."))
+        if not code or not state:
+            raise RuntimeError(T("Det där är inte adressen från Spotify. Kopiera hela adressen, den som börjar med http://127.0.0.1:8888/callback."))
+        try:
+            await self.web.finish(code, state)
+        except webapi.WebApiError:
+            raise RuntimeError(T("Spotify tog inte emot svaret. Det gäller i tio minuter och bara en gång: börja om med Logga in med Spotify."))
+        try:
+            self.hub.set_secret("spotify_user", (await self.web.me())["name"][:60])
+        except webapi.WebApiError:
+            pass
+        await self.hub.broadcast({"type": "spotify_user", "on": True})
+        return {"toast": {"sv": "Inloggad med Spotify", "en": "Signed in with Spotify"}}
 
     def status(self) -> dict | None:
         solo = self.hub.status.get("soloist") or {}

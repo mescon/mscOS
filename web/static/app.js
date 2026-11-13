@@ -1419,7 +1419,7 @@ async function saveOpts(form) {
   } catch {}       // (what went wrong has been said; the changes stay as they were typed)
   b.disabled = false;
 }
-const optsDirty = (box) => !!box.querySelector("[data-opt][data-dirty]");
+const optsDirty = (box) => !!box.querySelector("[data-opt][data-dirty], .mod-ask");   // (also while an action waits for the listener's answer)
 // (the module's card and Accounts and keys under Profile show the same fields and buttons)
 for (const box of ["#mods", "#accounts"]) {
   for (const ev of ["input", "change"]) $(box).addEventListener(ev, (e) => { const i = e.target.closest("[data-opt]"); if (i) optTouched(i); });
@@ -1430,6 +1430,13 @@ for (const box of ["#mods", "#accounts"]) {
   });
   $(box).addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.matches?.("input[data-opt]:not([type=checkbox])")) { e.preventDefault(); optTouched(e.target); saveOpts(e.target.closest(".mod-opts")); } });
   $(box).addEventListener("click", (e) => modAct(e));
+  $(box).addEventListener("click", (e) => { const c = e.target.closest("[data-ask-cancel]"); if (c) { c.closest(".mod-ask").remove(); loadMods(); } });
+  $(box).addEventListener("submit", async (e) => {
+    const f = e.target.closest(".mod-ask"); if (!f) return;
+    e.preventDefault();
+    const value = f.querySelector("input").value.trim(); if (!value) return;
+    try { const r = await post("/api/plugins/answer", { id: f.closest("[data-id]").dataset.id, name: f.dataset.ask, value }); if (r.toast) toast(locs(r.toast)); f.remove(); loadMods(); } catch {}
+  });
 }
 // Everything that is the listener's own, gathered from the modules that run: their keys, and
 // the sign-ins and facts a module marks as an account's ("account": true). One place to set up
@@ -1464,9 +1471,24 @@ $("#mods").addEventListener("click", (e) => {
 });
 async function modAct(e) {  // a button the module describes
   const b = e.target.closest("button[data-act]"); if (!b) return;
+  const home = b.closest("[data-id]"), id = home.dataset.id, name = b.dataset.act;
   b.disabled = true;
-  try { const r = await post("/api/plugins/action", { id: b.closest("[data-id]").dataset.id, name: b.dataset.act }); if (r.toast) toast(locs(r.toast));
+  try {
+    const r = await post("/api/plugins/action", { id, name });
+    if (r.toast) toast(locs(r.toast));
     if (/^https:\/\//.test(r.open || "")) { location.href = r.open; return; }    // (a sign-in at the service the module is for)
+    // the action needs something from the listener (an address to bring back from a sign-in):
+    // the steps, a link to begin with, and a field for what they bring
+    if (r.ask) {
+      home.querySelectorAll(".mod-ask").forEach((x) => x.remove());
+      const a = r.ask, steps = a.steps ? loc(a.steps) : [], link = a.link && /^https:\/\//.test(a.link.url || "") ? a.link : null;
+      b.parentElement.insertAdjacentHTML("afterend", `<form class="mod-ask" data-ask="${esc(name)}">
+        ${link ? `<p><a class="btn primary" href="${esc(link.url)}" target="_blank" rel="noopener noreferrer">${esc(locs(link.label))}</a></p>` : ""}
+        ${Array.isArray(steps) && steps.length ? `<ol>${steps.map((x) => `<li>${guideText(x)}</li>`).join("")}</ol>` : ""}
+        <div class="row wrap"><input type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other" aria-label="${esc(locs(a.label))}" placeholder="${esc(a.placeholder || "")}">
+          <button class="btn primary">${esc(locs(a.label))}</button><button type="button" class="btn" data-ask-cancel="1">${esc(tr("Avbryt"))}</button></div></form>`);
+      b.disabled = false; return;
+    }
   } catch {}
   b.disabled = false; setTimeout(loadMods, 1500);
 }

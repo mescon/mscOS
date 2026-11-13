@@ -1188,6 +1188,21 @@ async def plugins_action(request):
     return ok(**(r or {}))
 
 
+@routes.post("/api/plugins/answer")
+async def plugins_answer(request):
+    """What the listener typed when a module's action asked for something (Plugin.answer)."""
+    b = await body(request)
+    p = hub.plugins.get(str(b.get("id", "")))
+    value = b.get("value")
+    if p is None or b.get("name") not in {a["name"] for a in p.actions} or not isinstance(value, str) or len(value) > 4000:
+        raise web.HTTPNotFound(text=T("Okänd modul"))
+    try:
+        r = await p.answer(b["name"], value)
+    except RuntimeError as e:
+        raise web.HTTPBadGateway(text=str(e))
+    return ok(**(r or {}))
+
+
 @routes.post("/api/plugins/catalogue")
 async def plugins_catalogue(request):
     """What the project's catalogue has: for each module, whether this device has it and

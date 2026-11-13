@@ -903,6 +903,13 @@ body.no-dock .dock { display: none; }
 .acct .spec { margin-bottom: 12px; }
 /* a key in a module's card: hidden like a password */
 input.masked:not(:placeholder-shown) { -webkit-text-security: disc; }
+/* an action that asks the listener for something: its steps and a field */
+.mod-ask { margin: 14px 0 6px; padding: 16px; border: 1px solid var(--hair); border-radius: 3px; background: var(--plate); }
+.mod-ask p { margin: 0 0 12px; }
+.mod-ask ol { margin: 0 0 14px; padding-left: 1.4em; max-width: 62ch; font-size: .9375rem; }
+.mod-ask li { margin: 0 0 8px; line-height: 1.45; }
+.mod-ask code { font-family: var(--mono, ui-monospace, monospace); font-size: .8125rem; overflow-wrap: anywhere; }
+.mod-ask input { flex: 1 1 14em; min-width: 0; min-height: 44px; padding: 0 12px; border: 1px solid var(--btn-line); border-radius: 3px; background: none; color: var(--ink); font: inherit; }
 /* how to get a key, step by step, under its field */
 .mo-guide { margin: 6px 0 4px; font-size: .875rem; }
 .mo-guide summary { cursor: pointer; color: var(--ink); min-height: 36px; display: flex; align-items: center; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }

@@ -20,7 +20,7 @@ import logging
 import re
 import secrets
 import time
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 from aiohttp import ClientSession, ClientTimeout
 
@@ -38,6 +38,18 @@ ACCOUNTS = "https://accounts.spotify.com"
 # hour's pause after some two hundred questions in five minutes.
 PER_HALF_MINUTE = 20
 SCOPES = "user-read-playback-state playlist-read-private playlist-read-collaborative user-library-read"
+
+
+LOOPBACK = "http://127.0.0.1:8888/callback"     # the one kind of plain-http address Spotify sends a sign-in's answer to
+
+
+def answer_parts(pasted: str) -> tuple[str, str, str]:
+    """(code, state, error) from the address the browser ended up at after the sign-in, as the
+    listener copied it from the address field (the whole address, or what follows the "?")."""
+    text = "".join(str(pasted or "").split())[:4000]
+    query = urlsplit(text).query if "?" in text else text
+    q = {k: v[0] for k, v in parse_qs(query).items() if v}
+    return q.get("code", "")[:2000], q.get("state", "")[:200], q.get("error", "")[:100]
 
 
 class WebApiError(Exception):

@@ -142,6 +142,13 @@ class Plugin:
         whose output the panel shows. Raise RuntimeError with a text when it cannot be done."""
         return None
 
+    async def answer(self, name: str, value: str) -> dict | None:
+        """What the listener gave when an action asked for something: an action may return
+        {"ask": {"steps": [sv/en guide steps], "link": {"url", "label"}, "label", "placeholder"}},
+        and the panel shows the steps with a field; what is typed there comes here. Return and
+        raise as action() does."""
+        raise RuntimeError("?")
+
     async def set_secret(self, key: str, value: str) -> None:
         """Store one of its "secret" options. By default in the core's root-only secrets
         file; a module whose secret lives elsewhere (a player's own key file) overrides this

@@ -75,6 +75,14 @@ class Rows(unittest.TestCase):
             self.assertEqual(w2.asked()["half_minute"], 0)
         asyncio.run(go())
 
+    def test_the_answer_brought_back_by_hand(self):
+        parts = webapi.answer_parts
+        self.assertEqual(parts(" http://127.0.0.1:8888/callback?code=abc&state=xyz \n"), ("abc", "xyz", ""))
+        self.assertEqual(parts("code=abc&state=xyz"), ("abc", "xyz", ""), "what follows the question mark is enough")
+        self.assertEqual(parts("http://127.0.0.1:8888/callback?error=access_denied&state=xyz"), ("", "xyz", "access_denied"))
+        self.assertEqual(parts("something else"), ("", "", ""))
+        self.assertEqual(parts(None), ("", "", ""))
+
     def test_the_sign_in_address(self):
         from urllib.parse import parse_qs, urlsplit
         w = webapi.WebApi(lambda: ("my id", ""))
