@@ -1344,7 +1344,7 @@ function modCard(p, open) {
 function renderMods() {
   renderAccounts();
   const box = $("#mods");
-  if (box.contains(document.activeElement) && /^(text|password|number)$/.test(document.activeElement.type || "")) return;
+  if ((box.contains(document.activeElement) && /^(text|password|number)$/.test(document.activeElement.type || "")) || optsDirty(box)) return;   // (not while something is being typed or waits to be saved)
   const open = new Set([...box.querySelectorAll("details[open]")].map((d) => d.closest("li").dataset.id));
   box.innerHTML = Object.keys(KINDS).map((k) => {
     const list = MODS.plugins.filter((p) => p.kind === k);
@@ -1381,22 +1381,45 @@ function modOptions(p, only = () => true, pre = "mo") {
       : o.type === "number" ? `<span class="mo-num"><input type="number" id="${id}" ${key} value="${esc(v)}" min="${+o.min}" max="${+o.max}" step="${+o.step || 1}" inputmode="decimal">${o.unit ? `<small>${esc(o.unit)}</small>` : ""}</span>`
       // A key is not a password: a plain field, hidden by style, which password managers are told
       // to leave alone (one filled in a made-up password here, and it was saved over the key).
-      // And it is saved by its button or Enter, never by merely being filled in.
-      : o.type === "secret" ? `<span class="mo-secret"><input type="text" class="masked" id="${id}" ${key} data-secret="1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" placeholder="${o.set ? tr("Sparad. Skriv en ny för att byta.") : ph}"><button type="button" class="btn" data-save-secret="${id}">${esc(tr("Spara"))}</button></span>`
+      // And like every setting here it is saved by the card's button, never by merely being filled in.
+      : o.type === "secret" ? `<input type="text" class="masked" id="${id}" ${key} data-secret="1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" placeholder="${o.set ? tr("Sparad. Skriv en ny för att byta.") : ph}">`
       : `<input type="text" id="${id}" ${key} value="${esc(v)}" placeholder="${ph}" autocomplete="off">`;
     return `<label for="${id}">${esc(loc(o.label))}</label>${input}${help}`;
-  }).join("")}</div>`;
+  }).join("")}
+    <div class="row wrap mo-save" hidden><button type="button" class="btn primary" data-save-opts="1">${esc(tr("Spara ändringar"))}</button><button type="button" class="btn" data-undo-opts="1">${esc(tr("Ångra"))}</button></div></div>`;
 }
-async function saveOpt(i) {
-  const val = i.tagName === "SELECT" ? JSON.parse(i.value) : i.type === "checkbox" ? i.checked : i.type === "number" ? +i.value : i.dataset.secret ? i.value.trim() : i.value;
-  if (i.dataset.secret) { if (!val) return; toast(tr("Sparar och kontrollerar…")); }
-  try { await post("/api/settings", { [i.dataset.opt]: val }); toast(tr("Sparat")); if (i.dataset.secret) { i.value = ""; i.blur(); } loadMods(); } catch { if (!i.dataset.secret) loadMods(); }
+// Nothing in a module's settings is saved by being changed: what was changed is marked, and the
+// card's Save button (or Enter in a field) sends it, all of it at once. So a field filled in by
+// mistake, or by a password manager, changes nothing until the listener says so.
+const optVal = (i) => (i.tagName === "SELECT" ? JSON.parse(i.value) : i.type === "checkbox" ? i.checked : i.type === "number" ? +i.value : i.dataset.secret ? i.value.trim() : i.value);
+function optTouched(i) {
+  const form = i.closest(".mod-opts"); if (!form) return;
+  if (i.dataset.secret && !i.value.trim()) delete i.dataset.dirty; else i.dataset.dirty = "1";    // (an emptied key field: nothing to save)
+  form.querySelector(".mo-save").hidden = !form.querySelector("[data-dirty]");
 }
+async function saveOpts(form) {
+  const changed = [...form.querySelectorAll("[data-opt][data-dirty]")]; if (!changed.length) return;
+  const b = form.querySelector("[data-save-opts]"); b.disabled = true;
+  if (changed.some((i) => i.dataset.secret)) toast(tr("Sparar och kontrollerar…"));
+  try {
+    await post("/api/settings", Object.fromEntries(changed.map((i) => [i.dataset.opt, optVal(i)])));
+    toast(tr("Sparat"));
+    changed.forEach((i) => { delete i.dataset.dirty; if (i.dataset.secret) i.value = ""; });
+    document.activeElement?.blur?.();
+    loadMods();
+  } catch {}       // (what went wrong has been said; the changes stay as they were typed)
+  b.disabled = false;
+}
+const optsDirty = (box) => !!box.querySelector("[data-opt][data-dirty]");
 // (the module's card and Accounts and keys under Profile show the same fields and buttons)
 for (const box of ["#mods", "#accounts"]) {
-  $(box).addEventListener("change", (e) => { const i = e.target.closest("[data-opt]"); if (i && !i.dataset.secret) saveOpt(i); });
-  $(box).addEventListener("click", (e) => { const b = e.target.closest("[data-save-secret]"); if (b) saveOpt(document.getElementById(b.dataset.saveSecret)); });
-  $(box).addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.dataset?.secret) { e.preventDefault(); saveOpt(e.target); } });
+  for (const ev of ["input", "change"]) $(box).addEventListener(ev, (e) => { const i = e.target.closest("[data-opt]"); if (i) optTouched(i); });
+  $(box).addEventListener("click", (e) => {
+    const save = e.target.closest("[data-save-opts]"), undo = e.target.closest("[data-undo-opts]");
+    if (save) saveOpts(save.closest(".mod-opts"));
+    else if (undo) { undo.closest(".mod-opts").querySelectorAll("[data-dirty]").forEach((i) => delete i.dataset.dirty); document.activeElement?.blur?.(); loadMods(); }
+  });
+  $(box).addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.matches?.("input[data-opt]:not([type=checkbox])")) { e.preventDefault(); optTouched(e.target); saveOpts(e.target.closest(".mod-opts")); } });
   $(box).addEventListener("click", (e) => modAct(e));
 }
 // Everything that is the listener's own, gathered from the modules that run: their keys, and
@@ -1404,7 +1427,7 @@ for (const box of ["#mods", "#accounts"]) {
 // what a module needs from its owner.
 function renderAccounts() {
   const box = $("#accounts");
-  if (box.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return;
+  if ((box.contains(document.activeElement) && document.activeElement.tagName === "INPUT") || optsDirty(box)) return;   // (not while something is being typed or waits to be saved)
   const isKey = (o) => o.type === "secret";
   const mine = (MODS.plugins || []).filter((p) => p.running && ((p.options || []).some(isKey) || (p.actions || []).some((a) => a.account)));
   const missing = mine.reduce((n, p) => n + (p.options || []).filter((o) => isKey(o) && !o.set && o.needed).length, 0);

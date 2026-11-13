@@ -148,6 +148,8 @@
  "Lyssna": "Listen",
  "Ingång och ström": "Input and power",
  "Styrning": "Controls",
+ "Spara ändringar": "Save changes",
+ "Ångra": "Undo",
  "Konton och nycklar": "Accounts and keys",
  "Det som är ditt eget: inloggningar och nycklar hos tjänsterna som modulerna använder. Allt sparas bara på enheten.": "What is your own: sign-ins and keys at the services the modules use. All of it is kept on the device only.",
  "Logga in under Åtkomst ovan för att ändra dem.": "Log in under Access above to change them.",
