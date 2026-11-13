@@ -14,6 +14,7 @@ export default function page(api) {
       </button>
     </div>
     <div class="ly-stage" id="ly-stage"><ol class="ly-track" id="ly-track"></ol></div>
+    <p class="ly-note" id="ly-note" hidden>${esc(tr("Texten har inga tider, så den följer inte musiken. Bläddra i den själv."))}</p>
     <p class="from"><a href="https://lrclib.net/" target="_blank" rel="noopener noreferrer">LRCLIB</a></p>
     <style>
       /* The words move as one column: the line that is sung stands in the middle, the one before
@@ -46,7 +47,9 @@ export default function page(api) {
       .ly-track li span { white-space: pre-wrap; transition: opacity .18s ease-out; }
       .ly-track li.d0 span:not(.sung) { opacity: .42; }
       /* words without times: all of them, to read and scroll */
-      .lyrics.plain .ly-stage { overflow: hidden; height: 104px; }
+      .lyrics.plain .ly-stage { overflow-y: auto; height: 168px; -webkit-mask-image: none; mask-image: none; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+      .ly-note { position: relative; margin: 6px 0 0; font-size: .75rem; color: var(--engraved); }
+      .lyrics.full .ly-note { text-align: center; }
       .lyrics.plain.big .ly-stage, .lyrics.plain.full .ly-stage { overflow-y: auto; -webkit-mask-image: none; mask-image: none; }
       .lyrics.plain .ly-track { transform: none !important; padding-bottom: 12px; }
       .lyrics.plain .ly-track li { opacity: .85; transform: none; font-size: 1.125rem; padding: 3px 0; }
@@ -307,6 +310,8 @@ export default function page(api) {
     const timed = w.synced.length > 0;
     const lines = timed ? w.synced.map((l) => l[1]) : (w.plain || "").split("\n");
     lyr.classList.toggle("plain", !timed);
+    lyr.querySelector("#ly-note").hidden = timed || (w.instrumental && !lines.join("").trim());
+    stage.scrollTop = 0;
     // where every word has its time, each word is its own piece, to light as it is sung
     const line = (x, n) => { const ws = timed && w.words && w.words[n]; return ws && ws.length > 1 ? ws.map(([ms, t]) => `<span data-ms="${+ms}">${esc(t)}</span>`).join("") : esc(x); };
     track.innerHTML = !timed && w.instrumental && !lines.join("").trim() ? `<li>${esc(tr("Instrumental"))}</li>` : lines.map((x, n) => `<li>${line(x, n)}</li>`).join("");
