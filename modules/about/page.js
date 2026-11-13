@@ -243,8 +243,9 @@ export default function page(api) {
     measure();
     links();
   }
-  // The title, the artist and the album at the top of Listen lead to their cards, opened.
-  const LINK = [["track", "#np-title"], ["artist", "#np-artist"], ["album", "#np-album"], ["album", ".cover"]];
+  // The title and the sleeve at the top of Listen lead to their cards, opened. (The artist's and
+  // the album's names lead to them under Music: that is the panel's own doing.)
+  const LINK = [["track", "#np-title"], ["album", ".cover"]];
   function links() {
     for (const [kind, sel] of LINK) {
       const el = $(sel);

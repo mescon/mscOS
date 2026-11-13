@@ -38,14 +38,19 @@ def names(artists) -> str:
     return ", ".join(a.get("name", "") for a in artists or [] if a.get("name"))
 
 
+def apart(artists) -> list:
+    """The artists one by one, for a page that lets each name lead to the artist."""
+    return [{"id": a.get("id"), "name": a["name"]} for a in artists or [] if a.get("name")]
+
+
 def album_row(a: dict) -> dict:
-    return {"uri": a.get("uri"), "id": a.get("id"), "name": a.get("name", ""), "artist": names(a.get("artists")),
+    return {"uri": a.get("uri"), "id": a.get("id"), "name": a.get("name", ""), "artist": names(a.get("artists")), "artists": apart(a.get("artists")),
             "year": (a.get("release_date") or "")[:4], "kind": a.get("album_type") or "", "cover": image(a.get("images"))}
 
 
 def track_row(t: dict, album: dict | None = None) -> dict:
     al = t.get("album") or album or {}
-    return {"uri": t.get("uri"), "name": t.get("name", ""), "artist": names(t.get("artists")), "album": al.get("name", ""),
+    return {"uri": t.get("uri"), "name": t.get("name", ""), "artist": names(t.get("artists")), "artists": apart(t.get("artists")), "album": al.get("name", ""),
             "album_id": al.get("id"), "cover": image(al.get("images"), 64), "duration_ms": t.get("duration_ms"), "n": t.get("track_number")}
 
 

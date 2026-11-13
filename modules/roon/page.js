@@ -136,6 +136,7 @@ export default function page(api) {
   // Roon's lists do not say when an album is from. An entry that is a list with an artist
   // under its name is taken to be an album, and its year is asked for once the list is drawn.
   const albumMark = (i) => (i.hint === "list" && i.subtitle && !/^\d+\s/.test(i.subtitle) ? ` data-yb="${esc(i.subtitle)}" data-yt="${esc(i.title)}"` : "");
+  let byYear = "";         // the artist whose albums were asked for by name: that list in the order they came out
   async function addYears() {
     const els = [...box.querySelectorAll("button[data-yb]:not([data-yd])")];
     if (!els.length) return;
@@ -143,11 +144,22 @@ export default function page(api) {
     const years = (await api.yearsFor?.(els.map((b) => ({ artist: b.dataset.yb, title: b.dataset.yt })))) || [];   // (a panel older than this module has no such thing)
     els.forEach((b, n) => {
       const line = b.isConnected && years[n] ? b.querySelector("span span, b + span") : null;
-      if (line) line.textContent = `${line.textContent} · ${years[n]}`;
+      if (line) { line.append(` · ${years[n]}`); b.dataset.year = years[n]; }
     });
+    // One artist's albums (all by the same, or the list an artist's name led to): as they came
+    // out, those of unknown year last. Roon's own order is kept for every other list.
+    for (const ul of new Set(els.filter((b) => b.isConnected).map((b) => b.closest("ul")))) {
+      const lis = [...ul.children], bs = lis.map((li) => li.querySelector("button[data-yb]"));
+      if (lis.length < 2 || bs.some((b) => !b)) continue;
+      const one = bs.every((b) => b.dataset.yb === bs[0].dataset.yb), led = byYear && hier === "search" && query === byYear && trail.length === 1;
+      if (!one && !led) continue;
+      lis.map((li, n) => [li, +bs[n].dataset.year || 9999, n]).sort((x, y) => x[1] - y[1] || x[2] - y[2]).forEach(([li]) => ul.append(li));
+    }
   }
-  const card = (i, path) => `<li><button data-path="${path}" data-sub="${esc(i.subtitle || "")}"${albumMark(i)}>${pic(i, false)}<b>${esc(i.title)}</b>${i.subtitle && !/^0\s/.test(i.subtitle) ? `<span>${esc(i.subtitle)}</span>` : ""}</button></li>`;
-  const row = (i, path) => `<li><button class="go" data-path="${path}" data-sub="${esc(i.subtitle || "")}">${pic(i, true)}<span><b>${esc(i.title)}</b>${i.subtitle ? `<span>${esc(i.subtitle)}</span>` : ""}</span></button></li>`;
+  // what stands under an entry's name: for an album or a track the artist, who is a link then
+  const under = (i, pic) => ((i.image || !pic) && !/^\d+\s/.test(i.subtitle || "") && ["list", "action_list"].includes(i.hint) && api.artistLinks ? api.artistLinks(i.subtitle) : esc(i.subtitle || ""));
+  const card = (i, path) => `<li><button data-path="${path}" data-sub="${esc(i.subtitle || "")}"${albumMark(i)}>${pic(i, false)}<b>${esc(i.title)}</b>${i.subtitle && !/^0\s/.test(i.subtitle) ? `<span>${under(i)}</span>` : ""}</button></li>`;
+  const row = (i, path) => `<li><button class="go" data-path="${path}" data-sub="${esc(i.subtitle || "")}">${pic(i, true)}<span><b>${esc(i.title)}</b>${i.subtitle ? `<span>${under(i)}</span>` : ""}</span></button></li>`;
   function drawFound() {
     const d = found;
     $("#rm-head").innerHTML = "";
@@ -212,7 +224,7 @@ export default function page(api) {
     const pics = items.some((i) => i.image);
     $("#rm-list").innerHTML = `<ul class="rm-list">${items.map((i) => i.hint === "header" || !i.item_key
       ? `<li class="head">${esc(i.title)}</li>`
-      : `<li><button class="go${pics ? "" : " plain"}" data-key="${esc(i.item_key)}" data-title="${esc(i.title)}"${i.hint === "action" ? ' data-act="1"' : ""}${albumMark(i)}>${pics ? (i.image ? `<img src="${esc(i.image)}" alt="" loading="lazy">` : `<span class="ph"></span>`) : ""}<span><b>${esc(i.title)}</b>${i.subtitle ? `<span>${esc(i.subtitle)}</span>` : ""}</span>${i.hint === "action" ? "" : chev}</button></li>`).join("")}</ul>`;
+      : `<li><button class="go${pics ? "" : " plain"}" data-key="${esc(i.item_key)}" data-title="${esc(i.title)}"${i.hint === "action" ? ' data-act="1"' : ""}${albumMark(i)}>${pics ? (i.image ? `<img src="${esc(i.image)}" alt="" loading="lazy">` : `<span class="ph"></span>`) : ""}<span><b>${esc(i.title)}</b>${i.subtitle ? `<span>${under(i, true)}</span>` : ""}</span>${i.hint === "action" ? "" : chev}</button></li>`).join("")}</ul>`;
     addYears();
   }
   function search(text) {
@@ -326,10 +338,17 @@ export default function page(api) {
       follow(sub);
     },
     // from Listen: the album or the artist that plays, looked up in Roon
-    find(kind, t) {
-      const text = kind === "album" ? [t.album, String(t.artist || "").split(" / ")[0]].filter(Boolean).join(" ") : String(t.artist || "").split(" / ")[0];
+    // An album: the search for it. An artist: everything Roon finds of albums under that name,
+    // in the order they came out (Roon's own artist page shows only what is in the library).
+    async find(kind, t) {
+      const by = String(t.artist || "").split(/, | \/ /)[0];
+      const text = (kind === "album" ? [t.album, by].filter(Boolean).join(" ") : by).replace(/\s+/g, " ").slice(0, 120);
       if (!text) return;
-      loaded = true; $("#rm-find").value = text; clearTimeout(timer); results(text.replace(/\s+/g, " ").slice(0, 120), true);
+      loaded = true; $("#rm-find").value = text; clearTimeout(timer);
+      await results(text, true);
+      if (kind !== "artist" || !found || found.q !== text || query !== text) return;
+      const albums = found.sections.find((sec) => sec.items.length && sec.items.every((i) => i.hint === "list" && i.subtitle && !/^\d+\s/.test(i.subtitle)));
+      if (albums) { byYear = text; follow(["roon-search", text, albums.title], "", true); }
     },
   };
 }

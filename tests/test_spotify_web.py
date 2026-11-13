@@ -22,9 +22,10 @@ class Rows(unittest.TestCase):
         self.assertIsNone(webapi.image(None))
 
     def test_rows(self):
-        album = {"uri": "spotify:album:" + "a" * 22, "id": "a" * 22, "name": "An album", "artists": [{"name": "A"}, {"name": "B"}],
+        album = {"uri": "spotify:album:" + "a" * 22, "id": "a" * 22, "name": "An album", "artists": [{"name": "A", "id": "x" * 22}, {"name": "B"}],
                  "release_date": "1973-03-01", "album_type": "album", "images": IMAGES}
         self.assertEqual(webapi.album_row(album), {"uri": album["uri"], "id": "a" * 22, "name": "An album", "artist": "A, B",
+                                                   "artists": [{"id": "x" * 22, "name": "A"}, {"id": None, "name": "B"}],
                                                    "year": "1973", "kind": "album", "cover": "https://i.example/300"})
         track = {"uri": "spotify:track:" + "t" * 22, "name": "A song", "artists": [{"name": "A"}], "duration_ms": 1000, "track_number": 3}
         self.assertEqual(webapi.track_row(track, album)["album"], "An album", "an album's own tracks carry no album: it is given")

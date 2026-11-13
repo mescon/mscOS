@@ -50,6 +50,9 @@ export default function page(api) {
   const deco = (e) => (e && e.decorations) || {};
   const nameOf = (e) => deco(e).identity?.name || "";
   const coverOf = (e, size = "large") => { const c = deco(e).visual_identity?.cover || []; return (c.find((x) => x.size === size) || c[c.length - 1] || {}).url; };
+  // (a panel older than this module has no names that lead anywhere: plain text then)
+  const artistLinks = (a, list) => (api.artistLinks ? api.artistLinks(a, list) : esc(a || "")), albumLink = (al, by, id) => (api.albumLink ? api.albumLink(al, by, id) : esc(al || ""));
+  const apartOf = (e) => (deco(e).creators || []).map((c) => ({ id: String(c.entity?.uri || "").split(":")[2], name: nameOf(c.entity) })).filter((a) => a.id && a.name);
   const artistsOf = (e) => (deco(e).creators || []).map((c) => nameOf(c.entity)).filter(Boolean).join(", ");
   const devName = () => S.status.soloist?.device_name || S.names?.network || "mscOS";  // the name in the Spotify app
   // the current track, measured from the samples a few seconds in (Soloist does not report it)
@@ -161,13 +164,13 @@ export default function page(api) {
   // Lists as the Music view draws them, whether the rows come from what was played or from a search.
   const idOf = (uri) => String(uri || "").split(":")[2] || "";
   const albumList = (albums) => `<ul class="m-albums">${albums.map((a) =>
-    `<li><button ${M.search ? `data-album="${esc(a.id || idOf(a.uri))}"` : `data-play="${esc(a.uri)}"`} data-name="${esc(a.name)}">${img(a.cover)}<b>${esc(a.name)}</b><span>${esc([a.artist, a.year].filter(Boolean).join(" · "))}</span></button></li>`).join("")}</ul>`;
+    `<li><button ${M.search ? `data-album="${esc(a.id || idOf(a.uri))}"` : `data-play="${esc(a.uri)}"`} data-name="${esc(a.name)}">${img(a.cover)}<b>${esc(a.name)}</b><span>${[artistLinks(a.artist, a.artists), esc(a.year || "")].filter(Boolean).join(" · ")}</span></button></li>`).join("")}</ul>`;
   const artistList = (artists) => `<ul class="m-artists">${artists.map((a) =>
     `<li><button ${M.search ? `data-artist="${esc(a.id || idOf(a.uri))}"` : `data-play="${esc(a.uri)}"`} data-name="${esc(a.name)}">${a.cover ? img(a.cover) : ""}${esc(a.name)}</button></li>`).join("")}</ul>`;
   // how many listen to a track, in words: "1,8 milj.", "650 tusen"
   const many = (n) => (n >= 1e6 ? tr`${api.dec(n / 1e6, 1)} milj.` : n >= 1e3 ? tr`${Math.round(n / 1e3)} tusen` : String(n));
   const trackList = (tracks, numbered) => `<ol class="m-tracks">${tracks.map((t) =>
-    `<li><button class="go" data-play="${esc(t.uri)}" data-name="${esc(t.name)}">${numbered ? `<span class="n">${esc(t.n ?? "")}</span>` : img(t.cover)}<span><b>${esc(t.name)}</b><span>${esc([t.listeners ? "" : t.artist, numbered ? "" : t.album, t.listeners ? tr`${many(t.listeners)} lyssnare` : ""].filter(Boolean).join(" · "))}</span></span></button>
+    `<li><button class="go" data-play="${esc(t.uri)}" data-name="${esc(t.name)}">${numbered ? `<span class="n">${esc(t.n ?? "")}</span>` : img(t.cover)}<span><b>${esc(t.name)}</b><span>${[t.listeners ? "" : artistLinks(t.artist, t.artists), numbered ? "" : albumLink(t.album, t.artist, t.album_id), t.listeners ? esc(tr`${many(t.listeners)} lyssnare`) : ""].filter(Boolean).join(" · ")}</span></span></button>
        ${t.duration_ms ? `<span class="len">${esc(api.fmtTime(t.duration_ms))}</span>` : ""}<button class="q" data-queue="${esc(t.uri)}" data-name="${esc(t.name)}">${esc(tr("Kö"))}</button></li>`).join("")}</ol>`;
   const playlistList = (lists) => `<ul class="m-albums">${lists.map((p) =>
     `<li><button data-playlist="${esc(p.id || idOf(p.uri))}" data-name="${esc(p.name)}">${img(p.cover)}<b>${esc(p.name)}</b><span>${esc([p.owner, p.count != null ? tr`${p.count} låtar` : ""].filter(Boolean).join(" · "))}</span></button></li>`).join("")}</ul>`;
@@ -212,7 +215,7 @@ export default function page(api) {
       : pg.kind === "playlist" ? [KIND.playlist, d.count != null ? tr`${d.count} låtar` : ""].filter(Boolean).join(" · ") : KIND.artist;
     const hero = `<div class="m-hero ${pg.kind}">${img(d.cover)}<div>
         <p class="part">${esc(kindLine)}</p>
-        <h3>${esc(d.name)}</h3>${pg.kind === "album" ? `<p class="by">${esc(d.artist)}</p>` : pg.kind === "playlist" ? `<p class="by">${esc(d.owner)}</p>` : ""}
+        <h3>${esc(d.name)}</h3>${pg.kind === "album" ? `<p class="by">${artistLinks(d.artist, d.artists)}</p>` : pg.kind === "playlist" ? `<p class="by">${esc(d.owner)}</p>` : ""}
         <button class="btn primary" data-play="${esc(d.uri)}" data-name="${esc(d.name)}">${esc(tr("Spela"))}</button></div></div>`;
     if (pg.kind === "playlist") {
       return back + hero + (d.about ? `<p class="m-about">${esc(d.about)}</p>` : "")
@@ -302,7 +305,7 @@ export default function page(api) {
   }
   // the names alone, for modules that look the music up
   const track = () => { const it = M.playback.item; return it ? { title: nameOf(it), artist: artistsOf(it) || extra(it)?.artist || "", album: nameOf(deco(it).parent?.entity) || "",
-    artist_uri: deco(it).creators?.[0]?.entity?.uri || "" } : null; };
+    artist_uri: deco(it).creators?.[0]?.entity?.uri || "", artist_id: idOf(deco(it).creators?.[0]?.entity?.uri), album_id: idOf(deco(it).parent?.entity?.uri) } : null; };
   const duration = () => deco(M.playback.item).playback?.duration_ms || 0;
   function position() {
     const p = M.playback, pos = p.position;
@@ -313,13 +316,13 @@ export default function page(api) {
   const queued = new Map();                  // track id -> {name, artist, cover}, or null while asked for
   function renderQueue() {
     const rows = (M.queue.upcoming || []).slice(0, 8).map((q) => {
-      if (nameOf(q.item)) return { name: nameOf(q.item), artist: artistsOf(q.item), cover: coverOf(q.item, "small") };
+      if (nameOf(q.item)) return { name: nameOf(q.item), artist: artistsOf(q.item), artists: apartOf(q.item), cover: coverOf(q.item, "small") };
       const id = /^spotify:track:/.test(q.item?.uri || "") ? idOf(q.item.uri) : "";
       if (id && M.search && !queued.has(id)) queued.set(id, null);
       return queued.get(id) || null;
     }).filter(Boolean);
     $("#queue").innerHTML = rows.length
-      ? rows.map((r) => `<li>${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy">` : '<span class="q-ph"></span>'}<div><span class="q-t">${esc(r.name)}</span><span class="q-a">${esc(r.artist)}</span></div></li>`).join("")
+      ? rows.map((r) => `<li>${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy">` : '<span class="q-ph"></span>'}<div><span class="q-t">${esc(r.name)}</span><span class="q-a">${artistLinks(r.artist, r.artists)}</span></div></li>`).join("")
       : `<li class="empty">${tr("Kön visas när något spelas.")}</li>`;
     fv("queue", rows.length ? rows[0].name : "");
     askQueued();
@@ -468,6 +471,17 @@ export default function page(api) {
     }
   }
 
+  // the address changed (back, forward, a link, a kept address): show what it names
+  function routed(view, sub) {
+      if (view !== "v-music" || !current()) return;
+      const [kind, id] = sub;
+      if (["album", "artist", "playlist"].includes(kind) && /^[A-Za-z0-9]{8,40}$/.test(id || "")) { if (!(page && page.kind === kind && page.id === id)) showPage(kind, id); }
+      else {
+        const words = kind === "search" ? String(id || "").slice(0, 120) : "", box = $("#sp-find");
+        if (page) { page = null; drawMusic(); }
+        if (box.value.trim() !== words && !(spotifyUri(box.value.trim()) && !words)) { box.value = words; find(); }
+      }
+    }
   // ---------------------------------------------------------------- what the panel asks of this file
   return {
     // the first message on the socket: this module's part of the state
@@ -476,6 +490,9 @@ export default function page(api) {
         lastTest: m.last_test || null, tests: m.tests || [], search: !!m.spotify_search });
       $("#sp-find").placeholder = M.search ? tr("Sök i Spotify, eller klistra in en Spotify-länk") : tr("Sök i det du spelat, eller klistra in en Spotify-länk");
       renderQueue(); renderTest(M.lastTest); renderVlog();
+      // (an address with a search in it was followed before it was known that Spotify can be asked: ask now)
+      { const r = api.route(); routed(r.view, r.sub); }
+      if (M.search && !found && !page && $("#sp-find").value.trim().length >= 2) find();
     },
     // every later message; true = it was this module's and the panel need not look at it
     message(m) {
@@ -497,25 +514,27 @@ export default function page(api) {
       $("#auto-verify").checked = !!S.settings?.auto_verify;
     },
     // from Listen: the album or the artist that plays, opened here
-    find(kind) {
-      const it = M.playback.item; if (!it) return;
-      const e = kind === "album" ? deco(it).parent?.entity : deco(it).creators?.[0]?.entity;
-      if (M.search && e?.uri) { $("#sp-find").value = ""; openPage(kind, idOf(e.uri)); }
-      else { $("#sp-find").value = nameOf(e) || ""; find(); }
+    // from a name anywhere in the panel: the album or the artist, opened here. By Spotify's own
+    // id when the name came with one; else Spotify is asked for the name and its best match opened.
+    async find(kind, t = {}) {
+      const artist = String(t.artist || "").split(/, | \/ /)[0], name = kind === "album" ? t.album : artist;
+      let id = kind === "album" ? t.album_id : t.artist_id;
+      if (!name && !id) return;
+      if (M.search && !id) {
+        try {
+          const r = await fetch(`/api/spotify/search?q=${encodeURIComponent([name, kind === "album" ? artist : ""].filter(Boolean).join(" ").slice(0, 100))}`);
+          const rows = r.ok ? (await r.json())[kind === "album" ? "albums" : "artists"] || [] : [];
+          const fold = (x) => String(x || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "");
+          id = (rows.find((x) => fold(x.name) === fold(name)) || rows[0])?.id;
+        } catch {}
+      }
+      if (M.search && id) { $("#sp-find").value = ""; openPage(kind, id); }
+      else { $("#sp-find").value = name || ""; find(); }
     },
     // a view was chosen: the Music view shows what has been played up to now
     view(id) { if (id === "v-music" && current()) loadMusic(true); },
     // where the page is: /music/album/<id> and the like open that, /music alone closes it
-    route(view, sub) {
-      if (view !== "v-music" || !current()) return;
-      const [kind, id] = sub;
-      if (["album", "artist", "playlist"].includes(kind) && /^[A-Za-z0-9]{8,40}$/.test(id || "")) { if (!(page && page.kind === kind && page.id === id)) showPage(kind, id); }
-      else {
-        const words = kind === "search" ? String(id || "").slice(0, 120) : "", box = $("#sp-find");
-        if (page) { page = null; drawMusic(); }
-        if (box.value.trim() !== words && !(spotifyUri(box.value.trim()) && !words)) { box.value = words; find(); }
-      }
-    },
+    route(view, sub) { routed(view, sub); },
     // as the current source: the Listen view, the progress bar, the signal chain
     play, track, duration, position, chain, carry,
     playing: () => M.playback.status === "playing" && M.auth.is_active !== false,

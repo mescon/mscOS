@@ -260,6 +260,27 @@ async function yearsFor(albums) {
   for (const p of Object.values(PAGES)) if (p.years) { try { return (await p.years(albums)) || []; } catch (e) { console.error(e); } }
   return [];
 }
+// A name that leads somewhere: wherever an artist or an album is named, the name goes to it
+// under Music, looked up by the source that is chosen (its find(kind, t) hook). ids: what the
+// source itself calls them, when it is known; without, the source looks for the name.
+const nameLink = (kind, text, t) => (VIEW().find && text
+  ? `<a class="lnk" data-go="${kind}" data-artist="${esc(t.artist || "")}" data-album="${esc(t.album || "")}" data-artist-id="${esc(t.artist_id || "")}" data-album-id="${esc(t.album_id || "")}">${esc(text)}</a>`
+  : esc(text));
+// "A, B" or "A / B": each artist a link of its own. artists: [{id, name}] when the source gives them apart.
+function artistLinks(artist, artists) {
+  const list = artists?.length ? artists : String(artist || "").split(/, | \/ /).filter(Boolean).map((name) => ({ name }));
+  return list.map((a) => nameLink("artist", a.name, { artist: a.name, artist_id: a.id })).join(", ");
+}
+const albumLink = (album, artist, id) => nameLink("album", album, { album, artist: String(artist || "").split(/, | \/ /)[0], album_id: id });
+// (before the row the name stands in hears of the press: the name leads to the artist, the row plays)
+document.addEventListener("click", (e) => {
+  const a = e.target.closest?.("a.lnk[data-go]"), find = VIEW().find;
+  if (!a || !find) return;
+  e.preventDefault(); e.stopPropagation();
+  const d = a.dataset;
+  if (routeNow().view !== "v-music") go("v-music");     // (from within Music the way back leads to where one was)
+  find(d.go, { artist: d.artist, album: d.album, artist_id: d.artistId, album_id: d.albumId });
+}, true);
 function pageApi(id) {
   return { $, $$, S, tr, esc, dec, khz, fmtWord, fmtTime, clock, stamp, post, toast, fv, loc, MARK,
     outName, srcId, srcState, sigWord, usbStage,
@@ -269,6 +290,9 @@ function pageApi(id) {
     // a sleeve from elsewhere for {artist, album, title} when the player's own is missing or
     // broken: an address, or "" (a module offers it through a coverFor(track) hook)
     coverFor,
+    // names that lead to the artist or the album under Music, as HTML: artistLinks("A, B", [{id, name}]?),
+    // albumLink(album, artist, id?). Plain text when the chosen source cannot look them up.
+    artistLinks, albumLink,
     // the years albums first came out, for [{artist, title}]: a promise of [year or null] in the same order
     yearsFor,
     lang: () => LANG,
@@ -855,7 +879,7 @@ async function loadListened() {
   for (const e of d.items) {
     const dd = day(e.t);
     if (dd !== last) { html += `${last ? "</ol>" : ""}<h4>${esc(dd)}</h4><ol>`; last = dd; }
-    html += `<li><time>${esc(clock(e.t))}</time><span><b>${esc(e.title)}</b><span>${esc([e.artist, e.album].filter(Boolean).join(" · "))}</span></span><small>${esc(label(e.source))}</small></li>`;
+    html += `<li><time>${esc(clock(e.t))}</time><span><b>${esc(e.title)}</b><span>${[artistLinks(e.artist), albumLink(e.album, e.artist)].filter(Boolean).join(" · ")}</span></span><small>${esc(label(e.source))}</small></li>`;
   }
   $("#listened-list").innerHTML = html + (last ? "</ol>" : "");
 }

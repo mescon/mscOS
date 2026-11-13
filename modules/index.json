@@ -1,10 +1,10 @@
 {
  "format": 1,
- "serial": 63,
+ "serial": 67,
  "modules": [
   {
    "id": "about",
-   "version": "1.8.0",
+   "version": "1.9.0",
    "kind": "integration",
    "name": {
     "sv": "Om musiken",
@@ -27,12 +27,12 @@
     },
     {
      "path": "module.json",
-     "sha256": "d07324700b7e7121f8447f83d31eeb20cb5d818b58548700b6a68eb4cc9a5c6b",
+     "sha256": "d225e0039cf2a3a803342ca55cb7659a015140c66c98b459a74ca873ccdbcabe",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "3b758dea1aac0caf68fce80b7ba2a9c856e41d677302718c9ff4ff588b5f2a32",
+     "sha256": "65b599ae1ddf7521abac0bb90090e572c4460fbc893ce4ee71686cc53d239031",
      "exec": false
     },
     {
@@ -269,7 +269,7 @@
   },
   {
    "id": "roon",
-   "version": "1.9.0",
+   "version": "1.10.0",
    "kind": "source",
    "name": {
     "sv": "Roon Bridge",
@@ -292,12 +292,12 @@
     },
     {
      "path": "module.json",
-     "sha256": "96c0042d6b2ba6985ade0430b6d2a2afbc97718f2f2e9583603a0908cc260d0b",
+     "sha256": "b7e241c73cae213ea8d67acd4f42670b86b502ce949f5b0ae2807e25e9f26829",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "dcdc64c7245b18e602d20670e8963694a396f956715c18e191e0241161dbdbf9",
+     "sha256": "27c7487ccfc694426d124180b470ca6da4ec56687503192339e31c68bb8e60cd",
      "exec": false
     },
     {
@@ -344,7 +344,7 @@
   },
   {
    "id": "spotify",
-   "version": "1.11.1",
+   "version": "1.12.0",
    "kind": "source",
    "name": {
     "sv": "Spotify Lossless (Soloist)",
@@ -367,12 +367,12 @@
     },
     {
      "path": "module.json",
-     "sha256": "143b55748964c25668e5c9179c0e1f54a41fea2be4469264572747ab4063ec61",
+     "sha256": "516635b516607dee6d88f4fa1e87e92920aac77411b60cfbac40423969ff9f71",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "37c096b88111c6b92202558a2993478b15a90af1ec6926bb5657d893c68a281f",
+     "sha256": "fe5e1c237d8eb796061a15647747ed83145e610b8e38eec359ac3a30dd4bdc58",
      "exec": false
     },
     {
@@ -412,7 +412,7 @@
     },
     {
      "path": "webapi.py",
-     "sha256": "4f9d4b507eb822104233fc1990a3475c53f77f58ba3b5130270c2233a61443a1",
+     "sha256": "4e37fa982131e729258e2fade87a6491df217f4e5769582d23edabd04ed0edbe",
      "exec": false
     },
     {

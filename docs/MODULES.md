@@ -167,7 +167,9 @@ browser's back and forward: the module shows what the address says. An address s
 thing itself (an album's id, the names of the lists one went into), so that it can be kept,
 sent, and opened later: `/music/album/<id>`, `/music/search/<words>`, `/music/roon/Playlists/<name>`.
 A `coverFor(track)` hook lets a module offer a sleeve for `{artist, album, title}` when the
-player's own is missing or broken (`api.coverFor(track)` asks for one). A `years(albums)` hook
+player's own is missing or broken (`api.coverFor(track)` asks for one). `api.artistLinks("A, B", [{id, name}]?)` and `api.albumLink(album, artist, id?)` give HTML in which
+each name leads to the artist or the album under Music: the chosen source's `find(kind, t)` hook is
+called with `{artist, album, artist_id, album_id}` and opens it. A `years(albums)` hook
 answers when albums first came out, for a player whose lists do not say (`api.yearsFor(albums)`).
 The panel does the same for its own parts: a panel that is open is `/signal/clock`, a module's
 card is `/system/modules/<id>`. What stands in `sub` comes
