@@ -1,6 +1,6 @@
 {
  "id": "spotify",
- "version": "1.14.0",
+ "version": "1.14.1",
  "kind": "source",
  "name": {
   "sv": "Spotify Lossless (Soloist)",

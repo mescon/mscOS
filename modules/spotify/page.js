@@ -237,7 +237,8 @@ export default function page(api) {
         <button class="btn primary" data-play="${esc(d.uri)}" data-name="${esc(d.name)}">${esc(tr("Spela"))}</button></div></div>`;
     if (pg.kind === "playlist") {
       return back + hero + (d.about ? `<p class="m-about">${esc(d.about)}</p>` : "")
-        + ((d.tracks || []).length ? trackList(d.tracks) : `<p class="none">${esc(tr("Spotify låter inte den här sortens app se vilka låtar en spellista innehåller, bara spela den. Låtarna visas under Härnäst när listan spelar."))}</p>`);
+        + ((d.tracks || []).length ? trackList(d.tracks) : `<p class="none">${esc(M.user ? tr("Spotify visar bara låtarna i spellistor som är dina egna. Den här är någon annans, så den går att spela men inte att se in i. Låtarna visas under Härnäst när listan spelar.")
+          : tr("Spotify låter inte den här sortens app se vilka låtar en spellista innehåller, bara spela den. Låtarna visas under Härnäst när listan spelar."))}</p>`);
     }
     if (pg.kind === "album") return back + hero + trackList(d.tracks, true);
     // an artist: the best-known tracks first (a quick way to the hits), then the albums as they came out
