@@ -1,6 +1,6 @@
 {
  "format": 1,
- "serial": 81,
+ "serial": 82,
  "modules": [
   {
    "id": "about",
@@ -244,25 +244,25 @@
   },
   {
    "id": "netease",
-   "version": "1.0.0",
+   "version": "1.0.1",
    "kind": "integration",
    "name": {
     "sv": "Låttexter från NetEase",
     "en": "Lyrics from NetEase"
    },
    "description": {
-    "sv": "Hämtar låttexter med tider från NetEase Cloud Music när LRCLIB saknar dem. Enheten berättar då för NetEase (en kinesisk musiktjänst) vilken låt som spelas. Gränssnittet är inofficiellt och kan sluta fungera. Kräver Om musiken.",
-    "en": "Fetches lyrics with times from NetEase Cloud Music when LRCLIB has none. The device then tells NetEase (a Chinese music service) which song is playing. The interface is unofficial and may stop working. Needs About the music."
+    "sv": "Hämtar låttexter med tider från NetEase Cloud Music när LRCLIB saknar dem. Enheten berättar då för NetEase (en kinesisk musiktjänst) vilken låt som spelas.",
+    "en": "Fetches lyrics with times from NetEase Cloud Music when LRCLIB has none. The device then tells NetEase (a Chinese music service) which song is playing."
    },
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "3203dbc664896641d01a64b9f0ed0d48fc110593279506c8d7e0fa8c4df07e08",
+     "sha256": "53ce5adad4e220da563b9a03820493f44fce945ed01a178630c981483fa9cfe9",
      "exec": false
     },
     {
      "path": "module.json",
-     "sha256": "3050b2b488dc46770db9b381c98121665af034a2e6349302310e22c375e6d711",
+     "sha256": "3597f3753381a093ba3382279fc70498d44e8fd06f7647f5708d921766d2e3b1",
      "exec": false
     }
    ]
@@ -369,7 +369,7 @@
   },
   {
    "id": "spotify",
-   "version": "1.17.0",
+   "version": "1.17.1",
    "kind": "source",
    "name": {
     "sv": "Spotify Lossless (Soloist)",
@@ -382,7 +382,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "b43cc7ab28239051e251349db1f68a04465595e74127e8a9cf65783227ab9db4",
+     "sha256": "e3d88dba27f2ce154a792b5c8db43eab6911e9455f9b70afe7e5acbf1bea6a78",
      "exec": false
     },
     {
@@ -397,7 +397,7 @@
     },
     {
      "path": "module.json",
-     "sha256": "95044cccc6ec7ca90cc46e49444b30468294bd4ba363359a59faf4770728df32",
+     "sha256": "9de7f57af76a3820ae4e41cae9992b12c407554a0d2c59a2208081feedca1c9d",
      "exec": false
     },
     {

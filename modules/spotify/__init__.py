@@ -215,8 +215,8 @@ class Spotify(SourcePlugin):
                   "en": "For searching all of Spotify under Music. Create an app in Spotify's developer dashboard (Web API) and paste its Client ID here and its Client secret below."},
          "link": {"url": "https://developer.spotify.com/dashboard", "label": {"sv": "Spotifys utvecklarportal", "en": "Spotify's developer dashboard"}}},
         {"key": "spotify_client_secret", "type": "secret", "label": {"sv": "Webb-API: Client secret", "en": "Web API: Client secret"},
-         "help": {"sv": "Sparas bara på enheten och visas inte igen. Behövs inte när du loggar in med Spotify (knappen nedan): då räcker Client ID, och Musik visar även dina spellistor, sparade album och gillade låtar, och Lyssna säger vilken enhet som spelar. För inloggningen ska panelens adress med /api/spotify/callback på slutet stå som Redirect URI i appen hos Spotify.",
-                  "en": "Kept on the device only and not shown again. Not needed when you sign in with Spotify (the button below): the Client ID is enough then, and Music also shows your playlists, saved albums and liked tracks, and Listen says which device plays. For the sign-in, the panel's address with /api/spotify/callback at the end must be entered as a Redirect URI in the app at Spotify."}},
+         "help": {"sv": "Sparas bara på enheten och visas inte igen. Behövs inte om du loggar in med Spotify.",
+                  "en": "Kept on the device only and not shown again. Not needed if you sign in with Spotify."}},
         {"key": "soloist_normalization", "type": "toggle", "label": {"sv": "Normalisera volymen", "en": "Normalize the volume"},
          "help": {"sv": "Av ger bitperfekt ljud. Spotify-appens reglage når inte Soloist, så det styrs här. Soloist startas om när du ändrar.",
                   "en": "Off gives bit-perfect audio. The Spotify app's own switch does not reach Soloist, so it is set here. Soloist restarts when you change it."}},
@@ -281,7 +281,7 @@ class Spotify(SourcePlugin):
             # takes none but https ones: the panel's own, when it is reached over https.
             public = os.environ.get("MSCOS_PUBLIC_URL", "").strip().rstrip("/")
             if not public.lower().startswith("https://"):
-                raise RuntimeError(T("Inloggning med Spotify kräver att panelen nås över https (MSCOS_PUBLIC_URL). Spotify skickar inte svaret till en vanlig http-adress."))
+                raise RuntimeError(T("Inloggning med Spotify fungerar bara när panelen har en adress som börjar med https."))
             if not (self.hub.secret("spotify_client_id") or "").strip():
                 raise RuntimeError(T("Ange appens Client ID först, här ovanför."))
             return {"open": self.web.sign_in_address(public + "/api/spotify/callback")}

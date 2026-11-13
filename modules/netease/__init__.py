@@ -78,8 +78,8 @@ class NetEase(Plugin):
     id = "netease"
     kind = "integration"
     name = {"sv": "Låttexter från NetEase", "en": "Lyrics from NetEase"}
-    description = {"sv": "Hämtar låttexter med tider från NetEase Cloud Music när LRCLIB saknar dem. Enheten berättar då för NetEase (en kinesisk musiktjänst) vilken låt som spelas. Gränssnittet är inofficiellt och kan sluta fungera. Kräver Om musiken.",
-                   "en": "Fetches lyrics with times from NetEase Cloud Music when LRCLIB has none. The device then tells NetEase (a Chinese music service) which song is playing. The interface is unofficial and may stop working. Needs About the music."}
+    description = {"sv": "Hämtar låttexter med tider från NetEase Cloud Music när LRCLIB saknar dem. Enheten berättar då för NetEase (en kinesisk musiktjänst) vilken låt som spelas.",
+                   "en": "Fetches lyrics with times from NetEase Cloud Music when LRCLIB has none. The device then tells NetEase (a Chinese music service) which song is playing."}
 
     def __init__(self, hub):
         super().__init__(hub)

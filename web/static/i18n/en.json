@@ -165,7 +165,7 @@
  "{0} nycklar saknas": "{0} keys are missing",
  "Inställt": "Set up",
  "Det ser inte ut som ett Client ID eller en Client secret från Spotify: de är 32 tecken, siffror och a till f.": "That does not look like a Client ID or a Client secret from Spotify: they are 32 characters, digits and a to f.",
- "Inloggning med Spotify kräver att panelen nås över https (MSCOS_PUBLIC_URL). Spotify skickar inte svaret till en vanlig http-adress.": "Signing in with Spotify needs the panel to be reached over https (MSCOS_PUBLIC_URL). Spotify does not send its answer to a plain http address.",
+ "Inloggning med Spotify fungerar bara när panelen har en adress som börjar med https.": "Signing in with Spotify works only when the panel has an address that begins with https.",
  "Ange appens Client ID först, här ovanför.": "Enter the app's Client ID first, above.",
  "Spotify tillåter inte det för den här appen.": "Spotify does not allow that for this app.",
  "Logga in med Spotify under Moduler, Spotify Lossless.": "Sign in with Spotify under Modules, Spotify Lossless.",
