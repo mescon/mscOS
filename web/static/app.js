@@ -1375,17 +1375,22 @@ function modOptions(p) {
     const input = o.type === "select"
       ? `<select id="${id}" ${key}>${o.options.map(([val, l]) => `<option value="${esc(JSON.stringify(val))}"${val === v ? " selected" : ""}>${esc(loc(l))}</option>`).join("")}</select>`
       : o.type === "number" ? `<span class="mo-num"><input type="number" id="${id}" ${key} value="${esc(v)}" min="${+o.min}" max="${+o.max}" step="${+o.step || 1}" inputmode="decimal">${o.unit ? `<small>${esc(o.unit)}</small>` : ""}</span>`
-      : o.type === "secret" ? `<input type="password" id="${id}" ${key} data-secret="1" autocomplete="off" spellcheck="false" placeholder="${o.set ? tr("Sparad. Skriv en ny för att byta.") : ph}">`
+      // A key is not a password: a plain field, hidden by style, which password managers are told
+      // to leave alone (one filled in a made-up password here, and it was saved over the key).
+      // And it is saved by its button or Enter, never by merely being filled in.
+      : o.type === "secret" ? `<span class="mo-secret"><input type="text" class="masked" id="${id}" ${key} data-secret="1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" placeholder="${o.set ? tr("Sparad. Skriv en ny för att byta.") : ph}"><button type="button" class="btn" data-save-secret="${id}">${esc(tr("Spara"))}</button></span>`
       : `<input type="text" id="${id}" ${key} value="${esc(v)}" placeholder="${ph}" autocomplete="off">`;
     return `<label for="${id}">${esc(loc(o.label))}</label>${input}${help}`;
   }).join("")}</div>`;
 }
-$("#mods").addEventListener("change", async (e) => {
-  const i = e.target.closest("[data-opt]"); if (!i) return;
-  const val = i.tagName === "SELECT" ? JSON.parse(i.value) : i.type === "checkbox" ? i.checked : i.type === "number" ? +i.value : i.value;
-  if (i.dataset.secret) { if (!i.value.trim()) return; toast(tr("Sparar och kontrollerar…")); }
+async function saveOpt(i) {
+  const val = i.tagName === "SELECT" ? JSON.parse(i.value) : i.type === "checkbox" ? i.checked : i.type === "number" ? +i.value : i.dataset.secret ? i.value.trim() : i.value;
+  if (i.dataset.secret) { if (!val) return; toast(tr("Sparar och kontrollerar…")); }
   try { await post("/api/settings", { [i.dataset.opt]: val }); toast(tr("Sparat")); if (i.dataset.secret) { i.value = ""; i.blur(); } loadMods(); } catch { if (!i.dataset.secret) loadMods(); }
-});
+}
+$("#mods").addEventListener("change", (e) => { const i = e.target.closest("[data-opt]"); if (i && !i.dataset.secret) saveOpt(i); });
+$("#mods").addEventListener("click", (e) => { const b = e.target.closest("[data-save-secret]"); if (b) saveOpt(document.getElementById(b.dataset.saveSecret)); });
+$("#mods").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.dataset?.secret) { e.preventDefault(); saveOpt(e.target); } });
 // A source's player is not part of mscOS: it is downloaded to the device from its publisher.
 function modInstall(p) {
   if (p.kind !== "source" || !p.running || p.installed !== false) return "";

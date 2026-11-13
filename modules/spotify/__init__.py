@@ -193,7 +193,10 @@ class Spotify(SourcePlugin):
             if value:
                 await self.set_key(value)
         else:
-            await super().set_secret(key, value)
+            # (Spotify's Client ID and secret are 32 hexadecimal characters each: anything else is a slip)
+            if key.startswith("spotify_client") and value and not re.fullmatch(r"[0-9a-f]{32}", value.strip()):
+                raise web.HTTPBadRequest(text=T("Det ser inte ut som ett Client ID eller en Client secret från Spotify: de är 32 tecken, siffror och a till f."))
+            await super().set_secret(key, value.strip() if key.startswith("spotify_client") else value)
             if key.startswith("spotify_client"):
                 self.web.token = ""
                 if key == "spotify_client_id":       # (a sign-in belongs to the app it was made with)

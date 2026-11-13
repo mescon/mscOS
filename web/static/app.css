@@ -898,3 +898,9 @@ body::before { content: ""; position: fixed; inset: 0; z-index: 0; pointer-event
 /* Nothing plays and nothing is paused: no now-playing bar, and no room kept for it */
 body.no-dock { --dock-h: 0px; }
 body.no-dock .dock { display: none; }
+
+/* a key in a module's card: hidden like a password, saved by its button */
+.mo-secret { display: flex; gap: 8px; align-items: stretch; }
+.mo-secret input { flex: 1 1 auto; min-width: 0; }
+.mo-secret .btn { flex: none; }
+input.masked:not(:placeholder-shown) { -webkit-text-security: disc; }

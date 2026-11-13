@@ -148,6 +148,7 @@
  "Lyssna": "Listen",
  "Ingång och ström": "Input and power",
  "Styrning": "Controls",
+ "Det ser inte ut som ett Client ID eller en Client secret från Spotify: de är 32 tecken, siffror och a till f.": "That does not look like a Client ID or a Client secret from Spotify: they are 32 characters, digits and a to f.",
  "Inloggning med Spotify kräver att panelen nås över https (MSCOS_PUBLIC_URL). Spotify skickar inte svaret till en vanlig http-adress.": "Signing in with Spotify needs the panel to be reached over https (MSCOS_PUBLIC_URL). Spotify does not send its answer to a plain http address.",
  "Ange appens Client ID först, här ovanför.": "Enter the app's Client ID first, above.",
  "Spotify tillåter inte det för den här appen.": "Spotify does not allow that for this app.",
