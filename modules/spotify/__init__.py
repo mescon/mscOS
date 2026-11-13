@@ -107,7 +107,8 @@ class Spotify(SourcePlugin):
         if not hasattr(self, "_web"):
             self._web = webapi.WebApi(lambda: (self.hub.secret("spotify_client_id") or "", self.hub.secret("spotify_client_secret") or ""),
                                       lambda: self.hub.secret("about_lastfm_key") or "",
-                                      refresh=lambda: self.hub.secret("spotify_refresh") or "", keep_refresh=self._keep_refresh)
+                                      refresh=lambda: self.hub.secret("spotify_refresh") or "", keep_refresh=self._keep_refresh,
+                                      wait_file=os.path.join(collect.STATE_DIR, "spotify-webapi-wait"))
         return self._web
 
     # When a track was last added to each of the listener's own playlists, so that the ones in
@@ -136,7 +137,7 @@ class Spotify(SourcePlugin):
         """Start reading off the playlists that are new or have changed; how many there are."""
         known = self.added()
         todo = [(p["id"], p.get("snap") or "", p.get("count") or 0) for p in own if p.get("id") and known.get(p["id"], {}).get("snap") != (p.get("snap") or "")]
-        if todo and not (getattr(self, "_added_task", None) and not self._added_task.done()):
+        if todo and not self.web.asked()["wait"] and not (getattr(self, "_added_task", None) and not self._added_task.done()):
             self._added_task = asyncio.create_task(self._read_added(todo, {p["id"] for p in own if p.get("id")}))
         return len(todo)
 
@@ -156,7 +157,7 @@ class Spotify(SourcePlugin):
                 if n % 40 == 0:
                     self._added_save()
                     await self.hub.broadcast({"type": "spotify_added"})
-                await asyncio.sleep(1.2)
+                await asyncio.sleep(12)        # (very slowly, two or three in a half minute: Spotify allows an app like this one little)
         finally:
             for pid in [k for k in known if k not in own]:        # (playlists that are no more)
                 del known[pid]
@@ -207,7 +208,9 @@ class Spotify(SourcePlugin):
                             cooldown=24 * 3600)
 
     options = (
-        {"key": "spotify_client_id", "type": "secret", "needed": True, "label": {"sv": "Webb-API: Client ID", "en": "Web API: Client ID"},
+        {"key": "spotify_client_id", "type": "secret", "needed": True, "guide": {"sv": ["Öppna [Spotifys utvecklarportal](https://developer.spotify.com/dashboard) och logga in med ditt Spotify-konto.", "Tryck Create app.", "Skriv ett namn och en beskrivning. Vad som helst går bra, till exempel mscOS.", "Under Redirect URIs, skriv `{panel}/api/spotify/callback` och tryck Add. Adressen måste stämma tecken för tecken.", "Börjar adressen ovan med http och inte https godtar Spotify den inte. Skriv då `http://127.0.0.1:8888/callback` i stället: sökningen fungerar, men inte Logga in med Spotify.", "Under frågan om vilka API:er du tänker använda, kryssa i Web API.", "Godkänn villkoren och tryck Save.", "Öppna appens Settings. Kopiera Client ID till fältet här.", "Tryck View client secret och kopiera den till fältet Client secret här under.", "Tryck Spara ändringar. Tryck sedan Logga in med Spotify och godkänn hos Spotify."],
+                   "en": ["Open [Spotify's developer dashboard](https://developer.spotify.com/dashboard) and log in with your Spotify account.", "Press Create app.", "Enter a name and a description. Anything will do, mscOS for example.", "Under Redirect URIs, enter `{panel}/api/spotify/callback` and press Add. The address must match character for character.", "If the address above begins with http and not https, Spotify does not take it. Enter `http://127.0.0.1:8888/callback` instead: the search works, but Sign in with Spotify does not.", "Under the question of which APIs you plan to use, tick Web API.", "Accept the terms and press Save.", "Open the app's Settings. Copy the Client ID into the field here.", "Press View client secret and copy it into the Client secret field below.", "Press Save changes. Then press Sign in with Spotify and approve at Spotify."]},
+         "label": {"sv": "Webb-API: Client ID", "en": "Web API: Client ID"},
          "help": {"sv": "För att söka i hela Spotify under Musik. Skapa en app i Spotifys utvecklarportal (Web API) och klistra in dess Client ID här och dess Client secret nedan.",
                   "en": "For searching all of Spotify under Music. Create an app in Spotify's developer dashboard (Web API) and paste its Client ID here and its Client secret below."},
          "link": {"url": "https://developer.spotify.com/dashboard", "label": {"sv": "Spotifys utvecklarportal", "en": "Spotify's developer dashboard"}}},
@@ -217,7 +220,9 @@ class Spotify(SourcePlugin):
         {"key": "soloist_normalization", "type": "toggle", "label": {"sv": "Normalisera volymen", "en": "Normalize the volume"},
          "help": {"sv": "Av ger bitperfekt ljud. Spotify-appens reglage når inte Soloist, så det styrs här. Soloist startas om när du ändrar.",
                   "en": "Off gives bit-perfect audio. The Spotify app's own switch does not reach Soloist, so it is set here. Soloist restarts when you change it."}},
-        {"key": "soloist_key", "type": "secret", "needed": True, "label": {"sv": "Soloist: utvecklarnyckel", "en": "Soloist: developer key"},
+        {"key": "soloist_key", "type": "secret", "needed": True, "guide": {"sv": ["Kontot som skapar nyckeln måste ha Spotify Premium.", "Öppna [Spotify for Developers](https://developer.spotify.com/dashboard) och logga in med ditt Spotify-konto. Första gången får du godkänna utvecklarvillkoren.", "Gå till [sidan för Soloist-nycklar](https://developer.spotify.com/dashboard/soloist) och skapa en nyckel där.", "Kopiera nyckeln, klistra in den i fältet här och tryck Spara ändringar. Soloist startas om och kontrolleras, vilket tar ungefär 15 sekunder.", "Nyckeln är personlig. Dela den inte, och klistra inte in den i inlägg eller loggar. Mer står i [Spotifys beskrivning av Soloist](https://developer.spotify.com/documentation/soloist)."],
+                   "en": ["The account that creates the key must have Spotify Premium.", "Open [Spotify for Developers](https://developer.spotify.com/dashboard) and log in with your Spotify account. The first time you are asked to accept the developer terms.", "Go to [the page for Soloist keys](https://developer.spotify.com/dashboard/soloist) and create a key there.", "Copy the key, paste it into the field here and press Save changes. Soloist is restarted and checked, which takes about 15 seconds.", "The key is personal. Do not share it, and do not paste it into posts or logs. More is in [Spotify's description of Soloist](https://developer.spotify.com/documentation/soloist)."]},
+         "label": {"sv": "Soloist: utvecklarnyckel", "en": "Soloist: developer key"},
          "placeholder": {"sv": "Klistra in en ny nyckel", "en": "Paste a new key"},
          "help": {"sv": "Nyckeln lagras bara på enheten och visas aldrig. Efter bytet startas Soloist om och kontrolleras, vilket tar ungefär 15 sekunder. Startar den inte, återställs den tidigare nyckeln.",
                   "en": "The key is stored on the device only and never shown. After the change Soloist is restarted and checked, which takes about 15 seconds. If it does not start, the previous key is put back."},
@@ -307,12 +312,18 @@ class Spotify(SourcePlugin):
         nxt = re.search(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", str(solo.get("update_next") or ""))
         changed = time.strftime("%Y-%m-%d %H:%M", time.localtime(k["changed"])) if k.get("changed") else ""
         who = str(self.hub.secret("spotify_user") or "")[:60]
+        asked = self.web.asked()
         return [
             {"label": {"sv": "Tjänst", "en": "Service"}, **yes(solo.get("service") == "active", "Igång", "Running", str(solo.get("service") or "Okänd"), str(solo.get("service") or "Unknown"))},
             {"label": {"sv": "Spotify", "en": "Spotify"}, **yes(bool(self.auth.get("logged_in")), "Inloggad", "Signed in", "Inte inloggad: välj enheten i Spotify-appen", "Not signed in: choose the device in the Spotify app")},
             {"label": {"sv": "Spotify-konto", "en": "Spotify account"}, "account": True, "state": "good" if self.web.signed_in() else "",
              "value": ({"sv": f"Inloggad{' som ' + who if who else ''}", "en": f"Signed in{' as ' + who if who else ''}"} if self.web.signed_in()
                        else {"sv": "Inte inloggad: Musik visar inte ditt bibliotek", "en": "Not signed in: Music does not show your library"})},
+            {"label": {"sv": "Frågor till Spotifys webb-API", "en": "Questions to Spotify's Web API"}, "state": "warn" if asked["wait"] or asked["refused"] else "",
+             "value": {"sv": f"{asked['half_minute']} senaste halvminuten (högst {asked['limit']}), {asked['hour']} senaste timmen"
+                             + (f". Spotify har bett om paus {asked['refused']} gånger" if asked["refused"] else "") + (f", {asked['wait']} s kvar" if asked["wait"] else ""),
+                       "en": f"{asked['half_minute']} in the last half minute (at most {asked['limit']}), {asked['hour']} in the last hour"
+                             + (f". Spotify has asked for a pause {asked['refused']} times" if asked["refused"] else "") + (f", {asked['wait']} s left" if asked["wait"] else "")}},
             {"label": {"sv": "Realtidsprioritet", "en": "Realtime priority"}, **yes(solo.get("rt_watcher") == "active", "Aktiv", "On", "Av", "Off")},
             {"label": {"sv": "Nyckel", "en": "Key"}, **yes(k["set"], f"Inställd{', ändrad ' + changed if changed else ''}", f"Entered{', changed ' + changed if changed else ''}", "Saknas: Soloist kan inte starta", "Missing: Soloist cannot start")},
             {"label": {"sv": "Nästa versionskoll", "en": "Next version check"}, "value": nxt.group(0) if nxt else "–", "state": ""},

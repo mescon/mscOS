@@ -57,6 +57,24 @@ class Rows(unittest.TestCase):
         w.sign_out()
         self.assertFalse(w.signed_in(), "signing out forgets the token")
 
+    def test_held_back(self):
+        import asyncio
+        import time
+
+        async def go():
+            w = webapi.WebApi(lambda: ("id", "secret"))
+            for _ in range(webapi.PER_HALF_MINUTE):
+                await w._my_turn()
+            self.assertEqual(w.asked()["half_minute"], webapi.PER_HALF_MINUTE)
+            with self.assertRaises(asyncio.TimeoutError, msg="one more in the same half minute waits its turn"):
+                await asyncio.wait_for(w._my_turn(), 0.2)
+            w2 = webapi.WebApi(lambda: ("id", "secret"))
+            w2.wait_until = time.time() + 60
+            with self.assertRaises(webapi.WebApiError, msg="while Spotify has asked for a pause, nothing is asked"):
+                await w2._my_turn()
+            self.assertEqual(w2.asked()["half_minute"], 0)
+        asyncio.run(go())
+
     def test_the_sign_in_address(self):
         from urllib.parse import parse_qs, urlsplit
         w = webapi.WebApi(lambda: ("my id", ""))

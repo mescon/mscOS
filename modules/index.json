@@ -1,10 +1,10 @@
 {
  "format": 1,
- "serial": 75,
+ "serial": 77,
  "modules": [
   {
    "id": "about",
-   "version": "1.9.0",
+   "version": "1.10.0",
    "kind": "integration",
    "name": {
     "sv": "Om musiken",
@@ -17,7 +17,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "83faeda1baa26816920673f76f10d7b5f9684ba47efd90f2b02391f818cd6fdf",
+     "sha256": "f50bd2540db1caace66e461f634264a41536c8023f730df155c0ae9980c3cfb2",
      "exec": false
     },
     {
@@ -27,7 +27,7 @@
     },
     {
      "path": "module.json",
-     "sha256": "d225e0039cf2a3a803342ca55cb7659a015140c66c98b459a74ca873ccdbcabe",
+     "sha256": "a420a79c4e35e581f2d0d7da4db36107899dfd8b5cb610c39a3972e3e8824818",
      "exec": false
     },
     {
@@ -99,7 +99,7 @@
   },
   {
    "id": "homeassistant",
-   "version": "1.0.0",
+   "version": "1.1.0",
    "kind": "integration",
    "name": {
     "sv": "Home Assistant",
@@ -112,12 +112,12 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "3c9d4ae528d1873cb75560b272b669906dc2d22a0a98b6654967dd675f2e9659",
+     "sha256": "bd5a726be26a65a6e714b677208062f5dee5f8ba9983a91c5858d6be95c24835",
      "exec": false
     },
     {
      "path": "module.json",
-     "sha256": "dfe4025c945bdd837519f3058629a07182ebf5b1090a9cd87f0cee99b7c094f4",
+     "sha256": "b7289f0a524fa8a1a95045f6e7dabc81e1cc4b81e25202a0496e8cd95dad4e02",
      "exec": false
     }
    ]
@@ -189,7 +189,7 @@
   },
   {
    "id": "listenbrainz",
-   "version": "1.0.1",
+   "version": "1.1.0",
    "kind": "integration",
    "name": {
     "sv": "ListenBrainz",
@@ -202,12 +202,12 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "4d1822b719f083aeb044282bcfbee2bb3c2053a068b0b2263caf36da75b83530",
+     "sha256": "852b6a8a44048dcc6548a389bfae81042537129a541924003e6e7fad11dbfe96",
      "exec": false
     },
     {
      "path": "module.json",
-     "sha256": "6360ca6b655e236472428d86f780fdd8b29707738d00eb682fd77c51d833dd7d",
+     "sha256": "003cf9b1da414f1f3654284ddd2c9bd90c7188e0d49c7605355deb5969925e8f",
      "exec": false
     }
    ]
@@ -244,7 +244,7 @@
   },
   {
    "id": "ntfy",
-   "version": "1.0.0",
+   "version": "1.1.0",
    "kind": "notify",
    "name": {
     "sv": "ntfy",
@@ -257,12 +257,12 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "58fbad94d7b19fc5e41cfcc4ae40b4eabc6661f549ca2ef2d46fcd76104ebb81",
+     "sha256": "5a42bc10e471666e3810a087748633b48f716a289aa0d61773c8a46e31499435",
      "exec": false
     },
     {
      "path": "module.json",
-     "sha256": "0f7e3ea964ba7136aa0ee197f62d55534667b1b87d1c711e4d65eb3ce9096deb",
+     "sha256": "cd77cb456e3f24fc5f339f8ce43afc162140c643f320f3a7b87faf15648ad0c6",
      "exec": false
     }
    ]
@@ -344,7 +344,7 @@
   },
   {
    "id": "spotify",
-   "version": "1.16.0",
+   "version": "1.17.0",
    "kind": "source",
    "name": {
     "sv": "Spotify Lossless (Soloist)",
@@ -357,7 +357,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "8b34ca6660f90efd91d0550b56a0506db51562f892e461be676039d9fd9e77ef",
+     "sha256": "b43cc7ab28239051e251349db1f68a04465595e74127e8a9cf65783227ab9db4",
      "exec": false
     },
     {
@@ -372,7 +372,7 @@
     },
     {
      "path": "module.json",
-     "sha256": "f9cb9e680edb383f40425597e9fd8f79bfe533691af7ceefd95ac6f30df26f27",
+     "sha256": "95044cccc6ec7ca90cc46e49444b30468294bd4ba363359a59faf4770728df32",
      "exec": false
     },
     {
@@ -417,7 +417,7 @@
     },
     {
      "path": "webapi.py",
-     "sha256": "07eb317ea01dc62811a91f59f3772df19f1a8559c6815db1cf99e55b22b35a81",
+     "sha256": "2b5b608f5b8fc638432b45fdda756f75f9322618edfa5d0d98be858c811c1fb4",
      "exec": false
     },
     {

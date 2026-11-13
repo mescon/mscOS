@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import collections
 import hashlib
 import logging
 import re
@@ -29,6 +30,13 @@ API = "https://api.spotify.com/v1"
 ID = re.compile(r"[A-Za-z0-9]{22}")
 ACCOUNTS = "https://accounts.spotify.com"
 # what the sign-in asks leave for: to see where the account plays and what is in its library
+# Spotify counts an app's questions over a rolling half minute and does not say how many it
+# allows (few, for an app in development mode). So the device holds itself well back: at most
+# this many in any half minute, the rest wait their turn. And when Spotify says wait (429 with
+# Retry-After), nothing at all is asked until that time has passed, also if the panel starts
+# again meanwhile (the time is kept in a file). Spotify has been seen to ask for well over an
+# hour's pause after some two hundred questions in five minutes.
+PER_HALF_MINUTE = 20
 SCOPES = "user-read-playback-state playlist-read-private playlist-read-collaborative user-library-read"
 
 
@@ -83,16 +91,45 @@ def artist_row(a: dict) -> dict:
 
 
 class WebApi:
-    def __init__(self, credentials, lastfm_key=lambda: "", refresh=lambda: "", keep_refresh=lambda token: None):
+    def __init__(self, credentials, lastfm_key=lambda: "", refresh=lambda: "", keep_refresh=lambda token: None, wait_file: str = ""):
         self.credentials = credentials      # () -> (client id, client secret)
         self.refresh = refresh              # () -> the signed-in listener's refresh token, or ""
         self.keep_refresh = keep_refresh    # (token) -> keeps it; "" forgets it
         self.pending: tuple | None = None   # a sign-in under way: (state, verifier, redirect address, until)
+        self.sent: collections.deque = collections.deque(maxlen=5000)   # when each question of the last hour was asked
+        self.wait_file = wait_file          # where the time of a pause Spotify asked for is kept
+        self.wait_until = 0.0               # Spotify asked for a pause until then
+        try:
+            with open(wait_file) as f:
+                self.wait_until = min(float(f.read().strip()), time.time() + 86400)
+        except (OSError, ValueError):
+            pass
+        self.refused = 0                    # how many times it has (since the panel started)
+        self.turn = asyncio.Lock()
         self.lastfm_key = lastfm_key        # () -> the listener's Last.fm key, when there is one
         self.http: ClientSession | None = None
         self.token, self.until = "", 0.0
         self.kept: dict[str, tuple[float, dict]] = {}   # answers of the last minutes: typing asks the same again and again
         self.lock = asyncio.Lock()
+
+    async def _my_turn(self) -> None:
+        """Wait until a question may be asked (see PER_HALF_MINUTE), or refuse while Spotify has asked for a pause."""
+        async with self.turn:
+            for _ in range(3):
+                now = time.time()
+                if now < self.wait_until:
+                    raise WebApiError("busy")
+                lately = [t for t in self.sent if now - t < 30]
+                if len(lately) < PER_HALF_MINUTE:
+                    break
+                await asyncio.sleep(min(30.0, max(0.05, lately[0] + 30 - now)))
+            self.sent.append(time.time())
+
+    def asked(self) -> dict:
+        """How much has been asked of Spotify: for the module's card, so that it can be seen."""
+        now = time.time()
+        return {"half_minute": sum(1 for t in self.sent if now - t < 30), "hour": sum(1 for t in self.sent if now - t < 3600),
+                "limit": PER_HALF_MINUTE, "refused": self.refused, "wait": max(0, int(self.wait_until - now))}
 
     def ready(self) -> bool:
         cid, secret = self.credentials()
@@ -189,19 +226,29 @@ class WebApi:
         """keep: for how many seconds the answer is good to give again."""
         key = path + "?" + "&".join(f"{k}={v}" for k, v in sorted(params.items()))
         hit = self.kept.get(key)
-        if hit and time.time() - hit[0] < keep:
+        if hit and (time.time() - hit[0] < keep or time.time() < self.wait_until):   # (while Spotify asks for a pause: the older answer)
             return hit[1]
         if self.http is None:
             self.http = ClientSession(timeout=ClientTimeout(total=10))
         for attempt in (0, 1):
             token = await self._token()
+            await self._my_turn()
             try:
                 async with self.http.get(f"{API}/{path}", params=params, headers={"Authorization": f"Bearer {token}"}) as r:
                     if r.status == 401 and attempt == 0:     # the token went stale early: a new one, once
                         self.token = ""
                         continue
                     if r.status == 429:
-                        log.warning("spotify web api: asked to wait (429) at %s, Retry-After %s", path.split("/")[0], r.headers.get("Retry-After", "?"))
+                        after = r.headers.get("Retry-After", "")
+                        self.wait_until = time.time() + min(86400, int(after) if after.isdigit() else 60)
+                        if self.wait_file:
+                            try:
+                                with open(self.wait_file, "w") as f:
+                                    f.write(str(int(self.wait_until)))
+                            except OSError:
+                                pass
+                        self.refused += 1
+                        log.warning("spotify web api: asked to wait (429) at %s, Retry-After %s", path.split("/")[0], after or "?")
                         raise WebApiError("busy")
                     if r.status in (204, 404):               # (204: nothing plays anywhere)
                         return {}

@@ -903,6 +903,14 @@ body.no-dock .dock { display: none; }
 .acct .spec { margin-bottom: 12px; }
 /* a key in a module's card: hidden like a password */
 input.masked:not(:placeholder-shown) { -webkit-text-security: disc; }
+/* how to get a key, step by step, under its field */
+.mo-guide { margin: 6px 0 4px; font-size: .875rem; }
+.mo-guide summary { cursor: pointer; color: var(--ink); min-height: 36px; display: flex; align-items: center; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.mo-guide ol { margin: 6px 0 10px; padding-left: 1.4em; color: var(--engraved); max-width: 62ch; }
+.mo-guide li { margin: 0 0 8px; line-height: 1.45; }
+.mo-guide a { color: var(--ink); }
+.mo-guide code { font-family: var(--mono, ui-monospace, monospace); font-size: .8125rem; color: var(--ink); background: var(--plate); padding: 1px 5px; border-radius: 2px; overflow-wrap: anywhere; user-select: all; }
+@media (pointer: coarse) { .mo-guide summary { min-height: 44px; } }
 /* a module's settings are saved by this row's button, which shows once something is changed */
 .mo-save { margin-top: 16px; }
 .mod-opts [data-dirty]:not([type=checkbox]) { border-color: var(--ink); }

@@ -1365,6 +1365,11 @@ function renderMods() {
   showMod();   // the card the address names, now that the cards are drawn
 }
 // A module's own settings (declared by the module), saved one at a time as they change.
+// A step of a guide as HTML: plain words, with [a link](https://…), `something to type` and
+// {panel} for this panel's own address. Nothing else of the text is taken as markup.
+const guideText = (x) => esc(String(x).replaceAll("{panel}", location.origin))
+  .replace(/\[([^\]]{1,80})\]\((https:\/\/[^)\s"]{1,300})\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+  .replace(/`([^`]{1,200})`/g, "<code>$1</code>");
 // only: which of the options (all of them in the module's card; the keys alone under Profile).
 // pre: what the fields' ids begin with (the same option stands in both places).
 function modOptions(p, only = () => true, pre = "mo") {
@@ -1372,7 +1377,11 @@ function modOptions(p, only = () => true, pre = "mo") {
   if (!opts.length) return "";
   return `<div class="mod-opts admin">${opts.map((o) => {
     const id = `${pre}-${o.key}`, v = o.value ?? "", key = `data-opt="${esc(o.key)}"`;
-    const help = (o.help ? `<p class="fine">${esc(loc(o.help))}</p>` : "")
+    // how to get what the field asks for (a key, a token), step by step: the module's own
+    // words, with links to the pages where it is done ("guide": {sv: [steps], en: [steps]})
+    const steps = o.guide ? loc(o.guide) : null;
+    const guide = Array.isArray(steps) && steps.length ? `<details class="mo-guide"><summary>${esc(tr("Så skaffar du den, steg för steg"))}</summary><ol>${steps.map((x) => `<li>${guideText(x)}</li>`).join("")}</ol></details>` : "";
+    const help = (o.help ? `<p class="fine">${esc(loc(o.help))}</p>` : "") + guide
       + (o.link ? `<p class="fine"><a href="${esc(o.link.url)}" target="_blank" rel="noopener noreferrer">${esc(loc(o.link.label))}</a></p>` : "");
     const ph = esc(typeof o.placeholder === "object" ? loc(o.placeholder) : o.placeholder || "");
     if (o.type === "toggle") return `<label class="toggle"><input type="checkbox" id="${id}" ${key}${v ? " checked" : ""}><span class="toggle-ui" aria-hidden="true"></span><span>${esc(loc(o.label))}</span></label>${help}`;

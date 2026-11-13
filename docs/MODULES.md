@@ -109,6 +109,7 @@ A module needs no page of its own (it may bring page code, see below). The panel
 | `log()` | recent communication, folded, for troubleshooting |
 | `facts()` | rows of state in its card (service running, signed in, ...) |
 | `actions` and `action()` | buttons in its card (restart the player, look for a new version) |
+| `"guide": {"sv": [steps], "en": [steps]}` on an option | how to get what the field asks for, step by step, shown under the field: plain words with `[links](https://…)`, `` `things to type` `` and `{panel}` for the panel's own address. Every key or token a module asks for should have one |
 | `"account": True` on an action or a fact, `"needed": True` on a `secret` option | shown under Profile, Accounts and keys, too: every module's keys and sign-ins in one place; a needed key that is not entered is counted as missing there |
 | `panel()` and `panel_action()` | a card of buttons, sliders and choices in the Controls view |
 | `amp_state()` and `amp_action()` (an `AmpPlugin`) | the volume dial, inputs, power and mute |

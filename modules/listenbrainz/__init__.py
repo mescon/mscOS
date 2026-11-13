@@ -49,7 +49,9 @@ class ListenBrainz(Plugin):
     description = {"sv": "Skickar det som spelas här till ditt ListenBrainz-konto, från alla källor.",
                    "en": "Sends what is played here to your ListenBrainz account, from every source."}
     options = (
-        {"key": "listenbrainz_token", "type": "secret", "label": {"sv": "Användartoken", "en": "User token"},
+        {"key": "listenbrainz_token", "type": "secret", "needed": True, "guide": {"sv": ["Öppna [ListenBrainz](https://listenbrainz.org) och logga in. Inloggningen går via ett MusicBrainz-konto, som du skapar gratis på vägen om du inte har ett.", "Öppna [Settings](https://listenbrainz.org/settings/).", "Kopiera det som står under User token till fältet här och tryck Spara ändringar.", "Din token ger rätt att skriva lyssningar till ditt konto. Dela den inte."],
+                   "en": ["Open [ListenBrainz](https://listenbrainz.org) and log in. The login goes by a MusicBrainz account, which you create for free on the way if you have none.", "Open [Settings](https://listenbrainz.org/settings/).", "Copy what is under User token into the field here and press Save changes.", "Your token gives leave to write listens to your account. Do not share it."]},
+         "label": {"sv": "Användartoken", "en": "User token"},
          "help": {"sv": "Finns under Settings på listenbrainz.org. Den sparas bara på enheten och visas inte igen.",
                   "en": "Found under Settings at listenbrainz.org. It is kept on the device only and not shown again."},
          "link": {"url": "https://listenbrainz.org/settings/", "label": {"sv": "Hämta din token hos ListenBrainz", "en": "Get your token at ListenBrainz"}}},
