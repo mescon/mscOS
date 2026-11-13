@@ -1401,7 +1401,9 @@ $("#mods").addEventListener("click", (e) => {
 $("#mods").addEventListener("click", async (e) => {  // a button the module describes
   const b = e.target.closest("button[data-act]"); if (!b) return;
   b.disabled = true;
-  try { const r = await post("/api/plugins/action", { id: b.closest("li").dataset.id, name: b.dataset.act }); if (r.toast) toast(locs(r.toast)); } catch {}
+  try { const r = await post("/api/plugins/action", { id: b.closest("li").dataset.id, name: b.dataset.act }); if (r.toast) toast(locs(r.toast));
+    if (/^https:\/\//.test(r.open || "")) { location.href = r.open; return; }    // (a sign-in at the service the module is for)
+  } catch {}
   b.disabled = false; setTimeout(loadMods, 1500);
 });
 // modules that do not come with mscOS: install from the publisher's module.json, update, remove

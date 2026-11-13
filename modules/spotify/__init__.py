@@ -98,15 +98,21 @@ class Spotify(SourcePlugin):
 
     def hello(self) -> dict:
         return {"playback": self.playback, "auth": self.auth, "queue": self.queue, "last_test": self.last_test,
-                "quality": self.track_quality, "tests": list(self.tests)[-30:], "spotify_search": self.web.ready()}
+                "quality": self.track_quality, "tests": list(self.tests)[-30:], "spotify_search": self.web.ready(), "spotify_user": self.web.signed_in()}
 
     @property
     def web(self):
         """Spotify's Web API (search), with the listener's own app credentials."""
         if not hasattr(self, "_web"):
             self._web = webapi.WebApi(lambda: (self.hub.secret("spotify_client_id") or "", self.hub.secret("spotify_client_secret") or ""),
-                                      lambda: self.hub.secret("about_lastfm_key") or "")
+                                      lambda: self.hub.secret("about_lastfm_key") or "",
+                                      refresh=lambda: self.hub.secret("spotify_refresh") or "", keep_refresh=self._keep_refresh)
         return self._web
+
+    def _keep_refresh(self, token: str) -> None:
+        self.hub.set_secret("spotify_refresh", token)
+        if not token:
+            self.hub.set_secret("spotify_user", "")
 
     def summary(self) -> dict:
         return {"soloist": self._ha_soloist()}
@@ -151,7 +157,8 @@ class Spotify(SourcePlugin):
                   "en": "For searching all of Spotify under Music. Create an app in Spotify's developer dashboard (Web API) and paste its Client ID here and its Client secret below."},
          "link": {"url": "https://developer.spotify.com/dashboard", "label": {"sv": "Spotifys utvecklarportal", "en": "Spotify's developer dashboard"}}},
         {"key": "spotify_client_secret", "type": "secret", "label": {"sv": "Webb-API: Client secret", "en": "Web API: Client secret"},
-         "help": {"sv": "Sparas bara på enheten och visas inte igen.", "en": "Kept on the device only and not shown again."}},
+         "help": {"sv": "Sparas bara på enheten och visas inte igen. Behövs inte när du loggar in med Spotify (knappen nedan): då räcker Client ID, och Musik visar även dina spellistor, sparade album och gillade låtar, och Lyssna säger vilken enhet som spelar. För inloggningen ska panelens adress med /api/spotify/callback på slutet stå som Redirect URI i appen hos Spotify.",
+                  "en": "Kept on the device only and not shown again. Not needed when you sign in with Spotify (the button below): the Client ID is enough then, and Music also shows your playlists, saved albums and liked tracks, and Listen says which device plays. For the sign-in, the panel's address with /api/spotify/callback at the end must be entered as a Redirect URI in the app at Spotify."}},
         {"key": "soloist_normalization", "type": "toggle", "label": {"sv": "Normalisera volymen", "en": "Normalize the volume"},
          "help": {"sv": "Av ger bitperfekt ljud. Spotify-appens reglage når inte Soloist, så det styrs här. Soloist startas om när du ändrar.",
                   "en": "Off gives bit-perfect audio. The Spotify app's own switch does not reach Soloist, so it is set here. Soloist restarts when you change it."}},
@@ -165,6 +172,8 @@ class Spotify(SourcePlugin):
     actions = (
         {"name": "restart", "label": {"sv": "Starta om Soloist", "en": "Restart Soloist"}},
         {"name": "update", "label": {"sv": "Sök ny version", "en": "Look for a new version"}},
+        {"name": "login", "label": {"sv": "Logga in med Spotify", "en": "Sign in with Spotify"}},
+        {"name": "logout", "label": {"sv": "Logga ut från Spotify", "en": "Sign out of Spotify"}},
     )
 
     def update_settings(self, b: dict, upd: dict) -> None:
@@ -187,6 +196,8 @@ class Spotify(SourcePlugin):
             await super().set_secret(key, value)
             if key.startswith("spotify_client"):
                 self.web.token = ""
+                if key == "spotify_client_id":       # (a sign-in belongs to the app it was made with)
+                    self.web.sign_out()
 
     def secret_set(self, key: str) -> bool:
         return so.api_key_info()["set"] if key == "soloist_key" else super().secret_set(key)
@@ -197,6 +208,19 @@ class Spotify(SourcePlugin):
             if rc:
                 raise RuntimeError(err.strip()[-200:])
             return {"toast": {"sv": "Soloist startades om", "en": "Soloist was restarted"}}
+        if name == "login":
+            # Spotify sends the answer back to an address it has been told of beforehand, and
+            # takes none but https ones: the panel's own, when it is reached over https.
+            public = os.environ.get("MSCOS_PUBLIC_URL", "").strip().rstrip("/")
+            if not public.lower().startswith("https://"):
+                raise RuntimeError(T("Inloggning med Spotify kräver att panelen nås över https (MSCOS_PUBLIC_URL). Spotify skickar inte svaret till en vanlig http-adress."))
+            if not (self.hub.secret("spotify_client_id") or "").strip():
+                raise RuntimeError(T("Ange appens Client ID först, här ovanför."))
+            return {"open": self.web.sign_in_address(public + "/api/spotify/callback")}
+        if name == "logout":
+            self.web.sign_out()
+            await self.hub.broadcast({"type": "spotify_user", "on": False})
+            return {"toast": {"sv": "Utloggad från Spotify på den här enheten", "en": "Signed out of Spotify on this device"}}
         await self.hub.run_job("soloist-update", ["/usr/local/sbin/soloist-update"])
         return None
 
@@ -219,9 +243,13 @@ class Spotify(SourcePlugin):
         yes = lambda ok, sv, en, sv2, en2: {"value": {"sv": sv if ok else sv2, "en": en if ok else en2}, "state": "good" if ok else "warn"}  # noqa: E731
         nxt = re.search(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", str(solo.get("update_next") or ""))
         changed = time.strftime("%Y-%m-%d %H:%M", time.localtime(k["changed"])) if k.get("changed") else ""
+        who = str(self.hub.secret("spotify_user") or "")[:60]
         return [
             {"label": {"sv": "Tjänst", "en": "Service"}, **yes(solo.get("service") == "active", "Igång", "Running", str(solo.get("service") or "Okänd"), str(solo.get("service") or "Unknown"))},
             {"label": {"sv": "Spotify", "en": "Spotify"}, **yes(bool(self.auth.get("logged_in")), "Inloggad", "Signed in", "Inte inloggad: välj enheten i Spotify-appen", "Not signed in: choose the device in the Spotify app")},
+            {"label": {"sv": "Spotify-konto", "en": "Spotify account"}, "state": "good" if self.web.signed_in() else "",
+             "value": ({"sv": f"Inloggad{' som ' + who if who else ''}", "en": f"Signed in{' as ' + who if who else ''}"} if self.web.signed_in()
+                       else {"sv": "Inte inloggad: Musik visar inte ditt bibliotek", "en": "Not signed in: Music does not show your library"})},
             {"label": {"sv": "Realtidsprioritet", "en": "Realtime priority"}, **yes(solo.get("rt_watcher") == "active", "Aktiv", "On", "Av", "Off")},
             {"label": {"sv": "Nyckel", "en": "Key"}, **yes(k["set"], f"Inställd{', ändrad ' + changed if changed else ''}", f"Entered{', changed ' + changed if changed else ''}", "Saknas: Soloist kan inte starta", "Missing: Soloist cannot start")},
             {"label": {"sv": "Nästa versionskoll", "en": "Next version check"}, "value": nxt.group(0) if nxt else "–", "state": ""},
@@ -877,6 +905,7 @@ class Spotify(SourcePlugin):
 
         def failed(e: webapi.WebApiError):
             text = {"credentials": T("Spotify godtog inte appens Client ID och Client secret. Kontrollera dem under Moduler, Spotify Lossless."),
+                    "leave": T("Spotify tillåter inte det för den här appen."),
                     "busy": T("Spotify tar inte emot fler frågor just nu. Försök igen om en stund.")}.get(e.kind, T("Spotify svarar inte."))
             return web.HTTPBadGateway(text=text)
 
@@ -887,6 +916,42 @@ class Spotify(SourcePlugin):
                 raise web.HTTPBadRequest()
             try:
                 return web.json_response(await sp.web.search(q))
+            except webapi.WebApiError as e:
+                raise failed(e)
+
+        @routes.get("/api/spotify/callback")
+        async def spotify_callback(request):
+            """Where Spotify sends the listener back after the sign-in, with a code. It is taken
+            only with the state of the sign-in that was begun from the panel (by someone logged
+            in to it), within ten minutes."""
+            q = request.query
+            try:
+                await sp.web.finish(q.get("code", "")[:2000], q.get("state", "")[:200])
+                try:
+                    hub.set_secret("spotify_user", (await sp.web.me())["name"][:60])
+                except webapi.WebApiError:
+                    pass
+                await hub.broadcast({"type": "spotify_user", "on": True})
+            except webapi.WebApiError:
+                log.warning("spotify sign-in was not completed (%s)", "refused" if q.get("error") else "no valid code")
+            raise web.HTTPFound("/system/modules/spotify")
+
+        @routes.get("/api/spotify/where")
+        async def spotify_where(request):
+            """The device the account plays on, for when it is not this one."""
+            if not sp.web.signed_in():
+                return web.json_response({"device": None})
+            try:
+                return web.json_response({"device": await sp.web.where()})
+            except webapi.WebApiError as e:
+                raise failed(e)
+
+        @routes.get("/api/spotify/library")
+        async def spotify_library(request):
+            if not sp.web.signed_in():
+                raise web.HTTPConflict(text=T("Logga in med Spotify under Moduler, Spotify Lossless."))
+            try:
+                return web.json_response(await sp.web.library())
             except webapi.WebApiError as e:
                 raise failed(e)
 

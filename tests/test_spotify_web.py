@@ -47,3 +47,35 @@ class Rows(unittest.TestCase):
         self.assertFalse(webapi.WebApi(lambda: ("", "")).ready())
         self.assertFalse(webapi.WebApi(lambda: ("id", "")).ready())
         self.assertTrue(webapi.WebApi(lambda: ("id", "secret")).ready())
+
+    def test_signed_in_needs_no_secret(self):
+        kept = []
+        w = webapi.WebApi(lambda: ("id", ""), refresh=lambda: kept[-1] if kept else "", keep_refresh=kept.append)
+        self.assertFalse(w.ready())
+        kept.append("a refresh token")
+        self.assertTrue(w.ready() and w.signed_in())
+        w.sign_out()
+        self.assertFalse(w.signed_in(), "signing out forgets the token")
+
+    def test_the_sign_in_address(self):
+        from urllib.parse import parse_qs, urlsplit
+        w = webapi.WebApi(lambda: ("my id", ""))
+        u = urlsplit(w.sign_in_address("https://panel.example/api/spotify/callback"))
+        q = {k: v[0] for k, v in parse_qs(u.query).items()}
+        self.assertEqual((u.scheme, u.netloc, u.path), ("https", "accounts.spotify.com", "/authorize"))
+        self.assertEqual((q["client_id"], q["response_type"], q["code_challenge_method"]), ("my id", "code", "S256"))
+        self.assertEqual(q["redirect_uri"], "https://panel.example/api/spotify/callback")
+        self.assertNotIn("modify", q["scope"], "leave to read, not to change")
+        self.assertNotIn(w.pending[1], u.query, "the verifier stays on the device")
+        with self.assertRaises(webapi.WebApiError):
+            webapi.WebApi(lambda: ("", "")).sign_in_address("https://panel.example/x")
+
+    def test_a_code_with_another_state_is_not_taken(self):
+        import asyncio
+        w = webapi.WebApi(lambda: ("id", ""))
+        w.sign_in_address("https://panel.example/api/spotify/callback")
+        with self.assertRaises(webapi.WebApiError):
+            asyncio.run(w.finish("a code", "not the state"))
+        self.assertIsNone(w.pending, "one try: the sign-in is begun again after that")
+        with self.assertRaises(webapi.WebApiError):
+            asyncio.run(w.finish("a code", ""))

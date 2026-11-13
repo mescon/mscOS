@@ -17,7 +17,10 @@ export default function page(api) {
       <p>${tr("Spotify-volymen står på")} <b id="vol-val"></b> ${tr("%. Under 100 % räknas varje sampel om. Styr volymen med förstärkaren ovan.")}</p>
       <button class="btn" id="vol-reset">${tr("Återställ till 100 %")}</button>
     </div>`);
-  api.slot("play", `<details class="fold" id="f-queue" data-k="queue">
+  api.slot("play", `<div class="sp-else" id="sp-else" hidden><p id="sp-else-text"></p><button class="btn" id="sp-here">${tr("Spela här")}</button></div>
+    <style>.sp-else { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin: 0 0 18px; padding: 14px 16px; border: 1px solid var(--hair); border-radius: 3px; background: var(--plate); }
+      .sp-else p { flex: 1 1 12em; margin: 0; }</style>
+    <details class="fold" id="f-queue" data-k="queue">
       <summary><span>${tr("Härnäst")}</span><span class="fv" id="fv-queue"></span></summary>
       <div class="fold-body"><ol class="queue" id="queue"></ol></div>
     </details>`);
@@ -134,6 +137,20 @@ export default function page(api) {
           color: var(--engraved); font: inherit; font-size: .875rem; cursor: pointer; }
         .m-back:hover { color: var(--ink); }
         .m-back svg { width: 18px; height: 18px; }
+        .m-disc-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+        .m-seg { display: inline-flex; border: 1px solid var(--hair); border-radius: 3px; overflow: hidden; }
+        .m-seg button { appearance: none; min-height: 36px; padding: 0 14px; border: 0; background: none; color: var(--engraved); font: inherit; font-size: .8125rem; cursor: pointer; }
+        .m-seg button + button { border-left: 1px solid var(--hair); }
+        .m-seg button[aria-pressed="true"] { background: var(--plate); color: var(--ink); }
+        .m-disc { margin: 0 0 38px; }
+        .m-disc-top { display: grid; grid-template-columns: minmax(72px, 132px) minmax(0, 1fr); gap: 18px; align-items: end; margin-bottom: 10px; }
+        .m-disc-pic { appearance: none; padding: 0; border: 0; background: none; cursor: pointer; }
+        .m-disc-pic img, .m-disc-pic .ph { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 2px; background: var(--plate); box-shadow: 0 0 0 1px var(--hair); }
+        .m-disc .part { margin: 0; font-size: .8125rem; letter-spacing: .04em; color: var(--engraved); }
+        .m-disc h4 { margin: 2px 0 10px; }
+        .m-disc h4 button { appearance: none; padding: 0; border: 0; background: none; color: inherit; font-family: var(--serif); font-weight: 500; font-size: 1.375rem; line-height: 1.15; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+        .m-disc h4 button:hover { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+        .m-disc-tracks .none { margin-top: 8px; }
         .m-hero { display: grid; grid-template-columns: minmax(96px, 200px) minmax(0, 1fr); gap: 20px; align-items: end; margin: 8px 0 22px; }
         .m-hero img, .m-hero .ph { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 2px; background: var(--plate); box-shadow: 0 0 0 1px var(--hair); }
         .m-hero.artist img, .m-hero.artist .ph { border-radius: 50%; }
@@ -189,7 +206,7 @@ export default function page(api) {
         <button class="btn primary" data-play="${esc(link.uri)}">${esc(tr("Spela"))}</button>
         ${link.kind === "track" ? `<button class="btn" data-queue="${esc(link.uri)}">${esc(tr("Lägg i kön"))}</button>` : ""}`;
     }
-    if (page) { out.innerHTML = pageHtml(page); return; }
+    if (page) { out.innerHTML = pageHtml(page); watchDisc(); return; }
     // with the Web API: all of Spotify, as it is typed
     if (M.search && !link && text.length >= 2) {
       if (found && found.q === text) {
@@ -198,15 +215,16 @@ export default function page(api) {
       }
       return;   // (until the answer comes, what is there stays: the list changes under the typing, it does not blink)
     }
-    if (!played) { out.innerHTML = ""; return; }
+    const mineToo = text.length < 2 && !link ? libHtml() : "";    // (nothing typed: what is one's own first)
+    if (!played) { out.innerHTML = mineToo; return; }
     if (played.off) { out.innerHTML = `<p class="none">${esc(tr("Lyssningshistoriken är avstängd, så här finns inget att spela igen. Klistra in en Spotify-länk ovan för att spela något."))}</p>`; return; }
     const words = link ? [] : text.toLowerCase().split(/\s+/).filter(Boolean);
     const hit = (...f) => words.every((w) => f.some((x) => (x || "").toLowerCase().includes(w)));
     const mine = { albums: played.albums.filter((x) => hit(x.name, x.artist)), tracks: played.tracks.filter((t) => hit(t.name, t.artist, t.album)),
       artists: played.artists.filter((x) => hit(x.name)) };
-    if (!played.tracks.length) { out.innerHTML = `<p class="none">${esc(M.search ? tr("Sök i Spotify ovan. Här under samlas det som spelas på enheten, att spela igen.") : tr("Här samlas det som spelas på enheten: album, låtar och artister, att spela igen. Starta något i Spotify-appen, eller klistra in en Spotify-länk ovan."))}</p>`; return; }
+    if (!played.tracks.length) { out.innerHTML = mineToo + `<p class="none">${esc(M.search ? tr("Sök i Spotify ovan. Här under samlas det som spelas på enheten, att spela igen.") : tr("Här samlas det som spelas på enheten: album, låtar och artister, att spela igen. Starta något i Spotify-appen, eller klistra in en Spotify-länk ovan."))}</p>`; return; }
     if (!mine.albums.length && !mine.tracks.length && !mine.artists.length) { out.innerHTML = link ? "" : `<p class="none">${esc(tr("Inget av det du spelat heter så. Att söka i hela Spotify kräver Spotifys webb-API, som inte är inkopplat än. Klistra in en Spotify-länk för att spela något nytt."))}</p>`; return; }
-    out.innerHTML = (M.search && !words.length ? `<p class="m-lead">${esc(tr("Senast spelat"))}</p>` : "") + sections(mine, words.length ? 60 : 18);
+    out.innerHTML = mineToo + (M.search && !words.length ? `<p class="m-lead">${esc(tr("Senast spelat"))}</p>` : "") + sections(mine, words.length ? 60 : 18);
   }
   function pageHtml(pg) {
     const d = pg.data, back = `<button class="m-back" data-back="1"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 6-6 6 6 6"/></svg>${esc(tr("Tillbaka"))}</button>`;
@@ -219,14 +237,35 @@ export default function page(api) {
         <button class="btn primary" data-play="${esc(d.uri)}" data-name="${esc(d.name)}">${esc(tr("Spela"))}</button></div></div>`;
     if (pg.kind === "playlist") {
       return back + hero + (d.about ? `<p class="m-about">${esc(d.about)}</p>` : "")
-        + `<p class="none">${esc(tr("Spotify låter inte den här sortens app se vilka låtar en spellista innehåller, bara spela den. Låtarna visas under Härnäst när listan spelar."))}</p>`;
+        + ((d.tracks || []).length ? trackList(d.tracks) : `<p class="none">${esc(tr("Spotify låter inte den här sortens app se vilka låtar en spellista innehåller, bara spela den. Låtarna visas under Härnäst när listan spelar."))}</p>`);
     }
     if (pg.kind === "album") return back + hero + trackList(d.tracks, true);
     // an artist: the best-known tracks first (a quick way to the hits), then the albums as they came out
     return back + hero
       + ((d.top || []).length ? `<h3>${esc(tr("Mest lyssnat"))}</h3>${trackList(d.top)}<p class="m-src">${esc(d.top_from === "lastfm" ? tr("Efter antal lyssnare i hela världen, enligt Last.fm.") : tr("I den ordning Spotify listar artistens låtar."))}</p>` : "")
-      + (d.albums.length ? `<h3>${esc(tr("Album, i utgivningsordning"))}</h3>${albumList(d.albums)}` : "");
+      + (d.albums.length ? `<div class="m-disc-head"><h3>${esc(tr("Album, i utgivningsordning"))}</h3>
+          <div class="m-seg" role="group" aria-label="${esc(tr("Visa album som"))}"><button data-disc-as="grid" aria-pressed="${discAs() === "grid"}">${esc(tr("Omslag"))}</button><button data-disc-as="list" aria-pressed="${discAs() === "list"}">${esc(tr("Med låtar"))}</button></div></div>
+          ${discAs() === "list" ? discList(d.albums) : albumList(d.albums)}` : "");
   }
+  // How an artist's albums are shown is the listener's choice, kept in the browser.
+  const discAs = () => { try { return localStorage.getItem("sp-disc") === "list" ? "list" : "grid"; } catch { return "grid"; } };
+  const discList = (albums) => albums.map((a) => `<section class="m-disc" data-disc="${esc(a.id || idOf(a.uri))}">
+      <div class="m-disc-top"><button class="m-disc-pic" data-album="${esc(a.id || idOf(a.uri))}" aria-label="${esc(a.name)}">${img(a.cover)}</button>
+        <div><p class="part">${esc([KIND.album, a.year].filter(Boolean).join(" · "))}</p><h4><button data-album="${esc(a.id || idOf(a.uri))}">${esc(a.name)}</button></h4>
+          <button class="btn" data-play="${esc(a.uri)}" data-name="${esc(a.name)}">${esc(tr("Spela"))}</button></div></div>
+      <div class="m-disc-tracks"><p class="none wait">${esc(tr("Hämtar…"))}</p></div></section>`).join("");
+  // each album's tracks are asked for when the album comes into sight, not all at once
+  const discSeen = new IntersectionObserver((entries) => {
+    for (const en of entries) {
+      if (!en.isIntersecting) continue;
+      const sec = en.target; discSeen.unobserve(sec);
+      fetch(`/api/spotify/album/${encodeURIComponent(sec.dataset.disc)}`).then((r) => (r.ok ? r.json() : null)).then((d) => {
+        if (!sec.isConnected) return;
+        sec.querySelector(".m-disc-tracks").innerHTML = d && (d.tracks || []).length ? trackList(d.tracks, true) : `<p class="none">${esc(tr("Spotify svarar inte."))}</p>`;
+      }).catch(() => {});
+    }
+  }, { rootMargin: "300px 0px" });
+  const watchDisc = () => { for (const sec of music.querySelectorAll(".m-disc:not([data-seen])")) { sec.dataset.seen = "1"; discSeen.observe(sec); } };
   // An album, an artist or a playlist has its own address under Music: opening one is a step
   // in the history, and the way back leads to where one was.
   const openPage = (kind, id) => api.go("v-music", [kind, id]);
@@ -263,7 +302,17 @@ export default function page(api) {
       drawMusic();
     }, 220);
   }
+  let lib = null, libAt = 0;       // the signed-in listener's playlists, saved albums and liked tracks
+  async function loadLib(force) {
+    if (!M.user || (!force && lib && Date.now() - libAt < 120000)) return;
+    libAt = Date.now();
+    try { const r = await fetch("/api/spotify/library"); if (r.ok) { lib = await r.json(); drawMusic(); } } catch {}
+  }
+  const libHtml = () => (!M.user || !lib ? "" : ((lib.playlists || []).length ? `<h3>${esc(tr("Dina spellistor"))}</h3>${playlistList(lib.playlists)}` : "")
+    + ((lib.albums || []).length ? `<h3>${esc(tr("Sparade album"))}</h3>${albumList(lib.albums)}` : "")
+    + ((lib.tracks || []).length ? `<h3>${esc(tr("Gillade låtar"))}</h3>${trackList(lib.tracks.slice(0, 20))}` : ""));
   async function loadMusic(force) {
+    loadLib(force);
     const now = (M.playback.item || {}).uri || "";
     if (!force && played && now === playedFor && Date.now() - playedAt < 60000) return;
     try {
@@ -274,6 +323,8 @@ export default function page(api) {
   }
   $("#sp-find").addEventListener("input", find);
   music.addEventListener("click", (e) => {
+    const as = e.target.closest("[data-disc-as]");
+    if (as) { try { localStorage.setItem("sp-disc", as.dataset.discAs); } catch {} drawMusic(); return; }
     const b = e.target.closest("[data-play], [data-queue], [data-album], [data-artist], [data-playlist], [data-back]"); if (!b) return;
     if (b.dataset.back) api.back("v-music");
     else if (b.dataset.album) openPage("album", b.dataset.album);
@@ -338,6 +389,24 @@ export default function page(api) {
       renderQueue(); api.render();
     }).catch(() => {});
   }
+  // The account plays on another device: Soloist says only that it is not this one. Signed in
+  // with Spotify, the device is asked for by name (now and then, while it lasts).
+  let where = null, whereAt = 0;
+  const elsewhere = () => !!M.playback.item && M.auth.is_active === false && ["playing", "buffering"].includes(M.playback.status);
+  function renderElse() {
+    const on = current() && elsewhere();
+    $("#sp-else").hidden = !on;
+    if (!on) { where = null; whereAt = 0; return; }
+    $("#sp-else-text").textContent = where?.name ? tr`Spelar på ${where.name}.` : tr("Spelar på en annan enhet.");
+    if (!M.user || Date.now() - whereAt < 15000) return;
+    whereAt = Date.now();
+    fetch("/api/spotify/where").then((r) => (r.ok ? r.json() : null)).then((d) => { if (d) { where = d.device; if (elsewhere()) renderElse(); } }).catch(() => {});
+  }
+  $("#sp-here").addEventListener("click", async (e) => {
+    e.target.disabled = true;
+    try { await post("/api/soloist/command", { command: "activate" }); toast(tr`Musiken flyttas till ${devName()}`); } catch {}
+    e.target.disabled = false;
+  });
   // While another device plays, Soloist names the track and its album but not the artist, and
   // hands over no sleeve: those two are looked up the same way as the far end of the queue.
   function extra(it) {
@@ -381,7 +450,7 @@ export default function page(api) {
           if (f) return tr`${f.text} (uppmätt)`;
           return tr("FLAC upp till 24 bit, 44,1 kHz, mäts när låten spelat några sekunder"); })(),
         note: !M.auth.logged_in ? tr("Inte ansluten. Välj enheten i Spotify-appen.") : playing ? (nameOf(p.item) || tr("Spelar"))
-          : elsewhere ? tr`Spelar på en annan enhet. Välj ${devName()} i Spotify-appen.` : tr("Ansluten, väntar") },
+          : elsewhere ? (where?.name ? tr`Spelar på ${where.name}. Tryck Spela här under Lyssna, eller välj ${devName()} i Spotify-appen.` : tr`Spelar på en annan enhet. Välj ${devName()} i Spotify-appen.`) : tr("Ansluten, väntar") },
       { k: "soloist", name: "Soloist", tag: (solo.version || "").replace(/^soloist /, "").split(" ")[0],
         state: solo.service !== "active" ? "bad" : (volDigital || norm) ? "bad" : playing ? "ok" : "idle",
         facts: bridge ? tr`Volym ${vol} % styr ${outName}, normalisering ${norm ? tr("på") : tr("av")}` : tr`Volym ${vol} %, normalisering ${norm ? tr("på") : tr("av")}`,
@@ -487,7 +556,7 @@ export default function page(api) {
     // the first message on the socket: this module's part of the state
     hello(m) {
       Object.assign(M, { playback: m.playback || {}, auth: m.auth || {}, queue: m.queue || {}, quality: m.quality || {},
-        lastTest: m.last_test || null, tests: m.tests || [], search: !!m.spotify_search });
+        lastTest: m.last_test || null, tests: m.tests || [], search: !!m.spotify_search, user: !!m.spotify_user });
       $("#sp-find").placeholder = M.search ? tr("Sök i Spotify, eller klistra in en Spotify-länk") : tr("Sök i det du spelat, eller klistra in en Spotify-länk");
       renderQueue(); renderTest(M.lastTest); renderVlog();
       // (an address with a search in it was followed before it was known that Spotify can be asked: ask now)
@@ -499,13 +568,14 @@ export default function page(api) {
       if (m.type === "soloist") { soloistEvent(m.event); return true; }
       if (m.type === "quality") { M.quality = m.quality; api.render(); return true; }
       if (m.type === "job" && m.name === "audio-test") { testJob(m); return true; }
+      if (m.type === "spotify_user") { M.user = !!m.on; M.search = M.search || M.user; lib = null; where = null; loadMusic(true); api.render(); return true; }
       if (m.type === "history_cleared") { M.tests = []; renderVlog(); loadMusic(true); }
       return false;
     },
     // after every change: show the module's parts only where they apply
     render() {
       const cur = current(), vol = M.playback.volume, ready = api.srcState(ID).installed !== false && api.srcState(ID).key_set !== false;
-      $("#f-queue").hidden = !cur;
+      $("#f-queue").hidden = !cur; renderElse();
       music.hidden = !cur || !ready;
       if (cur && document.body.dataset.view === "v-music") loadMusic();
       $("#vol-warn").hidden = !cur || !ready || bridged() || !(typeof vol === "number" && vol < 100);

@@ -4,18 +4,29 @@ Soloist plays what it is told to (a track, an album, an artist, a playlist) but 
 The Web API can, with the credentials of an app the listener creates in Spotify's developer
 dashboard: its Client ID and Client secret, kept root-only on the device. Nothing here needs
 the listener's own account: the app's own token ("client credentials") reads the catalogue.
+
+The listener may also sign in with their Spotify account (authorization code with PKCE: the
+Client ID alone, no secret). Then the questions are asked as the listener, which adds what
+belongs to the account: where it plays, the playlists, the saved albums and the liked tracks.
+What is kept is a refresh token, root-only on the device, with leave to read and nothing more.
 """
 from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import re
+import secrets
 import time
+from urllib.parse import urlencode
 
 from aiohttp import ClientSession, ClientTimeout
 
 API = "https://api.spotify.com/v1"
 ID = re.compile(r"[A-Za-z0-9]{22}")
+ACCOUNTS = "https://accounts.spotify.com"
+# what the sign-in asks leave for: to see where the account plays and what is in its library
+SCOPES = "user-read-playback-state playlist-read-private playlist-read-collaborative user-library-read"
 
 
 class WebApiError(Exception):
@@ -68,8 +79,11 @@ def artist_row(a: dict) -> dict:
 
 
 class WebApi:
-    def __init__(self, credentials, lastfm_key=lambda: ""):
+    def __init__(self, credentials, lastfm_key=lambda: "", refresh=lambda: "", keep_refresh=lambda token: None):
         self.credentials = credentials      # () -> (client id, client secret)
+        self.refresh = refresh              # () -> the signed-in listener's refresh token, or ""
+        self.keep_refresh = keep_refresh    # (token) -> keeps it; "" forgets it
+        self.pending: tuple | None = None   # a sign-in under way: (state, verifier, redirect address, until)
         self.lastfm_key = lastfm_key        # () -> the listener's Last.fm key, when there is one
         self.http: ClientSession | None = None
         self.token, self.until = "", 0.0
@@ -78,13 +92,76 @@ class WebApi:
 
     def ready(self) -> bool:
         cid, secret = self.credentials()
-        return bool(cid and secret)
+        return bool(cid and (secret or self.refresh()))
+
+    def signed_in(self) -> bool:
+        return bool(self.credentials()[0] and self.refresh())
+
+    def sign_in_address(self, redirect: str) -> str:
+        """Where the listener's browser goes to give its leave. The answer comes back to
+        `redirect` with a code, which finish() trades for the tokens."""
+        cid = self.credentials()[0].strip()
+        if not cid:
+            raise WebApiError("credentials")
+        state, verifier = secrets.token_urlsafe(24), secrets.token_urlsafe(64)
+        self.pending = (state, verifier, redirect, time.time() + 600)
+        challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
+        return f"{ACCOUNTS}/authorize?" + urlencode({"client_id": cid, "response_type": "code", "redirect_uri": redirect, "state": state,
+                                                     "scope": SCOPES, "code_challenge_method": "S256", "code_challenge": challenge})
+
+    async def finish(self, code: str, state: str) -> None:
+        """The code Spotify sent back, traded for the tokens. Only for the sign-in that was begun here."""
+        p, self.pending = self.pending, None
+        if not p or not secrets.compare_digest(p[0], state or "") or time.time() > p[3] or not code:
+            raise WebApiError("credentials")
+        if self.http is None:
+            self.http = ClientSession(timeout=ClientTimeout(total=10))
+        try:
+            async with self.http.post(f"{ACCOUNTS}/api/token", data={"grant_type": "authorization_code", "code": code, "redirect_uri": p[2],
+                                                                    "client_id": self.credentials()[0].strip(), "code_verifier": p[1]}) as r:
+                d = await r.json(content_type=None) if r.status == 200 else None
+        except (OSError, asyncio.TimeoutError, ValueError):
+            raise WebApiError("down")
+        if not d or not d.get("refresh_token") or not d.get("access_token"):
+            raise WebApiError("credentials")
+        async with self.lock:
+            self.keep_refresh(d["refresh_token"])
+            self.token, self.until = d["access_token"], time.time() + max(60, int(d.get("expires_in", 3600)) - 120)
+            self.kept.clear()
+
+    def sign_out(self) -> None:
+        self.keep_refresh("")
+        self.token, self.until = "", 0.0
+        self.kept.clear()
+
+    async def _user_token(self, cid: str, refresh: str) -> str | None:
+        """A token as the listener, from the refresh token. None when Spotify no longer takes
+        it (leave withdrawn in the account): it is forgotten then."""
+        try:
+            async with self.http.post(f"{ACCOUNTS}/api/token", data={"grant_type": "refresh_token", "refresh_token": refresh, "client_id": cid}) as r:
+                if r.status in (400, 401):
+                    self.keep_refresh("")
+                    return None
+                d = await r.json(content_type=None) if r.status == 200 else None
+        except (OSError, asyncio.TimeoutError, ValueError):
+            raise WebApiError("down")
+        if not d or not d.get("access_token"):
+            raise WebApiError("down")
+        if d.get("refresh_token") and d["refresh_token"] != refresh:     # (Spotify may hand out a new one: the old one is spent then)
+            self.keep_refresh(d["refresh_token"])
+        self.token, self.until = d["access_token"], time.time() + max(60, int(d.get("expires_in", 3600)) - 120)
+        return self.token
 
     async def _token(self) -> str:
         async with self.lock:
             if self.token and time.time() < self.until:
                 return self.token
             cid, secret = (x.strip() for x in self.credentials())
+            refresh = self.refresh() if cid else ""
+            if refresh:
+                token = await self._user_token(cid, refresh)
+                if token:
+                    return token
             if not cid or not secret:
                 raise WebApiError("credentials")
             basic = base64.b64encode(f"{cid}:{secret}".encode()).decode()
@@ -101,10 +178,11 @@ class WebApi:
             self.token, self.until = d["access_token"], time.time() + max(60, int(d.get("expires_in", 3600)) - 120)
             return self.token
 
-    async def get(self, path: str, **params) -> dict:
+    async def get(self, path: str, keep: float = 600, **params) -> dict:
+        """keep: for how many seconds the answer is good to give again."""
         key = path + "?" + "&".join(f"{k}={v}" for k, v in sorted(params.items()))
         hit = self.kept.get(key)
-        if hit and time.time() - hit[0] < 600:
+        if hit and time.time() - hit[0] < keep:
             return hit[1]
         if self.http is None:
             self.http = ClientSession(timeout=ClientTimeout(total=10))
@@ -117,8 +195,10 @@ class WebApi:
                         continue
                     if r.status == 429:
                         raise WebApiError("busy")
-                    if r.status == 404:
+                    if r.status in (204, 404):               # (204: nothing plays anywhere)
                         return {}
+                    if r.status == 403:
+                        raise WebApiError("leave")
                     if r.status != 200:
                         raise WebApiError("down")
                     d = await r.json(content_type=None)
@@ -138,10 +218,54 @@ class WebApi:
                 "playlists": [playlist_row(p) for p in items("playlists")], "tracks": [track_row(t) for t in items("tracks")]}
 
     async def playlist(self, playlist_id: str) -> dict | None:
-        d = await self.get(f"playlists/{playlist_id}")
+        d = await self.get(f"playlists/{playlist_id}", keep=60)
         if not d.get("uri"):
             return None
-        return {**playlist_row(d), "cover": image(d.get("images"), 640), "followers": (d.get("followers") or {}).get("total")}
+        out = {**playlist_row(d), "cover": image(d.get("images"), 640), "followers": (d.get("followers") or {}).get("total")}
+        # what is in it: Spotify says so for the signed-in listener's own playlists only
+        if self.signed_in():
+            rows, total = [], None
+            for offset in range(0, 300, 50):
+                try:
+                    page = await self.get(f"playlists/{playlist_id}/items", keep=60, limit=50, offset=offset)
+                except WebApiError:
+                    break
+                for it in page.get("items") or []:
+                    t = it.get("item") or it.get("track") or {}
+                    if t.get("uri", "").startswith("spotify:track:"):
+                        rows.append(track_row(t))
+                total = page.get("total")
+                if not page.get("items") or offset + 50 >= (total or 0):
+                    break
+            if rows:
+                out["tracks"], out["count"] = rows, total if isinstance(total, int) else out.get("count")
+        return out
+
+    async def me(self) -> dict:
+        d = await self.get("me")
+        return {"name": d.get("display_name") or d.get("id") or ""}
+
+    async def where(self) -> dict | None:
+        """The device the account plays on right now: {"name", "type"}, or None when nothing plays."""
+        d = await self.get("me/player", keep=8)
+        dev = d.get("device") or {}
+        return {"name": str(dev.get("name") or "")[:80], "type": str(dev.get("type") or "")[:30]} if dev.get("name") else None
+
+    async def library(self) -> dict:
+        """What the listener has gathered: playlists, saved albums, liked tracks (the latest fifty of each)."""
+        async def part(path, row):
+            try:
+                d = await self.get(path, keep=120, limit=50)
+            except WebApiError as e:
+                if e.kind == "leave":
+                    return []
+                raise
+            return [x for x in (row(i) for i in d.get("items") or [] if isinstance(i, dict)) if x and x.get("uri")]
+        playlists, albums, tracks = await asyncio.gather(
+            part("me/playlists", playlist_row),
+            part("me/albums", lambda i: album_row(i.get("album") or {})),
+            part("me/tracks", lambda i: track_row(i.get("track") or {})))
+        return {"playlists": playlists, "albums": albums, "tracks": tracks}
 
     async def tracks(self, ids: list[str]) -> dict:
         """{id: row} for tracks known only by their id (the far end of the queue, which the

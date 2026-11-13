@@ -1,6 +1,6 @@
 {
  "format": 1,
- "serial": 67,
+ "serial": 68,
  "modules": [
   {
    "id": "about",
@@ -344,7 +344,7 @@
   },
   {
    "id": "spotify",
-   "version": "1.12.0",
+   "version": "1.13.0",
    "kind": "source",
    "name": {
     "sv": "Spotify Lossless (Soloist)",
@@ -357,7 +357,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "ee4e051298a4cf555919e70ee520bfc908fb3b0ced5326743a417424d4d93bf2",
+     "sha256": "88124dc64f188359a1509fec6b21ba5e4b230148fb41269a9fd9c1556df56fa8",
      "exec": false
     },
     {
@@ -367,12 +367,12 @@
     },
     {
      "path": "module.json",
-     "sha256": "516635b516607dee6d88f4fa1e87e92920aac77411b60cfbac40423969ff9f71",
+     "sha256": "6e764cf7879c4911963e558440a0fc67cd9cf0a568434681588230ddeb23865a",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "fe5e1c237d8eb796061a15647747ed83145e610b8e38eec359ac3a30dd4bdc58",
+     "sha256": "941ca3f754d60f718a1b50f29fb2fcc1e3773df4bb39a4d471bc77a6320d8848",
      "exec": false
     },
     {
@@ -412,12 +412,12 @@
     },
     {
      "path": "webapi.py",
-     "sha256": "4e37fa982131e729258e2fade87a6491df217f4e5769582d23edabd04ed0edbe",
+     "sha256": "34ae281f42cbf11f109e1349fee4e0ae39274870826e3cdedf22d33103eb1d4e",
      "exec": false
     },
     {
      "path": "i18n/en.json",
-     "sha256": "ef88356c0534c0001c95bf1cf79f3a9c8485fdad76da2496e403902c60622171",
+     "sha256": "015d3c07ae2bb023339804874ababfb10a10d1275db134e281290ed1c4321b96",
      "exec": false
     }
    ]

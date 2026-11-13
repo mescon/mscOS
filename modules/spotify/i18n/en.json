@@ -127,5 +127,16 @@
  "Mest lyssnat": "Most listened to",
  "Efter antal lyssnare i hela världen, enligt Last.fm.": "By the number of listeners all over the world, according to Last.fm.",
  "I den ordning Spotify listar artistens låtar.": "In the order Spotify lists the artist's tracks.",
- "Album, i utgivningsordning": "Albums, in the order they came out"
+ "Album, i utgivningsordning": "Albums, in the order they came out",
+ "Spela här": "Play here",
+ "Visa album som": "Show albums as",
+ "Omslag": "Sleeves",
+ "Med låtar": "With tracks",
+ "Dina spellistor": "Your playlists",
+ "Sparade album": "Saved albums",
+ "Gillade låtar": "Liked tracks",
+ "Spelar på en annan enhet.": "Playing on another device.",
+ "Spelar på {0}.": "Playing on {0}.",
+ "Musiken flyttas till {0}": "The music moves to {0}",
+ "Spelar på {0}. Tryck Spela här under Lyssna, eller välj {1} i Spotify-appen.": "Playing on {0}. Press Play here under Listen, or choose {1} in the Spotify app."
 }
