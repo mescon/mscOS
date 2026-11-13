@@ -137,6 +137,55 @@ export default function page(api) {
           color: var(--engraved); font: inherit; font-size: .875rem; cursor: pointer; }
         .m-back:hover { color: var(--ink); }
         .m-back svg { width: 18px; height: 18px; }
+        .m-lib { display: grid; grid-template-columns: minmax(190px, 250px) minmax(0, 1fr); gap: 34px; align-items: start; margin-top: 22px; }
+        .m-pane > h3:first-child, .m-pane > .m-lead:first-child { margin-top: 0; }
+        .m-tree { position: sticky; top: 14px; max-height: calc(100vh - 150px); overflow-y: auto; padding-right: 4px; font-size: .9375rem; }
+        .m-tree ul { list-style: none; margin: 0; padding: 0; }
+        .m-tree ul ul { margin-left: 15px; padding-left: 9px; border-left: 1px solid var(--hair); }
+        .m-tree > ul + ul, .m-tree .m-folders + ul { margin-top: 14px; }
+        .m-tree-head { display: flex; align-items: center; justify-content: space-between; margin: 20px 0 4px; font-size: .8125rem; letter-spacing: .04em; color: var(--engraved); }
+        .m-new { appearance: none; min-height: 32px; padding: 0 10px; border: 1px solid var(--hair); border-radius: 2px; background: none; color: var(--engraved); font: inherit; cursor: pointer; }
+        .m-new:hover { color: var(--ink); border-color: var(--btn-line); }
+        .m-node { display: flex; align-items: center; border-radius: 3px; }
+        .m-leaf { appearance: none; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; width: 100%; min-height: 38px; padding: 0 8px; border: 0; border-radius: 3px; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+        .m-leaf span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .m-leaf small { flex: none; font-size: .75rem; color: var(--engraved); font-variant-numeric: tabular-nums; }
+        .m-leaf svg { flex: none; width: 17px; height: 17px; color: var(--engraved); }
+        .m-leaf.pl { color: var(--engraved); min-height: 34px; }
+        .m-leaf:hover, .m-node:hover > .m-leaf { background: var(--plate); color: var(--ink); }
+        .m-leaf[aria-current], .m-node[aria-current] > .m-leaf { background: var(--plate); box-shadow: inset 2px 0 0 var(--ink); }
+        .m-twist { appearance: none; flex: none; width: 26px; height: 38px; display: grid; place-items: center; padding: 0; border: 0; background: none; color: var(--engraved); cursor: pointer; }
+        .m-twist svg { width: 14px; height: 14px; transition: transform .12s; }
+        .m-twist[aria-expanded="true"] svg { transform: rotate(90deg); }
+        .m-tree .drop, .m-sub .drop { outline: 1px dashed var(--ink); outline-offset: -1px; background: var(--plate); }
+        .m-hint { padding: 6px 8px; font-size: .8125rem; color: var(--engraved); }
+        .m-fhead { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 10px 18px; margin-bottom: 18px; }
+        .m-fhead h3 { margin: 0; }
+        .m-fhead .part { margin: 0 0 2px; font-size: .8125rem; color: var(--engraved); }
+        .m-sub { margin-bottom: 24px; }
+        .m-sub button svg { width: 17px; height: 17px; color: var(--engraved); }
+        .m-move { display: block; width: 100%; margin-top: 6px; min-height: 32px; padding: 0 6px; border: 1px solid var(--hair); border-radius: 2px; background: none; color: var(--engraved); font: inherit; font-size: .75rem; }
+        .m-edit { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0 0 22px; padding: 14px 16px; border: 1px solid var(--hair); border-radius: 3px; background: var(--plate); }
+        .m-edit label { flex: 1 0 100%; font-size: .8125rem; color: var(--engraved); }
+        .m-edit input { flex: 1 1 12em; min-height: 40px; padding: 0 12px; border: 1px solid var(--btn-line); border-radius: 3px; background: none; color: var(--ink); font: inherit; }
+        .m-lib-back { display: none; }
+        @media (max-width: 760px) {
+          .m-lib { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+          .m-tree { position: static; max-height: none; }
+          .m-lib.has-sel .m-tree { display: none; }
+          .m-lib.has-sel .m-lib-back { display: inline-flex; }
+        }
+        /* with a finger: rows and buttons a thumb can hit, and the folder chosen from a list (no dragging) */
+        @media (pointer: coarse) {
+          .m-leaf, .m-twist { min-height: 48px; height: auto; }
+          .m-leaf.pl { min-height: 46px; }
+          .m-twist { width: 44px; }
+          .m-twist svg { width: 16px; height: 16px; }
+          .m-new { min-height: 44px; padding: 0 14px; }
+          .m-move { min-height: 44px; font-size: .875rem; }
+          .m-tree { font-size: 1rem; }
+          .m-seg button { min-height: 44px; }
+        }
         .m-disc-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
         .m-seg { display: inline-flex; border: 1px solid var(--hair); border-radius: 3px; overflow: hidden; }
         .m-seg button { appearance: none; min-height: 36px; padding: 0 14px; border: 0; background: none; color: var(--engraved); font: inherit; font-size: .8125rem; cursor: pointer; }
@@ -215,16 +264,19 @@ export default function page(api) {
       }
       return;   // (until the answer comes, what is there stays: the list changes under the typing, it does not blink)
     }
-    const mineToo = text.length < 2 && !link ? libHtml() : "";    // (nothing typed: what is one's own first)
-    if (!played) { out.innerHTML = mineToo; return; }
+    // nothing typed: one's own library beside what was played (a tree and what is chosen in it)
+    const mineToo = text.length < 2 && !link, locked = mineToo && M.user && lib?.locked ? `<p class="none">${esc(tr("Logga in under Profil för att se dina spellistor, sparade album och gillade låtar här."))}</p>` : "";
+    const put = (h) => { out.innerHTML = mineToo && libOn() ? libLayout(h) : locked + h; };
+    if (mineToo && libOn() && sel) { put(""); return; }
+    if (!played) { put(""); return; }
     if (played.off) { out.innerHTML = `<p class="none">${esc(tr("Lyssningshistoriken är avstängd, så här finns inget att spela igen. Klistra in en Spotify-länk ovan för att spela något."))}</p>`; return; }
     const words = link ? [] : text.toLowerCase().split(/\s+/).filter(Boolean);
     const hit = (...f) => words.every((w) => f.some((x) => (x || "").toLowerCase().includes(w)));
     const mine = { albums: played.albums.filter((x) => hit(x.name, x.artist)), tracks: played.tracks.filter((t) => hit(t.name, t.artist, t.album)),
       artists: played.artists.filter((x) => hit(x.name)) };
-    if (!played.tracks.length) { out.innerHTML = mineToo + `<p class="none">${esc(M.search ? tr("Sök i Spotify ovan. Här under samlas det som spelas på enheten, att spela igen.") : tr("Här samlas det som spelas på enheten: album, låtar och artister, att spela igen. Starta något i Spotify-appen, eller klistra in en Spotify-länk ovan."))}</p>`; return; }
+    if (!played.tracks.length) { put(`<p class="none">${esc(M.search ? tr("Sök i Spotify ovan. Här under samlas det som spelas på enheten, att spela igen.") : tr("Här samlas det som spelas på enheten: album, låtar och artister, att spela igen. Starta något i Spotify-appen, eller klistra in en Spotify-länk ovan."))}</p>`); return; }
     if (!mine.albums.length && !mine.tracks.length && !mine.artists.length) { out.innerHTML = link ? "" : `<p class="none">${esc(tr("Inget av det du spelat heter så. Att söka i hela Spotify kräver Spotifys webb-API, som inte är inkopplat än. Klistra in en Spotify-länk för att spela något nytt."))}</p>`; return; }
-    out.innerHTML = mineToo + (M.search && !words.length ? `<p class="m-lead">${esc(tr("Senast spelat"))}</p>` : "") + sections(mine, words.length ? 60 : 18);
+    put((M.search && !words.length ? `<p class="m-lead">${esc(tr("Senast spelat"))}</p>` : "") + sections(mine, words.length ? 60 : 18));
   }
   function pageHtml(pg) {
     const d = pg.data, back = `<button class="m-back" data-back="1"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 6-6 6 6 6"/></svg>${esc(tr("Tillbaka"))}</button>`;
@@ -308,11 +360,77 @@ export default function page(api) {
     if (!M.user || (!force && lib && Date.now() - libAt < 120000)) return;
     libAt = Date.now();
     // (one's own library is shown to someone logged in to the panel; others are told so)
-    try { const r = await fetch("/api/spotify/library"); if (r.ok) lib = await r.json(); else if (r.status === 401) { lib = { locked: true }; libAt = 0; } drawMusic(); } catch {}
+    try {
+      const [r, f] = await Promise.all([fetch("/api/spotify/library"), fetch("/api/spotify/folders")]);
+      if (r.ok) { lib = await r.json(); if (f.ok) tree = await f.json(); } else if (r.status === 401) { lib = { locked: true }; libAt = 0; }
+      drawMusic();
+    } catch {}
   }
-  const libHtml = () => (!M.user || !lib ? "" : lib.locked ? `<p class="none">${esc(tr("Logga in under Profil för att se dina spellistor, sparade album och gillade låtar här."))}</p>` : ((lib.playlists || []).length ? `<h3>${esc(tr("Dina spellistor"))}</h3>${playlistList(lib.playlists)}` : "")
-    + ((lib.albums || []).length ? `<h3>${esc(tr("Sparade album"))}</h3>${albumList(lib.albums)}` : "")
-    + ((lib.tracks || []).length ? `<h3>${esc(tr("Gillade låtar"))}</h3>${trackList(lib.tracks.slice(0, 20))}` : ""));
+  // ---- the listener's library as a tree, like a file manager's side: liked tracks, saved albums,
+  // folders of one's own with playlists in them, and the playlists not yet put anywhere. The
+  // folders are mscOS's own, kept on the device (Spotify's Web API tells nothing of the folders
+  // in its app). What is chosen in the tree stands in the address: /music/library/<what>.
+  let tree = { folders: [], place: {} }, sel = "", edit = null, sure = "";
+  const libOn = () => !!(M.user && lib && !lib.locked);
+  const opened = (() => { try { return new Set(JSON.parse(localStorage.getItem("sp-open") || "[]")); } catch { return new Set(); } })();
+  const keepOpened = () => { try { localStorage.setItem("sp-open", JSON.stringify([...opened].slice(0, 300))); } catch {} };
+  const folderOf = (id) => tree.folders.find((f) => f.id === id);
+  const kids = (id) => tree.folders.filter((f) => (f.parent || null) === (id || null)).sort((x, y) => x.name.localeCompare(y.name, api.lang()));
+  // the playlists a track was added to lately first (one's own: Spotify tells it of no others), the rest in Spotify's order
+  const lately = (lists) => lists.map((pl, n) => [pl, n]).sort((x, y) => (y[0].added || "").localeCompare(x[0].added || "") || x[1] - y[1]).map(([pl]) => pl);
+  const listsIn = (id) => lately((lib.playlists || []).filter((pl) => tree.place[pl.id] === id));
+  const loose = (own) => lately((lib.playlists || []).filter((pl) => !folderOf(tree.place[pl.id]) && (pl.owner_id === lib.me) === own));
+  const pathOf = (id) => { const out = []; for (let f = folderOf(id), n = 0; f && n < 12; f = folderOf(f.parent), n++) out.unshift(f.name); return out; };
+  const CHEV = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9.5 6 6 6-6 6"/></svg>`;
+  const FOLDER = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M3.5 7.5a1.5 1.5 0 0 1 1.5-1.5h4l2 2.2h8a1.5 1.5 0 0 1 1.5 1.5v7.8a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5z"/></svg>`;
+  const leaf = (key, label, n) => `<li><button class="m-leaf" data-lib="${esc(key)}"${key && ["mine", "followed"].includes(key) ? ` data-drop=""` : ""}${sel === key ? ' aria-current="true"' : ""}><span>${esc(label)}</span>${n != null ? `<small>${n}</small>` : ""}</button></li>`;
+  function node(f, depth) {
+    const sub = kids(f.id), lists = listsIn(f.id), open = opened.has(f.id), any = sub.length + lists.length > 0;
+    return `<li><div class="m-node" data-drop="${esc(f.id)}"${sel === f.id ? ' aria-current="true"' : ""}>
+        ${any ? `<button class="m-twist" data-twist="${esc(f.id)}" aria-expanded="${open}" aria-label="${esc(open ? tr`Fäll ihop ${f.name}` : tr`Fäll ut ${f.name}`)}">${CHEV}</button>` : `<span class="m-twist"></span>`}
+        <button class="m-leaf" data-lib="${esc(f.id)}">${FOLDER}<span>${esc(f.name)}</span>${lists.length ? `<small>${lists.length}</small>` : ""}</button></div>
+      ${open && any ? `<ul>${depth < 8 ? sub.map((c) => node(c, depth + 1)).join("") : ""}${lists.map((pl) => `<li><button class="m-leaf pl" data-playlist="${esc(pl.id)}" draggable="true" data-drag="${esc(pl.id)}"><span>${esc(pl.name)}</span></button></li>`).join("")}</ul>` : ""}</li>`;
+  }
+  const treeHtml = () => `<nav class="m-tree" aria-label="${esc(tr("Ditt bibliotek"))}">
+      <ul>${leaf("", tr("Senast spelat"))}${leaf("liked", tr("Gillade låtar"), (lib.tracks || []).length)}${leaf("albums", tr("Sparade album"), (lib.albums || []).length)}</ul>
+      <div class="m-tree-head"><span>${esc(tr("Mappar"))}</span><button class="m-new" data-newfolder="">${esc(tr("Ny mapp"))}</button></div>
+      <ul class="m-folders">${kids(null).map((f) => node(f, 0)).join("") || `<li class="m-hint">${esc(tr("Inga mappar än. Skapa en och lägg spellistor i den."))}</li>`}</ul>
+      <ul>${leaf("mine", tr("Mina spellistor"), loose(true).length)}${leaf("followed", tr("Följda spellistor"), loose(false).length)}</ul></nav>`;
+  // where a playlist is kept, as a choice under its sleeve (dragging it onto a folder does the same)
+  const moveSelect = (pl) => (tree.folders.length ? `<select class="m-move" data-move="${esc(pl.id)}" aria-label="${esc(tr`Mapp för ${pl.name}`)}"><option value="">${esc(tr("Ingen mapp"))}</option>${tree.folders
+    .map((f) => [pathOf(f.id).join(" / "), f.id]).sort((x, y) => x[0].localeCompare(y[0], api.lang())).map(([name, id]) => `<option value="${esc(id)}"${tree.place[pl.id] === id ? " selected" : ""}>${esc(name)}</option>`).join("")}</select>` : "");
+  const playlistCards = (lists) => (lists.length ? `<ul class="m-albums">${lists.map((pl) =>
+    `<li><button data-playlist="${esc(pl.id)}" data-name="${esc(pl.name)}" draggable="true" data-drag="${esc(pl.id)}">${img(pl.cover)}<b>${esc(pl.name)}</b><span>${esc([pl.owner_id === lib.me ? "" : pl.owner, pl.count != null ? tr`${pl.count} låtar` : "", pl.added ? tr`påfylld ${pl.added.slice(0, 10)}` : ""].filter(Boolean).join(" · "))}</span></button>${moveSelect(pl)}</li>`).join("")}</ul>`
+    : `<p class="none">${esc(tr("Här finns inga spellistor."))}</p>`);
+  const editForm = () => (!edit ? "" : `<form class="m-edit" data-edit="1"><label for="m-edit-name">${esc(edit.kind === "rename" ? tr("Mappens namn") : edit.parent ? tr`Ny mapp i ${folderOf(edit.parent)?.name || ""}` : tr("Ny mapp"))}</label>
+      <input id="m-edit-name" type="text" maxlength="60" autocomplete="off" value="${esc(edit.kind === "rename" ? folderOf(edit.id)?.name || "" : "")}">
+      <button class="btn primary">${esc(tr("Spara"))}</button><button type="button" class="btn" data-edit-cancel="1">${esc(tr("Avbryt"))}</button></form>`);
+  function paneHtml(rest) {
+    const f = folderOf(sel);
+    if (f) {
+      const sub = kids(f.id), path = pathOf(f.id).slice(0, -1);
+      return `<div class="m-fhead"><div>${path.length ? `<p class="part">${esc(path.join(" / "))}</p>` : ""}<h3>${esc(f.name)}</h3></div>
+          <div class="row wrap"><button class="btn" data-newfolder="${esc(f.id)}">${esc(tr("Ny undermapp"))}</button><button class="btn" data-rename="${esc(f.id)}">${esc(tr("Byt namn"))}</button>
+            <button class="btn" data-rmfolder="${esc(f.id)}">${esc(sure === f.id ? tr("Tryck igen för att ta bort") : tr("Ta bort mappen"))}</button></div></div>
+        ${sub.length ? `<ul class="m-artists m-sub">${sub.map((c) => `<li><button data-lib="${esc(c.id)}" data-drop="${esc(c.id)}">${FOLDER}${esc(c.name)}</button></li>`).join("")}</ul>` : ""}
+        ${listsIn(f.id).length || !sub.length ? playlistCards(listsIn(f.id)) : ""}
+        ${!listsIn(f.id).length ? `<p class="none">${esc(tr("Lägg spellistor här genom att dra dem hit, eller välj mappen under en spellista i Mina spellistor."))}</p>` : ""}`;
+    }
+    if (sel === "liked") return `<h3>${esc(tr("Gillade låtar"))}</h3>${(lib.tracks || []).length ? trackList(lib.tracks) : `<p class="none">${esc(tr("Här finns inget."))}</p>`}<p class="m-src">${esc(tr("De senaste femtio."))}</p>`;
+    if (sel === "albums") return `<h3>${esc(tr("Sparade album"))}</h3>${(lib.albums || []).length ? albumList(lib.albums) : `<p class="none">${esc(tr("Här finns inget."))}</p>`}`;
+    if (sel === "mine") return `<h3>${esc(tr("Mina spellistor"))}</h3><p class="m-src">${esc(tr("De som inte ligger i någon mapp. Den du senast lade en låt i står först."))}${lib.reading ? " " + esc(tr`${lib.reading} spellistor är inte avlästa än; ordningen blir klar efter hand.`) : ""}</p>${playlistCards(loose(true))}`;
+    if (sel === "followed") return `<h3>${esc(tr("Följda spellistor"))}</h3><p class="m-src">${esc(tr("Andras spellistor som du följer, och som inte ligger i någon mapp."))}</p>${playlistCards(loose(false))}`;
+    return rest;
+  }
+  // rest: what the view showed before there was a library (what was played lately), for when nothing is chosen
+  const libLayout = (rest) => {
+    if (sel && !folderOf(sel) && !["liked", "albums", "mine", "followed"].includes(sel)) sel = "";
+    return `<div class="m-lib${sel ? " has-sel" : ""}">${treeHtml()}<div class="m-pane">${sel ? `<button class="m-back m-lib-back" data-lib=""><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 6-6 6 6 6"/></svg>${esc(tr("Biblioteket"))}</button>` : ""}${editForm()}${paneHtml(rest)}</div></div>`;
+  };
+  async function folderOp(op) {
+    try { tree = await post("/api/spotify/folders", op); } catch { return false; }
+    drawMusic(); return true;
+  }
   async function loadMusic(force) {
     loadLib(force);
     const now = (M.playback.item || {}).uri || "";
@@ -324,7 +442,38 @@ export default function page(api) {
     } catch {}
   }
   $("#sp-find").addEventListener("input", find);
+  music.addEventListener("submit", async (e) => {
+    if (!e.target.dataset.edit || !edit) return;
+    e.preventDefault();
+    const name = $("#m-edit-name").value, was = edit;
+    if (await folderOp(was.kind === "rename" ? { op: "rename", id: was.id, name } : { op: "add", name, parent: was.parent })) {
+      if (was.kind === "new" && was.parent) { opened.add(was.parent); keepOpened(); }
+      edit = null; drawMusic();
+    }
+  });
+  music.addEventListener("change", (e) => { const m = e.target.closest("[data-move]"); if (m) folderOp({ op: "place", playlist: m.dataset.move, folder: m.value || null }); });
+  // a playlist dragged onto a folder is put in it (onto Mine or Followed: taken out of its folder)
+  let dragged = "";
+  music.addEventListener("dragstart", (e) => { const d = e.target.closest?.("[data-drag]"); if (d) { dragged = d.dataset.drag; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", dragged); } });
+  music.addEventListener("dragend", () => { dragged = ""; music.querySelectorAll(".drop").forEach((x) => x.classList.remove("drop")); });
+  music.addEventListener("dragover", (e) => { const d = dragged && e.target.closest?.("[data-drop]"); if (d) { e.preventDefault(); d.classList.add("drop"); } });
+  music.addEventListener("dragleave", (e) => e.target.closest?.("[data-drop]")?.classList.remove("drop"));
+  music.addEventListener("drop", (e) => { const d = dragged && e.target.closest?.("[data-drop]"); if (!d) return; e.preventDefault(); const pl = dragged; dragged = ""; if (d.dataset.drop) { opened.add(d.dataset.drop); keepOpened(); } folderOp({ op: "place", playlist: pl, folder: d.dataset.drop || null }); });
   music.addEventListener("click", (e) => {
+    const t = e.target.closest("[data-lib], [data-twist], [data-newfolder], [data-rename], [data-rmfolder], [data-edit-cancel]");
+    if (t) {
+      const d = t.dataset;
+      if (d.twist != null) { if (opened.has(d.twist)) opened.delete(d.twist); else opened.add(d.twist); keepOpened(); drawMusic(); }
+      else if (d.newfolder != null) { edit = { kind: "new", parent: d.newfolder || null }; drawMusic(); $("#m-edit-name")?.focus(); }
+      else if (d.rename) { edit = { kind: "rename", id: d.rename }; drawMusic(); $("#m-edit-name")?.select(); }
+      else if (d.editCancel) { edit = null; drawMusic(); }
+      else if (d.rmfolder) {      // (a second press: what is in the folder moves up, nothing is lost, but the order one made is)
+        if (sure !== d.rmfolder) { sure = d.rmfolder; drawMusic(); setTimeout(() => { if (sure === d.rmfolder) { sure = ""; drawMusic(); } }, 4000); }
+        else { const up = folderOf(d.rmfolder)?.parent || ""; sure = ""; folderOp({ op: "remove", id: d.rmfolder }).then((ok) => { if (ok) api.go("v-music", up ? ["library", up] : [], { replace: true }); }); }
+      }
+      else { edit = null; if (folderOf(d.lib)) { opened.add(d.lib); keepOpened(); } api.go("v-music", d.lib ? ["library", d.lib] : []); }
+      return;
+    }
     const as = e.target.closest("[data-disc-as]");
     if (as) { try { localStorage.setItem("sp-disc", as.dataset.discAs); } catch {} drawMusic(); return; }
     const b = e.target.closest("[data-play], [data-queue], [data-album], [data-artist], [data-playlist], [data-back]"); if (!b) return;
@@ -549,7 +698,8 @@ export default function page(api) {
       if (["album", "artist", "playlist"].includes(kind) && /^[A-Za-z0-9]{8,40}$/.test(id || "")) { if (!(page && page.kind === kind && page.id === id)) showPage(kind, id); }
       else {
         const words = kind === "search" ? String(id || "").slice(0, 120) : "", box = $("#sp-find");
-        if (page) { page = null; drawMusic(); }
+        const want = kind === "library" ? String(id || "").slice(0, 40) : "";
+        if (page || want !== sel) { page = null; sel = want; edit = null; if (want) box.value = ""; drawMusic(); if (want && !words) return; }
         if (box.value.trim() !== words && !(spotifyUri(box.value.trim()) && !words)) { box.value = words; find(); }
       }
     }
@@ -570,7 +720,8 @@ export default function page(api) {
       if (m.type === "soloist") { soloistEvent(m.event); return true; }
       if (m.type === "quality") { M.quality = m.quality; api.render(); return true; }
       if (m.type === "job" && m.name === "audio-test") { testJob(m); return true; }
-      if (m.type === "spotify_user") { M.user = !!m.on; M.search = M.search || M.user; lib = null; where = null; loadMusic(true); api.render(); return true; }
+      if (m.type === "spotify_user") { M.user = !!m.on; M.search = M.search || M.user; lib = null; sel = ""; where = null; loadMusic(true); api.render(); return true; }
+      if (m.type === "spotify_added") { loadLib(true); return true; }
       if (m.type === "history_cleared") { M.tests = []; renderVlog(); loadMusic(true); }
       return false;
     },

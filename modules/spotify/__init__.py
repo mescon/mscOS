@@ -26,6 +26,7 @@ import websockets
 
 import bitcheck
 import collect
+from . import folders
 from . import webapi
 from i18n import T
 from plugins import SourcePlugin
@@ -108,6 +109,60 @@ class Spotify(SourcePlugin):
                                       lambda: self.hub.secret("about_lastfm_key") or "",
                                       refresh=lambda: self.hub.secret("spotify_refresh") or "", keep_refresh=self._keep_refresh)
         return self._web
+
+    # When a track was last added to each of the listener's own playlists, so that the ones in
+    # use come first. Spotify says it only inside each playlist, so they are read off one at a
+    # time, slowly, and again only when a playlist has changed (its snapshot is another).
+    ADDED = os.path.join(collect.STATE_DIR, "spotify-playlist-added.json")
+
+    def added(self) -> dict:
+        if not hasattr(self, "_added"):
+            try:
+                with open(self.ADDED) as f:
+                    d = json.load(f)
+                self._added = {k: v for k, v in d.items() if isinstance(v, dict)} if isinstance(d, dict) else {}
+            except (OSError, ValueError):
+                self._added = {}
+        return self._added
+
+    def _added_save(self) -> None:
+        fd = os.open(self.ADDED + ".tmp", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump(self._added, f)
+        os.replace(self.ADDED + ".tmp", self.ADDED)
+        self.hub.persist(self.ADDED)
+
+    def read_added(self, own: list[dict]) -> int:
+        """Start reading off the playlists that are new or have changed; how many there are."""
+        known = self.added()
+        todo = [(p["id"], p.get("snap") or "", p.get("count") or 0) for p in own if p.get("id") and known.get(p["id"], {}).get("snap") != (p.get("snap") or "")]
+        if todo and not (getattr(self, "_added_task", None) and not self._added_task.done()):
+            self._added_task = asyncio.create_task(self._read_added(todo, {p["id"] for p in own if p.get("id")}))
+        return len(todo)
+
+    async def _read_added(self, todo: list, own: set) -> None:
+        known, n = self.added(), 0
+        try:
+            for pid, snap, count in todo:
+                if not self.web.signed_in():
+                    break
+                try:
+                    known[pid] = {"snap": snap, "added": await self.web.last_added(pid, count)}
+                except webapi.WebApiError as e:
+                    if e.kind in ("busy", "credentials"):      # (Spotify asks for a pause: the rest another time)
+                        break
+                    known[pid] = {"snap": snap, "added": known.get(pid, {}).get("added", "")}
+                n += 1
+                if n % 40 == 0:
+                    self._added_save()
+                    await self.hub.broadcast({"type": "spotify_added"})
+                await asyncio.sleep(1.2)
+        finally:
+            for pid in [k for k in known if k not in own]:        # (playlists that are no more)
+                del known[pid]
+            if n:
+                self._added_save()
+                await self.hub.broadcast({"type": "spotify_added"})
 
     def _keep_refresh(self, token: str) -> None:
         self.hub.set_secret("spotify_refresh", token)
@@ -963,9 +1018,36 @@ class Spotify(SourcePlugin):
             if not sp.web.signed_in():
                 raise web.HTTPConflict(text=T("Logga in med Spotify under Moduler, Spotify Lossless."))
             try:
-                return web.json_response(await sp.web.library())
+                d = await sp.web.library()
             except webapi.WebApiError as e:
                 raise failed(e)
+            known = sp.added()
+            d = {**d, "playlists": [{**p, "added": known.get(p.get("id"), {}).get("added", "")} for p in d["playlists"]]}
+            d["reading"] = sp.read_added([p for p in d["playlists"] if p.get("owner_id") == d["me"]])     # (how many are still to be read off)
+            return web.json_response(d)
+
+        FOLDERS = os.path.join(collect.STATE_DIR, "spotify-folders.json")
+
+        @routes.get("/api/spotify/folders")
+        async def spotify_folders(request):
+            """The listener's own folders for their playlists (kept on the device: Spotify's
+            Web API tells nothing of the folders in its app)."""
+            if not hub.logged_in(request):
+                raise web.HTTPUnauthorized(text=T("Logga in under Profil för att göra det här."))
+            return web.json_response(folders.load(FOLDERS))
+
+        @routes.post("/api/spotify/folders")
+        async def spotify_folders_change(request):
+            if not hub.logged_in(request):
+                raise web.HTTPUnauthorized(text=T("Logga in under Profil för att göra det här."))
+            try:
+                d = folders.change(folders.load(FOLDERS), await hub.body(request))
+            except folders.Refused as e:
+                raise web.HTTPBadRequest(text={"name": T("Mappen behöver ett namn."), "full": T("Det går inte att lägga till fler mappar där."),
+                                               "into itself": T("En mapp kan inte läggas i sig själv.")}.get(str(e), T("Okänd mapp eller spellista.")))
+            folders.save(FOLDERS, d)
+            hub.persist(FOLDERS)
+            return web.json_response(d)
 
         @routes.get("/api/spotify/tracks")
         async def spotify_tracks(request):

@@ -32,9 +32,9 @@ class Rows(unittest.TestCase):
         self.assertEqual(webapi.track_row(track, album)["n"], 3)
 
     def test_a_playlist(self):
-        p = {"uri": "spotify:playlist:" + "p" * 22, "id": "p" * 22, "name": "Morning", "owner": {"display_name": "Someone"},
+        p = {"uri": "spotify:playlist:" + "p" * 22, "id": "p" * 22, "name": "Morning", "owner": {"display_name": "Someone", "id": "someone"},
              "items": {"total": 29}, "images": IMAGES, "description": 'Calm <a href="x">music</a> for mornings'}
-        self.assertEqual(webapi.playlist_row(p), {"uri": p["uri"], "id": "p" * 22, "name": "Morning", "owner": "Someone", "count": 29,
+        self.assertEqual(webapi.playlist_row(p), {"uri": p["uri"], "id": "p" * 22, "name": "Morning", "owner": "Someone", "owner_id": "someone", "snap": "", "count": 29,
                                                   "cover": "https://i.example/300", "about": "Calm music for mornings"})
         self.assertIsNone(webapi.playlist_row({"uri": "x"})["count"])
 

@@ -15,12 +15,15 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import logging
 import re
 import secrets
 import time
 from urllib.parse import urlencode
 
 from aiohttp import ClientSession, ClientTimeout
+
+log = logging.getLogger("spotify")
 
 API = "https://api.spotify.com/v1"
 ID = re.compile(r"[A-Za-z0-9]{22}")
@@ -70,6 +73,7 @@ def playlist_row(p: dict) -> dict:
     a public playlist is called, whose it is and how long, but not what is in it."""
     count = (p.get("items") or p.get("tracks") or {}).get("total")
     return {"uri": p.get("uri"), "id": p.get("id"), "name": p.get("name", ""), "owner": (p.get("owner") or {}).get("display_name") or "",
+            "owner_id": (p.get("owner") or {}).get("id") or "", "snap": p.get("snapshot_id") or "",
             "count": count if isinstance(count, int) else None, "cover": image(p.get("images")),
             "about": re.sub(r"<[^>]+>", "", p.get("description") or "")[:400]}
 
@@ -197,16 +201,21 @@ class WebApi:
                         self.token = ""
                         continue
                     if r.status == 429:
+                        log.warning("spotify web api: asked to wait (429) at %s, Retry-After %s", path.split("/")[0], r.headers.get("Retry-After", "?"))
                         raise WebApiError("busy")
                     if r.status in (204, 404):               # (204: nothing plays anywhere)
                         return {}
                     if r.status == 403:
                         raise WebApiError("leave")
                     if r.status != 200:
+                        log.warning("spotify web api: %s at %s", r.status, path.split("/")[0])
                         raise WebApiError("down")
                     d = await r.json(content_type=None)
-            except (OSError, asyncio.TimeoutError, ValueError):
+            except (OSError, asyncio.TimeoutError, ValueError) as e:
+                log.warning("spotify web api: no answer at %s (%s)", path.split("/")[0], type(e).__name__)
                 raise WebApiError("down")
+            if keep <= 0:           # (asked once and not again: not worth keeping)
+                return d
             if len(self.kept) > 300:
                 for k in sorted(self.kept, key=lambda k: self.kept[k][0])[:100]:
                     del self.kept[k]
@@ -251,25 +260,43 @@ class WebApi:
 
     async def where(self) -> dict | None:
         """The device the account plays on right now: {"name", "type"}, or None when nothing plays."""
-        d = await self.get("me/player", keep=8)
+        try:
+            d = await self.get("me/player", keep=8)
+        except WebApiError:           # (not worth an error on the page: the device is just not named)
+            return None
         dev = d.get("device") or {}
         return {"name": str(dev.get("name") or "")[:80], "type": str(dev.get("type") or "")[:30]} if dev.get("name") else None
 
     async def library(self) -> dict:
-        """What the listener has gathered: playlists, saved albums, liked tracks (the latest fifty of each)."""
-        async def part(path, row):
-            try:
-                d = await self.get(path, keep=120, limit=50)
-            except WebApiError as e:
-                if e.kind == "leave":
-                    return []
-                raise
-            return [x for x in (row(i) for i in d.get("items") or [] if isinstance(i, dict)) if x and x.get("uri")]
-        playlists, albums, tracks = await asyncio.gather(
-            part("me/playlists", playlist_row),
-            part("me/albums", lambda i: album_row(i.get("album") or {})),
-            part("me/tracks", lambda i: track_row(i.get("track") or {})))
-        return {"playlists": playlists, "albums": albums, "tracks": tracks}
+        """What the listener has gathered: every playlist (their own and those they follow), the
+        saved albums, and the latest liked tracks. "me": the listener's id, to tell their own
+        playlists from the followed ones."""
+        async def part(path, row, most):
+            out = []
+            for offset in range(0, most, 50):
+                try:
+                    d = await self.get(path, keep=900, limit=50, offset=offset)     # (a quarter of an hour: a large library is many questions)
+                except WebApiError as e:
+                    if e.kind == "leave" or out:      # (not allowed, or cut short: what there is)
+                        break
+                    raise
+                out += [x for x in (row(i) for i in d.get("items") or [] if isinstance(i, dict)) if x and x.get("uri")]
+                if not d.get("items") or offset + 50 >= (d.get("total") or 0):
+                    break
+            return out
+        playlists, albums, tracks, me = await asyncio.gather(
+            part("me/playlists", playlist_row, 1000),
+            part("me/albums", lambda i: album_row(i.get("album") or {}), 500),
+            part("me/tracks", lambda i: track_row(i.get("track") or {}), 50),
+            self.get("me"))
+        return {"playlists": playlists, "albums": albums, "tracks": tracks, "me": me.get("id") or ""}
+
+    async def last_added(self, playlist_id: str, total: int) -> str:
+        """When a track was last added to the playlist (one of the listener's own), as Spotify
+        writes the time; "" for an empty one. The newest are looked for at the end, where they
+        are put unless the listener sorts the list by hand."""
+        d = await self.get(f"playlists/{playlist_id}/items", keep=0, limit=50, offset=max(0, int(total or 0) - 50), fields="items(added_at)")
+        return max((str(i.get("added_at") or "") for i in d.get("items") or [] if isinstance(i, dict)), default="")[:20]
 
     async def tracks(self, ids: list[str]) -> dict:
         """{id: row} for tracks known only by their id (the far end of the queue, which the
