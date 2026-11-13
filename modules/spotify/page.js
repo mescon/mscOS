@@ -308,12 +308,29 @@ export default function page(api) {
     const p = M.playback, pos = p.position;
     return pos ? pos.position_ms + (p.status === "playing" ? (Date.now() - pos.timestamp_ms) * (pos.speed || 1) : 0) : 0;
   }
+  // Soloist names the far end of the queue by address alone (no title, artist or sleeve). With
+  // Spotify's search set up those are looked up, once each; without it only the named rows show.
+  const queued = new Map();                  // track id -> {name, artist, cover}, or null while asked for
   function renderQueue() {
-    const up = (M.queue.upcoming || []).slice(0, 8);
-    $("#queue").innerHTML = up.length
-      ? up.map((q) => `<li><img src="${esc(coverOf(q.item, "small") || "")}" alt="" loading="lazy"><div><span class="q-t">${esc(nameOf(q.item))}</span><span class="q-a">${esc(artistsOf(q.item))}</span></div></li>`).join("")
+    const rows = (M.queue.upcoming || []).slice(0, 8).map((q) => {
+      if (nameOf(q.item)) return { name: nameOf(q.item), artist: artistsOf(q.item), cover: coverOf(q.item, "small") };
+      const id = /^spotify:track:/.test(q.item?.uri || "") ? idOf(q.item.uri) : "";
+      if (id && M.search && !queued.has(id)) queued.set(id, null);
+      return queued.get(id) || null;
+    }).filter(Boolean);
+    $("#queue").innerHTML = rows.length
+      ? rows.map((r) => `<li>${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy">` : '<span class="q-ph"></span>'}<div><span class="q-t">${esc(r.name)}</span><span class="q-a">${esc(r.artist)}</span></div></li>`).join("")
       : `<li class="empty">${tr("Kön visas när något spelas.")}</li>`;
-    fv("queue", up.length ? nameOf(up[0].item) : "");
+    fv("queue", rows.length ? rows[0].name : "");
+    const ask = [...queued].filter(([, v]) => v === null).map(([id]) => id).slice(0, 10);
+    if (!ask.length) return;
+    ask.forEach((id) => queued.set(id, false));          // asked for: not again
+    fetch(`/api/spotify/tracks?ids=${ask.join(",")}`).then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (!d) return;
+      for (const [id, t] of Object.entries(d.tracks || {})) queued.set(id, t);
+      if (queued.size > 400) [...queued.keys()].slice(0, 200).forEach((k) => queued.delete(k));
+      renderQueue();
+    }).catch(() => {});
   }
 
   // ---------------------------------------------------------------- the signal chain

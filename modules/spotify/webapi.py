@@ -138,6 +138,18 @@ class WebApi:
             return None
         return {**playlist_row(d), "cover": image(d.get("images"), 640), "followers": (d.get("followers") or {}).get("total")}
 
+    async def tracks(self, ids: list[str]) -> dict:
+        """{id: row} for tracks known only by their id (the far end of the queue, which the
+        player hands over as bare addresses). One question each, kept; those not found are left out."""
+        async def one(i):
+            try:
+                t = await self.get(f"tracks/{i}")
+            except WebApiError:
+                return None
+            return track_row(t) if t.get("name") else None
+        rows = await asyncio.gather(*(one(i) for i in ids))
+        return {i: r for i, r in zip(ids, rows) if r}
+
     async def album(self, album_id: str) -> dict | None:
         d = await self.get(f"albums/{album_id}")
         if not d.get("uri"):

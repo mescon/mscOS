@@ -890,6 +890,14 @@ class Spotify(SourcePlugin):
             except webapi.WebApiError as e:
                 raise failed(e)
 
+        @routes.get("/api/spotify/tracks")
+        async def spotify_tracks(request):
+            """Names and sleeves for tracks the queue names only by address."""
+            ids = list(dict.fromkeys(i for i in request.query.get("ids", "").split(",") if webapi.ID.fullmatch(i)))[:10]
+            if not ids or not sp.web.ready():
+                raise web.HTTPBadRequest()
+            return web.json_response({"tracks": await sp.web.tracks(ids)})
+
         @routes.get("/api/spotify/{kind:album|artist|playlist}/{sid}")
         async def spotify_item(request):
             sid = request.match_info["sid"]

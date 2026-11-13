@@ -170,6 +170,7 @@ select { appearance: none; padding-right: 32px; background-image: linear-gradien
 
 .queue { list-style: none; padding: 0; margin: 0; }
 .queue li { display: grid; grid-template-columns: 44px 1fr; gap: 14px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--hair); }
+.queue .q-ph { width: 44px; height: 44px; border-radius: 1px; background: var(--glass); display: block; }
 .queue li.empty { display: block; border: 0; color: var(--engraved); font-size: .9375rem; }
 .queue img { width: 44px; height: 44px; border-radius: 1px; background: var(--glass); display: block; }
 .queue .q-t { display: block; font-family: var(--serif); font-weight: 600; font-size: 1.0625rem; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -867,6 +868,8 @@ html { -webkit-tap-highlight-color: transparent; }
 .np-meta { justify-content: flex-start; gap: 4px; }
 .np-meta .np-album { flex: 0 1 auto; }
 .np-meta .np-format { margin-left: auto; padding-left: 10px; }
+.np-artist.can-find, .np-album.can-find { cursor: pointer; }
+.np-artist.can-find:hover, .np-album.can-find:hover { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .np-find { appearance: none; flex: none; width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: var(--engraved); cursor: pointer; }
 .np-find:hover { color: var(--ink); background: var(--hair); }
 .np-find svg { width: 16px; height: 16px; }

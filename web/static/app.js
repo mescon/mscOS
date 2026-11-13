@@ -346,7 +346,10 @@ function stageLayout() {
   // the buttons that lead from the artist and the album to the same in Music: where the
   // source's module can look them up
   const t = VIEW().find ? nowTrack() : null;
-  $$(".np-find").forEach((b) => { b.hidden = !t || !t[b.dataset.find]; });
+  $$(".np-find").forEach((b) => {
+    b.hidden = !t || !t[b.dataset.find];
+    $(`#np-${b.dataset.find}`).classList.toggle("can-find", !b.hidden);   // (the name itself leads there too)
+  });
   const col = document.querySelector(".console-col");
   const empty = ![...$$("#v-play .console-col [data-page-of]")].some((el) => !el.hidden);
   // Controls: the amplifier's input and power, and the modules' own cards. No tab when there are none.
@@ -1204,12 +1207,14 @@ $("#ml-up").addEventListener("click", () => ampStep(1));
 $("#ml-vol").addEventListener("change", (e) => amp({ volume_db: +e.target.value }));
 $("#ml-src").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) amp({ input: b.dataset.src }); });
 
-$$(".np-find").forEach((b) => b.addEventListener("click", () => {
+function findPlaying(kind) {
   const t = nowTrack(), find = VIEW().find;
-  if (!t || !find) return;
+  if (!t || !t[kind] || !find) return;
   go("v-music");
-  find(b.dataset.find, t);
-}));
+  find(kind, t);
+}
+$$(".np-find").forEach((b) => b.addEventListener("click", () => findPlaying(b.dataset.find)));
+for (const kind of ["artist", "album"]) $(`#np-${kind}`).addEventListener("click", (e) => { if (e.currentTarget.classList.contains("can-find")) findPlaying(kind); });
 // ------------------------------------------------------------------ source switch
 // The veil over the page while something slow is done on the device; "" lifts it.
 function busy(text) { VEIL.busy = text; veil(); }
