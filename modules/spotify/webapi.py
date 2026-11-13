@@ -146,7 +146,7 @@ class WebApi:
                 t = await self.get(f"tracks/{i}")
             except WebApiError:
                 return None
-            return track_row(t) if t.get("name") else None
+            return {**track_row(t), "cover_big": image((t.get("album") or {}).get("images"), 640)} if t.get("name") else None
         rows = await asyncio.gather(*(one(i) for i in ids))
         return {i: r for i, r in zip(ids, rows) if r}
 

@@ -293,15 +293,15 @@ export default function page(api) {
     const f = it && M.auth.is_active ? formatOf() : null;
     return {
       title: it ? nameOf(it) : tr("Inget spelas"),
-      artist: it ? artistsOf(it) : (M.auth.logged_in ? tr("Starta musik i Spotify-appen") : tr`Välj ${devName()} i Spotify-appen`),
+      artist: it ? artistsOf(it) || extra(it)?.artist || "" : (M.auth.logged_in ? tr("Starta musik i Spotify-appen") : tr`Välj ${devName()} i Spotify-appen`),
       album: it ? nameOf(deco(it).parent?.entity) : "",
       // "measuring" only while it plays
       format: it && M.auth.is_active && (f || playing) ? { text: f ? f.text : tr("Mäter formatet …"), lossy: !!f?.lossy, pending: !f } : null,
-      cover: (it && coverOf(it)) || "", playing, shuffle: !!o.shuffle, repeat: o.repeat || "off",
+      cover: (it && (coverOf(it) || extra(it)?.cover_big || extra(it)?.cover)) || "", playing, shuffle: !!o.shuffle, repeat: o.repeat || "off",
     };
   }
   // the names alone, for modules that look the music up
-  const track = () => { const it = M.playback.item; return it ? { title: nameOf(it), artist: artistsOf(it), album: nameOf(deco(it).parent?.entity) || "",
+  const track = () => { const it = M.playback.item; return it ? { title: nameOf(it), artist: artistsOf(it) || extra(it)?.artist || "", album: nameOf(deco(it).parent?.entity) || "",
     artist_uri: deco(it).creators?.[0]?.entity?.uri || "" } : null; };
   const duration = () => deco(M.playback.item).playback?.duration_ms || 0;
   function position() {
@@ -322,6 +322,9 @@ export default function page(api) {
       ? rows.map((r) => `<li>${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy">` : '<span class="q-ph"></span>'}<div><span class="q-t">${esc(r.name)}</span><span class="q-a">${esc(r.artist)}</span></div></li>`).join("")
       : `<li class="empty">${tr("Kön visas när något spelas.")}</li>`;
     fv("queue", rows.length ? rows[0].name : "");
+    askQueued();
+  }
+  function askQueued() {
     const ask = [...queued].filter(([, v]) => v === null).map(([id]) => id).slice(0, 10);
     if (!ask.length) return;
     ask.forEach((id) => queued.set(id, false));          // asked for: not again
@@ -329,8 +332,17 @@ export default function page(api) {
       if (!d) return;
       for (const [id, t] of Object.entries(d.tracks || {})) queued.set(id, t);
       if (queued.size > 400) [...queued.keys()].slice(0, 200).forEach((k) => queued.delete(k));
-      renderQueue();
+      renderQueue(); api.render();
     }).catch(() => {});
+  }
+  // While another device plays, Soloist names the track and its album but not the artist, and
+  // hands over no sleeve: those two are looked up the same way as the far end of the queue.
+  function extra(it) {
+    if (!it || (artistsOf(it) && coverOf(it))) return null;
+    const id = /^spotify:track:/.test(it.uri || "") ? idOf(it.uri) : "";
+    if (!id || !M.search) return null;
+    if (!queued.has(id)) { queued.set(id, null); askQueued(); }
+    return queued.get(id) || null;
   }
 
   // ---------------------------------------------------------------- the signal chain
