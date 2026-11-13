@@ -222,7 +222,7 @@
             <canvas id="ck-chart" aria-label="Klockans avvikelse senaste 24 timmarna"></canvas>
             <div class="chart-axis"><span>−24 h</span><span>−12 h</span><span>nu</span></div>
           </div>
-          <p class="fine" id="ck-sum">Mäts när strömmen till DAC:en är öppen.</p>
+          <p class="fine" id="ck-sum">Mäts när ljudströmmen till DAC:en är öppen.</p>
         </div>
       </details>
 <details class="fold" id="f-drop" data-k="drop">
@@ -240,17 +240,17 @@
           <dl class="spec" id="usb-kv"></dl>
           <div class="notice" id="usb-note" hidden></div>
           <h4 class="sub">Anslutningar sedan start</h4>
-          <ol class="vlog" id="usb-ev"><li class="empty">Läser kärnans logg…</li></ol>
+          <ol class="vlog" id="usb-ev"><li class="empty">Hämtar USB-händelserna…</li></ol>
           <div class="admin">
-            <button class="btn" id="usb-reconnect">Anslut DAC:n på nytt</button>
-            <p class="fine">Gör om USB-förhandlingen, till exempel efter byte av kabel eller port. Ljudet bryts i cirka 10 sekunder.</p>
+            <button class="btn" id="usb-reconnect">Anslut DAC:en på nytt</button>
+            <p class="fine">Ansluter DAC:en på nytt över USB, till exempel efter byte av kabel eller port. Ljudet bryts i cirka 10 sekunder.</p>
           </div>
         </div>
       </details>
 <details class="fold" id="f-dac" data-k="dac">
-        <summary><span>DAC:n och format</span><span class="fv" id="fv-dac"></span></summary>
+        <summary><span>DAC:en och format</span><span class="fv" id="fv-dac"></span></summary>
         <div class="fold-body">
-          <h4 class="sub first" id="dac-title">DAC:n</h4>
+          <h4 class="sub first" id="dac-title">DAC:en</h4>
           <dl class="spec" id="dac-kv"></dl>
           <h4 class="sub">Format</h4>
           <table class="fmt" id="dac-fmt"></table>
@@ -270,7 +270,7 @@
       <div>
         <a class="back" href="/system"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 6-6 6 6 6"/></svg>System</a>
         <h2 id="h-mods" class="view-title">Moduler</h2>
-        <p class="fine" id="mods-sum">Stöd för dina källor, din utrustning och dina system. Kärnan klarar sig utan alla.</p>
+        <p class="fine" id="mods-sum">Moduler lägger till källor, utrustning och andra system. mscOS fungerar utan dem.</p>
       </div>
       <button class="btn admin" id="mods-check">Sök uppdateringar</button>
     </div>
@@ -340,7 +340,7 @@
               <button role="radio" data-v="100" aria-checked="false">100 Mbit/s</button>
               <button role="radio" data-v="1000" aria-checked="false">1000 Mbit/s</button>
             </div>
-            <p class="fine" id="net-note">100 Mbit/s räcker gott för musik och drar något mindre ström. Länken bryts några sekunder vid byte.</p>
+            <p class="fine" id="net-note">100 Mbit/s räcker gott för musik och drar något mindre ström. Nätverket bryts några sekunder vid byte.</p>
           </div>
         </div>
       </details>
@@ -358,7 +358,7 @@
           </div>
           <p class="fine" id="os-info"></p>
           <label class="toggle"><input type="checkbox" id="overlay"><span class="toggle-ui" aria-hidden="true"></span><span>Skrivskyddat system</span></label>
-          <p class="fine" id="overlay-note">Skyddar systemet vid strömavbrott. Ändringar ligger bara i minnet tills skyddet stängs av. Kräver omstart.</p>
+          <p class="fine" id="overlay-note">Skyddar systemet vid strömavbrott. Så länge skyddet är på försvinner ändringar vid omstart. Att slå på eller av skyddet kräver en omstart.</p>
           <h4 class="sub">Ström och omstart</h4>
           <div class="row wrap">
             <button class="btn" id="audio-restart">Starta om ljudtjänsterna</button>
@@ -424,7 +424,7 @@
 <details class="fold" id="f-accounts" data-k="accounts">
         <summary><span>Konton och nycklar</span><span class="fv" id="fv-accounts"></span></summary>
         <div class="fold-body">
-          <p class="lead">Det som är ditt eget: inloggningar och nycklar hos tjänsterna som modulerna använder. Allt sparas bara på enheten.</p>
+          <p class="lead">Dina inloggningar och nycklar hos tjänsterna som modulerna använder. Allt sparas bara på enheten.</p>
           <p class="fine" id="accounts-locked">Logga in under Åtkomst ovan för att ändra dem.</p>
           <div id="accounts"></div>
         </div>
@@ -484,8 +484,8 @@
 </aside>
 
 <!-- output of an installation or update, visible from every view -->
-<aside class="job" id="job" aria-label="Utskrift" hidden>
-  <div class="job-head"><b id="job-title">Utskrift</b><button class="btn" id="job-close">Stäng</button></div>
+<aside class="job" id="job" aria-label="Förlopp" hidden>
+  <div class="job-head"><b id="job-title">Förlopp</b><button class="btn" id="job-close">Stäng</button></div>
   <pre class="console" id="job-out"></pre>
 </aside>
 

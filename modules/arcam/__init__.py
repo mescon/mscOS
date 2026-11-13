@@ -74,7 +74,7 @@ class ArcamPlugin(Plugin):
             return None
         a, title = self.state, {"sv": "Arcam", "en": "Arcam"}
         if a.get("reachable") is None:  # read when the card is opened: the receiver takes one connection at a time
-            return {"title": title, "lead": {"sv": "Läser receivern…", "en": "Reading the receiver…"}, "controls": []}
+            return {"title": title, "lead": {"sv": "Hämtar läget från receivern…", "en": "Asking the receiver…"}, "controls": []}
         if a.get("reachable") is False:
             return {"title": title, "summary": {"sv": "Svarar inte", "en": "No answer"}, "warn": True, "controls": [],
                     "lead": {"sv": "Receivern svarar inte. Kontrollera att den är på nätverket och att IP-styrning är aktiverad.",

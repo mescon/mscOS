@@ -301,12 +301,12 @@ export default function page(api) {
       { k: "raat", name: tr("Nätverket"), tag: "RAAT",
         state: !me.active ? "bad" : open ? "ok" : "idle",
         facts: open ? (wire === "FLAC" ? tr("FLAC, förlustfritt packat på vägen") : wire ? tr`${wire}, opackat` : tr("Förlustfritt")) : tr("Ingen ström just nu"),
-        note: tr("Roons eget protokoll. Enhetens klocka styr takten, servern följer den.") },
+        note: tr("Roons eget sätt att skicka ljud över nätverket. Enhetens klocka styr takten, servern följer den.") },
       { k: "bridge", name: "Roon Bridge", tag: me.version || "",
         state: !me.active ? "bad" : !same ? "bad" : open ? "ok" : "idle",
-        facts: !me.active ? tr("Roon Bridge kör inte") : open ? tr`Öppnar DAC:en ensam, ${r.hw_bits && frame > r.hw_bits && !dsd ? tr`${r.hw_bits} bit ljud i ${frame}-bitars ram, ${khz(rate)} kHz` : api.sigWord(dac.hw_params?.format, rate)}` : tr("Igång, väntar på Roon"),
+        facts: !me.active ? tr("Roon Bridge är inte igång") : open ? tr`Har DAC:en för sig själv, ${r.hw_bits && frame > r.hw_bits && !dsd ? tr`${r.hw_bits} bit ljud i ${frame}-bitarsformat, ${khz(rate)} kHz` : api.sigWord(dac.hw_params?.format, rate)}` : tr("Igång, väntar på Roon"),
         note: !me.active ? tr("Byt källa igen eller starta om enheten")
-          : open ? [r.realtime ? tr("Realtidsprioritet.") : "", buf && rate ? tr`Buffert ${buf} sampel (${dec(buf / rate * 1000, 0)} ms).` : "", tr("Ingen mixer, ingen omsampling på enheten.")].filter(Boolean).join(" ")
+          : open ? [r.realtime ? tr("Ljudet har förtur på enheten.") : "", buf && rate ? tr`Buffert ${buf} sampel (${dec(buf / rate * 1000, 0)} ms).` : "", tr("Enheten blandar inte ljudet med annat och samplar inte om.")].filter(Boolean).join(" ")
           : tr("Välj den här enheten som zon i Roon") },
       api.usbStage(dac, running),
       { k: "dac", name: api.outName(), tag: tr("DAC"), state: !dac.present ? "bad" : running ? "ok" : "idle",
@@ -314,12 +314,12 @@ export default function page(api) {
         note: running ? tr("Tar emot signalen direkt från Roon Bridge") : tr("Väntar på Roon") },
     ];
     let seal;
-    if (!me.active) seal = { head: tr("Roon Bridge kör inte"), sub: tr("Byt källa igen eller starta om enheten."), cls: "warn" };
+    if (!me.active) seal = { head: tr("Roon Bridge är inte igång"), sub: tr("Byt källa igen eller starta om enheten."), cls: "warn" };
     else if (!open) seal = { head: tr("Redo för Roon"), sub: sv.name ? tr`Ansluten till ${sv.name}. Enheten lämnar DAC:en orörd tills Roon spelar.` : tr("Roon Bridge är igång och väntar på Roon."), cls: "" };
     else if (issues.length) seal = { head: tr("Roon ändrar signalen"), cls: "warn",
       sub: issues.join(", ").replace(/^./, (x) => x.toUpperCase()) + ". " + tr("Ställ zonens volym på fast nivå i Roon (Enhetsinställningar, Volymkontroll) för orört ljud.") };
     else if (worked) seal = { head: tr("Orört på enheten"), cls: "",
-      sub: tr`Roon skickar 32 bit, mer än musikfiler innehåller. Det tyder på att servern bearbetar ljudet (DSP, volymutjämning eller Roons egen volym). Roons signalväg visar vad, och där stänger man av det för orört ljud. Roon Bridge lämnar det som kommer till DAC:en oförändrat.` };
+      sub: tr`Roon skickar 32 bit, mer än musikfiler innehåller. Det tyder på att servern bearbetar ljudet (DSP, volymutjämning eller Roons egen volym). Roons signalväg visar vad, och där stänger du av det om du vill ha orört ljud. Roon Bridge lämnar det som kommer till DAC:en oförändrat.` };
     else seal = { head: tr("Orört på enheten"), cls: "verified",
       sub: tr`Roon skickar ${asked}${wire ? `, ${wire}` : ""}, och Roon Bridge lämnar det till DAC:en som det kom. Vad servern gjort före det (DSP, volymutjämning, omsampling) visar Roons egen signalväg.` };
     return { stages, running, playing: open, rate, issues, dac, seal,

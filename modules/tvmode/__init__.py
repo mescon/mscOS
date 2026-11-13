@@ -81,7 +81,7 @@ class TvMode(Plugin):
             raise RuntimeError(T("Okänt reglage"))
         a = self._amp()
         if a is None or not a.host:
-            raise RuntimeError(T("Förstärkaren är inte hittad"))
+            raise RuntimeError(T("Förstärkaren hittades inte"))
         try:
             await self._switch(a, value)
         except a.errors as e:
@@ -112,10 +112,10 @@ class TvMode(Plugin):
             b = await hub.body(request)
             mode = b.get("mode")
             if mode not in ("tv", "stereo", "tv_off"):
-                raise web.HTTPBadRequest(text=T("mode ska vara tv, stereo eller tv_off"))
+                raise web.HTTPBadRequest(text=T("Okänt läge"))
             a = self._amp()
             if a is None or not a.host:
-                raise web.HTTPServiceUnavailable(text=T("Förstärkaren är inte hittad"))
+                raise web.HTTPServiceUnavailable(text=T("Förstärkaren hittades inte"))
             try:
                 did = await self._switch(a, mode)
             except a.errors as e:

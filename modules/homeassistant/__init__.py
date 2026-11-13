@@ -26,8 +26,8 @@ class HomeAssistant(Plugin):
     id = "homeassistant"
     kind = "integration"
     name = {"sv": "Home Assistant", "en": "Home Assistant"}
-    description = {"sv": "Tillstånd för sensorer (/api/ha) och larm till telefonen via en webhook.",
-                   "en": "State for sensors (/api/ha) and alerts to the phone through a webhook."}
+    description = {"sv": "Låter Home Assistant läsa av enheten och skickar larm till telefonen genom Home Assistant.",
+                   "en": "Lets Home Assistant read the device and sends alerts to the phone through Home Assistant."}
 
     options = (
         {"key": "ha_webhook", "type": "secret", "needed": True, "guide": {"sv": ["I Home Assistant: öppna Inställningar, Automationer och scener, och skapa en ny automation.", "Lägg till en utlösare av typen Webhook. Home Assistant föreslår ett webhook-ID. Byt det mot något långt som är svårt att gissa: alla i nätet som kan det kan utlösa automationen.", "Lägg till en åtgärd som skickar en avisering till din telefon, med titeln `{{ trigger.json.title }}` och meddelandet `{{ trigger.json.message }}`.", "Spara automationen.", "Skriv adressen i fältet här: din Home Assistants adress följt av `/api/webhook/` och ditt webhook-ID, till exempel `http://homeassistant.local:8123/api/webhook/ditt-id`. Tryck Spara ändringar.", "Prova med Skicka ett testlarm under Profil, Larm till telefonen. Mer om utlösaren står i [Home Assistants beskrivning av webhook-utlösare](https://www.home-assistant.io/docs/automation/trigger/#webhook-trigger)."],

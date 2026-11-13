@@ -31,11 +31,11 @@ class About(Plugin):
     id = "about"
     name = {"sv": "Om musiken", "en": "About the music"}
     description = {"sv": "Text om artisten, albumet och låten som spelas, vilka som medverkar, och låttexten i takt med musiken. Ett omslag när spelaren saknar ett. Från Wikipedia, MusicBrainz, Cover Art Archive, Wikidata, Discogs, Last.fm och LRCLIB. Enheten frågar de tjänsterna om det som spelas.",
-                   "en": "Notes on the artist, the album and the song that is playing, who plays on it, and the words in time with the music. A sleeve when the player has none. From Wikipedia, MusicBrainz, the Cover Art Archive, Wikidata, Discogs, Last.fm and LRCLIB. The device asks those services about what is playing."}
+                   "en": "Notes on the artist, the album and the song that is playing, who plays on it, and the lyrics in time with the music. A sleeve when the player has none. From Wikipedia, MusicBrainz, the Cover Art Archive, Wikidata, Discogs, Last.fm and LRCLIB. The device asks those services about what is playing."}
     defaults = {"about_lyrics": False}
-    options = ({"key": "about_lyrics", "type": "toggle", "label": {"sv": "Visa låttexten", "en": "Show the words of the song"},
+    options = ({"key": "about_lyrics", "type": "toggle", "label": {"sv": "Visa låttexten", "en": "Show the lyrics"},
                 "help": {"sv": "Texten hämtas från LRCLIB, en öppen databas som användare fyller på, och följer med i musiken när den är tidssatt.",
-                         "en": "The words come from LRCLIB, an open database kept by its users, and follow the music when they are timed."}},
+                         "en": "The lyrics come from LRCLIB, an open database kept by its users, and follow the music when they are timed."}},
                {"key": "about_lastfm_key", "type": "secret", "guide": {"sv": ["Öppna [Last.fm: Create API account](https://www.last.fm/api/account/create) och logga in. Har du inget konto skapar du ett först, det är gratis.", "Skriv ett namn under Application name, till exempel mscOS. Övriga fält kan lämnas tomma.", "Tryck Submit.", "Kopiera API key (inte Shared secret) till fältet här och tryck Spara ändringar.", "Tappar du bort nyckeln finns den kvar under [dina API-konton hos Last.fm](https://www.last.fm/api/accounts)."],
                    "en": ["Open [Last.fm: Create API account](https://www.last.fm/api/account/create) and log in. If you have no account, create one first; it is free.", "Enter a name under Application name, mscOS for example. The other fields can be left empty.", "Press Submit.", "Copy the API key (not the Shared secret) into the field here and press Save changes.", "If you lose the key, it is still there under [your API accounts at Last.fm](https://www.last.fm/api/accounts)."]},
          "label": {"sv": "Last.fm API-nyckel (valfritt)", "en": "Last.fm API key (optional)"},

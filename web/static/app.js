@@ -231,7 +231,7 @@ function connect() {
   ws.onopen = () => { retry = 1000; const l = $("#conn"); l.classList.add("on"); l.setAttribute("aria-label", tr("Ansluten till enheten")); };
   ws.onclose = () => {
     const l = $("#conn"); l.classList.remove("on"); l.setAttribute("aria-label", tr("Ingen kontakt med enheten"));
-    $("#dev-sub").textContent = tr("– ingen kontakt, försöker igen…");
+    $("#dev-sub").textContent = tr("ingen kontakt, försöker igen…");
     // (a moment's grace: a module switched on closes and opens the connection at once)
     clearTimeout(lostTimer);
     lostTimer = setTimeout(() => { if (!ws || ws.readyState !== 1) waiting(heard ? tr("Enheten svarar inte just nu, den kanske startar om. Sidan kommer tillbaka av sig själv.") : tr("Ingen kontakt med enheten. Försöker igen…")); }, 1500);
@@ -350,7 +350,7 @@ function renderNames() {
   o.placeholder = n.detected?.output || ""; st.placeholder = n.detected?.streamer || "";
   const c = $("#net-name-custom");
   if (!$("#names-form").contains(document.activeElement)) { netNameMode(set.network_name || "streamer"); c.value = set.network_name_custom || ""; }
-  $("#net-name-now").textContent = n.network ? tr`Enheten heter ${n.network} i Spotify-appen och för andra spelare som visar sig i nätverket.` : "";
+  $("#net-name-now").textContent = n.network ? tr`Enheten heter ${n.network} i Spotify-appen och i andra appar som hittar den i nätverket.` : "";
 }
 // Only what this installation has: no amplifier driver, no amplifier parts; no Arcam, no Arcam row.
 // Nothing beside the sleeve (no amplifier module, no cards, no queue): the text takes that place.
@@ -465,7 +465,7 @@ function renderSource() {
     b.disabled = srcState(b.dataset.v).installed === false;
   });
   const s = SRC();
-  $("#source-note").textContent = !list.length ? tr("Ingen källa är påslagen.") : s ? tr`${loc(s.name)} äger DAC:en.` : "";
+  $("#source-note").textContent = !list.length ? tr("Ingen källa är påslagen.") : s ? tr`${loc(s.name)} använder DAC:en.` : "";
 }
 // The transport buttons show what the source says, and only what it can do.
 function transportState(playing, shuffle, repeat) {
@@ -613,7 +613,7 @@ function usbStage(dac, running) {
   return { k: "usb", name: "USB", tag: dac.usb_speed === "high" ? "high speed" : dac.present ? "full speed" : "",
     state: !dac.present ? "bad" : running ? "ok" : "idle",
     facts: dac.present ? tr`Asynkron överföring, ${dac.usb_speed === "high" ? "USB 2.0" : "USB 1.1"}` : tr("Ingen DAC ansluten"),
-    note: dac.present ? tr("DAC:ns egen klocka styr takten.") + " " + (dac.usb_speed === "high" ? tr("Upp till 192 kHz och DSD64 via DoP.") : tr`Upp till ${khz(dac.max_rate || 48000)} kHz. Högre upplösningar räknas om av källan.`) : tr("Kontrollera USB-kabeln") };
+    note: dac.present ? tr("DAC:ens egen klocka styr takten.") + " " + (dac.usb_speed === "high" ? tr("Upp till 192 kHz och DSD64 via DoP.") : tr`Upp till ${khz(dac.max_rate || 48000)} kHz. Högre upplösningar räknas om av källan.`) : tr("Kontrollera USB-kabeln") };
 }
 function chainSource() {
   const st = S.status, dac = st.dac || {}, s = SRC() || { label: tr("Ingen källa"), name: {}, protocol: "", pipewire: true };
@@ -627,7 +627,7 @@ function chainSource() {
   const unity = sink.volume == null || Math.abs(sink.volume - 1) < 1e-6;
   const stages = [
     { k: "roon", name: s.label, tag: s.protocol, state: !roon.active ? "bad" : running ? "ok" : "idle",
-      facts: roon.installed === false ? tr`${roon.name} är inte installerat` : roon.active ? tr`${roon.name} är igång` : tr`${roon.name} kör inte`,
+      facts: roon.installed === false ? tr`${roon.name} är inte installerat` : roon.active ? tr`${roon.name} är igång` : tr`${roon.name} är inte igång`,
       note: roon.active ? (running ? (now?.codec ? `${CODEC[now.codec] || now.codec}${now.bitrate ? `, ${now.bitrate} kbit/s` : ""}` : tr("Spelar")) : srcHint(s)) : tr("Byt källa igen eller starta om enheten") },
     s.pipewire && { k: "pipewire", name: "PipeWire", tag: "pro-audio",
       state: !sink.name || !unity ? "bad" : running ? "ok" : "idle",
@@ -664,10 +664,10 @@ function renderSignal() {
   if (!c.dac.present) { head = tr("Ingen DAC"); sub = tr("Kontrollera USB-kabeln till DAC:en."); cls = "warn"; }
   else if (c.seal) ({ head, sub, cls = "" } = c.seal);  // the source's page code has its own verdict
   else {
-    head = c.roon.active ? (c.running ? tr`${c.roon.label} spelar` : tr`${c.roon.label}, redo`) : tr`${c.roon.name} kör inte`;
+    head = c.roon.active ? (c.running ? tr`${c.roon.label} spelar` : tr`${c.roon.label}, redo`) : tr`${c.roon.name} är inte igång`;
     sub = !c.running ? srcHint() + "."
       : c.lossy ? tr`${CODEC[S.now.codec] || S.now.codec}${S.now.bitrate ? `, ${S.now.bitrate} kbit/s` : ""}: komprimerat ljud, inte Lossless.`
-      : c.direct ? tr`${c.roon.name} äger DAC:en: ${sigWord(c.dac.hw_params?.format, c.rate)}.` : tr`${c.roon.name} spelar via PipeWire.`;
+      : c.direct ? tr`${c.roon.name} använder DAC:en: ${sigWord(c.dac.hw_params?.format, c.rate)}.` : tr`${c.roon.name} spelar via PipeWire.`;
     cls = c.roon.active ? "" : "warn";
   }
   seal.className = `seal ${cls}`;
@@ -708,8 +708,8 @@ function renderSysHead() {
   const st = S.status, dac = st.dac || {}, sys = st.system || {}, m = AMP || {};
   if (!st.system) return;
   const issues = [], sname = SRC() ? loc(SRC().name) : "";
-  if (!dac.present) issues.push(tr("DAC:n hittas inte"));
-  if (SRC() && !srcState().active) issues.push(tr`${sname} kör inte`);
+  if (!dac.present) issues.push(tr("DAC:en hittas inte"));
+  if (SRC() && !srcState().active) issues.push(tr`${sname} är inte igång`);
   if (!SRC()) issues.push(tr("ingen källa är påslagen"));
   for (const p of Object.values(PAGES)) issues.push(...(p.issues?.() || []));  // what the modules' page code reports
   if (m.reachable === false) issues.push(tr("förstärkaren svarar inte"));
@@ -742,12 +742,12 @@ function renderSpark() {
     if (n) { total += n; ctx.fillStyle = red; const bh = Math.min(h - 6, 8 + Math.log2(n + 1) * 10); ctx.fillRect(x, h - bh, Math.max(2, bw), bh); }
   }
   $("#spark-sum").textContent = played
-    ? tr`${total ? tr`${total} avbrott vid DAC:en` : tr("Inga avbrott vid DAC:en")} under ${Math.round(played / 2)} minuters uppspelning.${streamMiss ? tr` Gula markeringar: strömmen missade ${streamMiss} cykler, oftast vid låtbyte eller volymändring, utan luckor i signalen.` : ""} Röda staplar är avbrott.`
+    ? tr`${total ? tr`${total} avbrott vid DAC:en` : tr("Inga avbrott vid DAC:en")} under ${Math.round(played / 2)} minuters uppspelning.${streamMiss ? tr` Gula markeringar: ljudet kom för sent ${streamMiss} gånger, oftast vid låtbyte eller volymändring, utan luckor i signalen.` : ""} Röda staplar är avbrott.`
     : tr("Ingen uppspelning registrerad senaste dygnet.");
   // what was played by a source that opens the DAC itself is not counted: say so, claim nothing
   if (direct) $("#spark-sum").textContent = (direct === played
     ? tr`${Math.round(played / 2)} minuters uppspelning.`
-    : $("#spark-sum").textContent) + " " + tr`Under ${Math.round(direct / 2)} av minuterna ägde källan DAC:en själv (Roon, HQPlayer, UPnP). Då går ljudet förbi PipeWire och enheten kan inte räkna avbrott.`;
+    : $("#spark-sum").textContent) + " " + tr`Under ${Math.round(direct / 2)} av minuterna spelade källan direkt till DAC:en (Roon, HQPlayer, UPnP). Då går ljudet förbi PipeWire och enheten kan inte räkna avbrott.`;
   fv("drop", !played ? tr("Ingen uppspelning") : total ? tr`${total} vid DAC:en` : direct === played ? tr("Räknas inte") : tr("Inga"), total > 0);
 }
 window.addEventListener("resize", renderSpark);
@@ -817,7 +817,7 @@ $("#apt-check").addEventListener("click", async () => {
   const b = $("#apt-check"); b.disabled = true; $("#apt-info").textContent = tr("Söker…");
   try {
     const r = await fetch("/api/system/updates").then((x) => x.json());
-    $("#apt-info").textContent = r.packages.length ? tr`${r.packages.length} paket kan uppdateras: ${r.packages.slice(0, 12).join(", ")}${r.packages.length > 12 ? " …" : ""}` : tr("Systemet är uppdaterat.");
+    $("#apt-info").textContent = r.packages.length ? tr`${r.packages.length} uppdateringar finns: ${r.packages.slice(0, 12).join(", ")}${r.packages.length > 12 ? " …" : ""}` : tr("Systemet är uppdaterat.");
     $("#apt-run").hidden = !r.packages.length;
   } finally { b.disabled = false; }
 });
@@ -827,7 +827,7 @@ $("#os-check").addEventListener("click", async () => {
   try {
     const r = await (await fetch("/api/system/mscos-update")).json();
     if (r.ok === false || r.current == null) throw new Error();
-    info.textContent = r.available ? (r.signed === false ? tr`mscOS ${r.latest} är publicerad men inte signerad än. Du har ${r.current}. Försök igen senare.` : tr`mscOS ${r.latest} finns. Du har ${r.current}.`)
+    info.textContent = r.available ? (r.signed === false ? tr`mscOS ${r.latest} finns men är inte klar att hämta än. Du har ${r.current}. Försök igen senare.` : tr`mscOS ${r.latest} finns. Du har ${r.current}.`)
       : r.latest ? tr`mscOS ${r.current} är den senaste.` : tr`Ingen utgåva är publicerad än. Du har ${r.current}.`;
     $("#os-run").hidden = !r.available || r.signed === false;
   } catch { info.textContent = tr("Kunde inte söka efter en ny version av mscOS."); }
@@ -1017,18 +1017,18 @@ function renderDac() {
     $("#ck-ppm").innerHTML = `<b>${ppmTxt(ck.ppm)} ppm</b> mot ${khz(ck.nominal)} kHz, ±${dec(ck.unc_ppm, ck.unc_ppm < 1 ? 2 : 1)} ppm efter ${fmtUptime(ck.elapsed_s)}`;
     const s = ck.series || [];
     const lo = s.length ? Math.min(...s.map((x) => x[1])) : null, hi = s.length ? Math.max(...s.map((x) => x[1])) : null;
-    $("#ck-sum").textContent = tr`DAC:ns egen kristall styr takten, och streamern följer den via återkopplingen. Siffran är medelvärdet sedan strömmen till DAC:en startade, mätt mot streamerns kristall, och blir exaktare ju längre den går. Avvikelsen är skillnaden mellan två kristaller och påverkar inte ljudet.${s.length > 4 ? tr` Kurvan visar timmedel: ${ppmTxt(lo)} till ${ppmTxt(hi)} ppm.` : tr(" Kurvan visar timmedel när strömmen har gått en halvtimme.")}`;
+    $("#ck-sum").textContent = tr`DAC:ens egen kristall styr takten, och streamern följer den via återkopplingen. Siffran är medelvärdet sedan ljudströmmen till DAC:en startade, mätt mot streamerns kristall, och blir exaktare ju längre den går. Avvikelsen är skillnaden mellan två kristaller och påverkar inte ljudet.${s.length > 4 ? tr` Kurvan visar timmedel: ${ppmTxt(lo)} till ${ppmTxt(hi)} ppm.` : tr(" Kurvan visar timmedel när ljudströmmen har gått en halvtimme.")}`;
   } else if (fb.hz) {
     // The stream is young (a source that opens the DAC anew for each track starts over every
     // time): until the average is there, what the DAC itself reports through the feedback.
     $("#ck-hz").textContent = fb.hz.toLocaleString("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     fv("clock", `${$("#ck-hz").textContent} Hz`);
-    $("#ck-ppm").innerHTML = `<b>${esc(ppmTxt(fb.ppm))} ppm</b> ${esc(tr`mot ${khz(fb.nominal)} kHz, DAC:ns egen återkoppling just nu (upplösning ${dec(fb.res_ppm, 1)} ppm)`)}`;
-    $("#ck-sum").textContent = tr("DAC:ns egen kristall styr takten, och streamern följer den via återkopplingen. Medelvärdet mot streamerns kristall kommer när strömmen till DAC:en har varit öppen en minut. En källa som öppnar DAC:en på nytt för varje låt (Roon, HQPlayer, UPnP) börjar om vid varje låtbyte.");
+    $("#ck-ppm").innerHTML = `<b>${esc(ppmTxt(fb.ppm))} ppm</b> ${esc(tr`mot ${khz(fb.nominal)} kHz, DAC:ens egen återkoppling just nu (upplösning ${dec(fb.res_ppm, 1)} ppm)`)}`;
+    $("#ck-sum").textContent = tr("DAC:ens egen kristall styr takten, och streamern följer den via återkopplingen. Medelvärdet mot streamerns kristall kommer när ljudströmmen till DAC:en har varit öppen en minut. En källa som öppnar DAC:en på nytt för varje låt (Roon, HQPlayer, UPnP) börjar om vid varje låtbyte.");
   } else {
     $("#ck-hz").textContent = "–";
     $("#ck-ppm").innerHTML = tr("Mäter, första värdet efter en minut");
-    $("#ck-sum").textContent = tr("Klockan mäts när strömmen till DAC:en är öppen. Den är öppen hela tiden efter första uppspelningen.");
+    $("#ck-sum").textContent = tr("Klockan mäts när ljudströmmen till DAC:en är öppen. Den är öppen hela tiden efter första uppspelningen.");
   }
   renderClockChart(ck.series || []);
   // identity
@@ -1049,14 +1049,14 @@ function renderDac() {
     [tr("Port på streamern"), esc(d.port), d.port === "Audio USB" ? "good" : ""],
     [tr("Hastighet"), hs ? "High speed, 480 Mbit/s (USB 2.0)" : `Full speed, ${d.speed_mbps} Mbit/s (USB 1.1)`, hs ? "good" : "warn"],
     [tr("Styrkrets"), `${esc(d.host)}, ${esc(d.controller)}`],
-    [tr("Överföring"), /ASYNC/.test(d.endpoint || "") ? tr("Asynkron, DAC:n är klockmaster") : esc(d.endpoint || "–"), /ASYNC/.test(d.endpoint || "") ? "good" : ""],
+    [tr("Överföring"), /ASYNC/.test(d.endpoint || "") ? tr("Asynkron, DAC:en styr klockan") : esc(d.endpoint || "–"), /ASYNC/.test(d.endpoint || "") ? "good" : ""],
     d.sync_endpoint && [tr("Återkoppling"), tr`Ändpunkt ${esc(d.sync_endpoint)}, format ${esc(fb.feedback_format || "–")}`],
     d.packet_size && [tr("Största paket"), tr`${d.packet_size} byte per ${hs ? "125 µs" : "ms"}`],
     d.altset != null && [tr("Gränssnitt"), tr`Alternativ ${d.altset}`],
   ]);
   const note = $("#usb-note");
   note.hidden = hs || !failedHs;
-  note.innerHTML = `<p>${tr("DAC:n anmäler sig som USB 2.0, men redan första paketet i 480 Mbit/s kommer fram förvanskat, så länken faller tillbaka till USB 1.1. Det räcker för 24 bit/44,1 kHz bitperfekt. Prova en kort vanlig USB-kabel, eller en annan USB-port.")}</p>`;
+  note.innerHTML = `<p>${tr("DAC:en klarar USB 2.0, men anslutningen fungerar inte i den hastigheten, så den går i USB 1.1. Det räcker för bitperfekt 24 bit/44,1 kHz. Prova en kort vanlig USB-kabel eller en annan USB-port.")}</p>`;
   // formats
   const cur = st.hw_params || {}, rows = st.altsets || [];
   $("#dac-fmt").innerHTML = `<tr><th>${tr("Ordlängd")}</th><th>${tr("Frekvenser, kHz")}</th></tr>` + rows.map((a) =>
@@ -1064,7 +1064,7 @@ function renderDac() {
   const rate = parseInt(cur.rate), per = parseInt(cur.period_size), buf = parseInt(cur.buffer_size);
   const dsd = dsdOf(cur.format, rate);
   $("#dac-cur").textContent = dsd ? tr`Används nu: ${sigWord(cur.format, rate)}. DSD-strömmen skickas orörd, ${dsd.hz / rate} enbitssampel i taget (i rådata heter formatet ${cur.format}, ${khz(rate)} kHz).`
-    : rate ? tr`Används nu: ${fmtCarry(cur.format)}, ${khz(rate)} kHz, period ${per.toLocaleString("sv-SE")} sampel (${dec(per / rate * 1000)} ms), buffert ${buf.toLocaleString("sv-SE")} sampel (${Math.round(buf / rate * 1000)} ms). Varje sampel skickas som ett 32-bitars tal, och musikens bitar ligger orörda i det (i rådata heter formatet ${cur.format}).` : tr("Ingen ström öppen just nu.");
+    : rate ? tr`Används nu: ${fmtCarry(cur.format)}, ${khz(rate)} kHz, period ${per.toLocaleString("sv-SE")} sampel (${dec(per / rate * 1000)} ms), buffert ${buf.toLocaleString("sv-SE")} sampel (${Math.round(buf / rate * 1000)} ms). Varje sampel skickas som ett 32-bitars tal, och musikens bitar ligger orörda i det (i rådata heter formatet ${cur.format}).` : tr("Ingen ljudström öppen just nu.");
   renderUsbEvents(d.events || []);
   // raw, keep open state
   const raw = $("#dac-raw");
@@ -1087,8 +1087,8 @@ function renderUsbEvents(ev) {
   const shown = out.slice(-8).reverse();
   $("#usb-ev").innerHTML = shown.length ? shown.map((e) => {
     const fail = e.failed || (e.kind === "failed" ? e : null);
-    const what = e.kind === "connected" ? `${e.reconnect ? tr("Återansluten") : tr("Ansluten")}, ${sp(e.speed)}` : e.kind === "failed" ? tr("High speed misslyckades") : tr("Frånkopplad");
-    const sub = fail ? tr`High speed misslyckades efter ${fail.tries} försök (${fail.errors} fel, -71)` : e.kind === "connected" ? esc(e.product || "") : "";
+    const what = e.kind === "connected" ? `${e.reconnect ? tr("Återansluten") : tr("Ansluten")}, ${sp(e.speed)}` : e.kind === "failed" ? tr("Anslutning i USB 2.0 misslyckades") : tr("Frånkopplad");
+    const sub = fail ? tr`Anslutning i USB 2.0 misslyckades efter ${fail.tries} försök (${fail.errors} fel)` : e.kind === "connected" ? esc(e.product || "") : "";
     const cls = fail ? "fail" : "";
     return `<li class="${cls}">${fail ? MARK.warn : e.kind === "connected" ? MARK.ok : MARK.optional}<p class="vl-what">${what}${sub ? `<span>${sub}</span>` : ""}</p><span class="vl-when">${clock(e.t)}</span></li>`;
   }).join("") + (out.length > 8 ? `<li class="empty">${tr`${out.length - 8} äldre händelser sedan start visas inte.`}</li>` : "")
@@ -1124,15 +1124,15 @@ $("#poweroff").addEventListener("click", async (e) => {
   try { await post("/api/system/poweroff"); toast(S.features?.board?.power_button === false ? tr("Stänger av. Bryt och slå på strömmen för att starta igen.") : tr("Stänger av.")); } catch {}
 });
 $("#audio-restart").addEventListener("click", async (e) => {
-  const b = e.currentTarget; b.disabled = true; toast(tr("Startar om PipeWire, WirePlumber och spelaren…"));
+  const b = e.currentTarget; b.disabled = true; toast(tr("Startar om ljudtjänsterna…"));
   try { await post("/api/system/restart-audio"); toast(tr("Ljudtjänsterna är omstartade")); } catch {}
   b.disabled = false;
 });
 $("#usb-reconnect").addEventListener("click", async (e) => {
-  const b = e.currentTarget; b.disabled = true; toast(tr("Ansluter DAC:n på nytt, cirka 10 sekunder…"));
+  const b = e.currentTarget; b.disabled = true; toast(tr("Ansluter DAC:en på nytt, cirka 10 sekunder…"));
   try {
     const r = await post("/api/system/usb-reconnect");
-    toast(!r.present ? tr("DAC:n svarar inte. Kontrollera kabeln.") : r.speed === "high" ? tr("Ansluten i high speed, USB 2.0") : tr("Ansluten i full speed, USB 1.1"));
+    toast(!r.present ? tr("DAC:en svarar inte. Kontrollera kabeln.") : r.speed === "high" ? tr("Ansluten i high speed, USB 2.0") : tr("Ansluten i full speed, USB 1.1"));
     loadDac();
   } catch {}
   b.disabled = false;
@@ -1297,7 +1297,7 @@ $("#theme").addEventListener("click", (e) => {
 
 // ---- modules: grouped by kind, each with its state, version and settings in one card
 const KINDS = { source: tr("Källor"), amp: tr("Förstärkare"), device: tr("Utrustning"), notify: tr("Larm till telefonen"), integration: tr("Integrationer") };
-const KIND_HELP = { source: tr("En källa i taget äger DAC:en. Du byter under Styrning."), amp: tr("Volym och ingångar över nätverket. En förstärkare åt gången."),
+const KIND_HELP = { source: tr("En källa i taget använder DAC:en. Du byter under Styrning."), amp: tr("Volym och ingångar över nätverket. En förstärkare åt gången."),
   device: "", notify: tr("Vad som larmas om väljer du under Profil."), integration: "" };
 const lang = () => (document.documentElement.lang || "sv").slice(0, 2);
 const loc = (o) => (o && (o[lang()] || o.en || o.sv)) || "";

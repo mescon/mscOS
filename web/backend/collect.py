@@ -392,21 +392,21 @@ def optimizations(status: dict, playback: dict, vol_bridge: bool = False, output
                       "state": "ok" if ok else ("optional" if optional else "warn")})
 
     # ---- Kärna och processor
-    G = T("Kärna och processor")
+    G = T("System och processor")
     preempt = "PREEMPT" in os.uname().version and "PREEMPT_NONE" not in os.uname().version
     hz = _kernel_config("HZ")
-    add(G, "kernel", T("Låglatenskärna"),
-        T("Kärnan kan avbrytas mitt i arbete, så ljudtrådar kommer till direkt."),
-        preempt and hz in ("1000", None), f"{'PREEMPT' if preempt else T('Ingen preemption')}, {hz or '?'} Hz")
+    add(G, "kernel", T("Systemkärna för låg fördröjning"),
+        T("Systemet släpper fram ljudet direkt, även mitt i annat arbete."),
+        preempt and hz in ("1000", None), f"{'PREEMPT' if preempt else T('Ljudet släpps inte fram direkt')}, {hz or '?'} Hz")
     rtgs = "rt_group_sched=0" in cmd or _kernel_config("RT_GROUP_SCHED") is None
-    add(G, "rtgroup", T("Realtidsschemaläggning tillåten"),
-        T("Utan detta får PipeWire ingen realtidsprioritet inne i systemd."), rtgs,
-        T("Ingen RT-budget per grupp") if rtgs else T("RT-budget 0 i cgroups"))
+    add(G, "rtgroup", T("Ljudet får högsta prioritet"),
+        T("Utan detta får PipeWire inte gå före annat arbete i systemet."), rtgs,
+        T("Ingen gräns för ljudets prioritet") if rtgs else T("Ljudets prioritet är spärrad"))
     gov, mhz = sysi.get("governor"), sysi.get("cpu_mhz")
     fixed = bp["CPU_FIXED_KHZ"]
     if gov:  # no cpufreq at all (some PCs and VMs): nothing to check
-        add(G, "cpu", T("Fast klockfrekvens"),
-            T("Ingen frekvensväxling som kan ge jitter i bearbetningen."),
+        add(G, "cpu", T("Fast processorhastighet"),
+            T("Processorn byter inte hastighet, vilket annars kan ge ojämn takt i ljudbearbetningen."),
             gov == "performance" and (not fixed or mhz == int(fixed) // 1000), f"{mhz} MHz, {gov}")
     acpu = board.audio_cpu()
     if acpu is not None:
@@ -417,7 +417,7 @@ def optimizations(status: dict, playback: dict, vol_bridge: bool = False, output
         split = usb_ok and (audio_cpu == {str(acpu)} or not via_pw)
         who = "USB + PipeWire" + (f" + {label}" if rt_proc else "") if via_pw else "USB"
         add(G, "cpu1", T("Egen processorkärna för ljud"),
-            T("USB-avbrott och ljudtrådar på kärna {n}; nätverk, lagring och panel på de andra.", n=acpu), split,
+            T("DAC:ens USB-trafik och ljudet går på kärna {n}. Nätverk, lagring och panel går på de andra.", n=acpu), split,
             T("Kärna {n}: {who}", n=acpu, who=who) if split else T("Ljud på kärna {cpus}", cpus=", ".join(sorted(audio_cpu)) or "?"))
     if via_pw:
         dl = [t for t in th if t["proc"] == "pipewire" and t["name"].startswith("data-loop") and t["policy"] == 1]
@@ -426,10 +426,10 @@ def optimizations(status: dict, playback: dict, vol_bridge: bool = False, output
         if rt_proc:
             val += f", {label} {max((t['rtprio'] for t in so), default=0)} ({len(so)} {T('tråd') if len(so) == 1 else T('trådar')})"
         add(G, "rt", T("Realtidsprioritet"),
-            T("PipeWires ljudtråd och spelarens renderingstrådar går före allt annat."),
+            T("Ljudet i PipeWire och i spelaren går före allt annat."),
             bool(dl) and (len(so) >= 1 or not rt_proc), val)
     add(G, "audit", T("Säkerhetsloggning av"),
-        T("Ingen granskningslogg på varje systemanrop."), "audit=0" in cmd or _kernel_config("AUDIT") is None,
+        T("Systemet loggar inte varje åtgärd i bakgrunden."), "audit=0" in cmd or _kernel_config("AUDIT") is None,
         "audit=0" if "audit=0" in cmd else T("Aktiv"))
 
     # ---- Ljudväg
@@ -462,9 +462,9 @@ def optimizations(status: dict, playback: dict, vol_bridge: bool = False, output
                 T("All volym under 100 % räknar om samplen. Volymen sköts i förstärkaren."), sink_ok,
                 f"PipeWire {round((sink.get('volume') if sink.get('volume') is not None else 1) * 100)} %")
         tsched = "disable-tsched" in wp and re.search(r"api\.alsa\.disable-tsched\s*=\s*true", wp)
-        add(G, "tsched", T("Avbrottsstyrd USB-matning"),
-            T("DAC:ens egna avbrott styr flödet i stället för en uppskattande timer."), bool(tsched),
-            "period 1024, headroom 1024" if tsched else T("Timerstyrd"))
+        add(G, "tsched", T("DAC:en styr takten"),
+            T("DAC:en talar själv om när den vill ha mer ljud, i stället för att enheten uppskattar tiden."), bool(tsched),
+            "period 1024, headroom 1024" if tsched else T("Enheten uppskattar takten"))
         q = top.get("quantum")
         mq = re.search(r"default\.clock\.quantum\s*=\s*(\d+)", pwc)
         q = q or (int(mq.group(1)) if mq else None)
@@ -472,43 +472,43 @@ def optimizations(status: dict, playback: dict, vol_bridge: bool = False, output
             T("1024 sampel ger marginal mot avbrott utan att påverka ljudet."), q == 1024,
             T("{n} sampel ({ms} ms)", n=q, ms=round(q / 44.1)) if q else "–")
         add(G, "pro", T("Rå ljudprofil"),
-            T("Pro-audio-profilen: ingen kanalmixning, ingen dither, inbyggt ljud avstängt."),
+            T("Ingen kanalmixning och ingen dither. Enhetens inbyggda ljud är avstängt."),
             "pro-audio" in wp and "dither.method" in wp, "pro-audio, S32LE")
     elif src:
         # PipeWire is stopped: nothing between the player and the DAC (looked up now, not in
         # the status snapshot, which may be from before the source was switched)
         free = not any(t["proc"] == "pipewire" for t in th)
-        add(G, "direct", T("Direkt till DAC:n"),
-            T("{name} öppnar DAC:n själv: inget mellanled, alla format DAC:n tar emot.", name=src.get("label", "")),
-            free, T("PipeWire är stoppat") if free else T("PipeWire håller DAC:n"))
+        add(G, "direct", T("Direkt till DAC:en"),
+            T("{name} spelar direkt till DAC:en, utan mellanled, i alla format som DAC:en tar emot.", name=src.get("label", "")),
+            free, T("PipeWire är stoppat") if free else T("PipeWire använder DAC:en"))
 
     # ---- Störningsfrihet
     G = T("Störningsfrihet")
     if bp["THERMAL_OFF"]:
         zones = [z for z in glob.glob("/sys/class/thermal/thermal_zone*") if read(f"{z}/type").strip() == bp["THERMAL_OFF"]]
         th_ok = not zones or all(read(f"{z}/mode").strip() == "disabled" for z in zones)
-        add(G, "thermal", T("Ingen termoavläsning"),
+        add(G, "thermal", T("Ingen temperaturavläsning"),
             T("Kortets temperatursensor blockerar processorn i upp till en sekund per avläsning."), th_ok,
-            T("Sensorn borttagen") if not zones else (T("Avstängd") if th_ok else T("Pollas")))
+            T("Läses inte av") if not zones else (T("Avstängd") if th_ok else T("Läses av")))
     if bp["DT_OFF_NODE"]:
         dt_ok = read(f"/proc/device-tree/{bp['DT_OFF_NODE']}/status").strip("\0\n") == "disabled"
         nmods = max(0, len(read("/proc/modules").splitlines()))
         add(G, "dt", T("Oanvänd hårdvara avstängd"),
-            T("Hårdvara som enheten inte har får inga klockor och drivrutiner."), dt_ok,
-            T("{n} kärnmoduler laddade", n=nmods))
+            T("Drivrutiner för hårdvara som enheten inte har laddas inte."), dt_ok,
+            T("{n} drivrutiner laddade", n=nmods))
     cache = any(l.split()[1] == f"{AUDIO_HOME}/.cache" and l.split()[2] == "tmpfs"
                 for l in read("/proc/mounts").splitlines() if len(l.split()) > 2)
-    add(G, "cache", T("Strömningscache i RAM"),
+    add(G, "cache", T("Musiken mellanlagras i minnet"),
         T("Inga skrivningar till lagringen under uppspelning."), cache, "tmpfs 400 MB" if cache else T("På disk"))
     wants = "/etc/systemd/system/timers.target.wants"
     active_t = [t for t in QUIET_TIMERS if os.path.exists(f"{wants}/{t}")]
     add(G, "timers", T("Inga bakgrundsjobb under lyssning"),
-        T("Automatiska apt-, man-db- och diskkontroller är avstängda; underhåll sker 04:30–04:45."),
-        not active_t, T("Avstängda") if not active_t else T("{n} timers aktiva", n=len(active_t)))
+        T("Automatiska uppdaterings- och diskkontroller är avstängda. Underhåll sker 04:30 till 04:45."),
+        not active_t, T("Avstängda") if not active_t else T("{n} bakgrundsjobb aktiva", n=len(active_t)))
     sp = (sysi.get("net") or {}).get("speed_mbps")
     if sp and sp > 0:
         add(G, "net", T("Nätverk i 100 Mbit/s"),
-            T("Lägre länkhastighet ger mindre elektriskt brus; räcker gott för Lossless."), sp == 100,
+            T("Lägre nätverkshastighet ger mindre elektriskt brus och räcker gott för Lossless."), sp == 100,
             f"{sp} Mbit/s", optional=True)
     add(G, "overlay", T("Skrivskyddat system"),
         T("Lagringen tål strömavbrott och systemet är identiskt efter varje start."),

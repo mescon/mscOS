@@ -108,8 +108,8 @@ class Upnp(SourcePlugin):
                    "en": "This device as an output for UPnP and OpenHome apps: Qobuz, Tidal and your own files from e.g. mconnect or BubbleUPnP. Every format the DAC takes, DSD too."}
     system_units = ("mpd.service", "upmpdcli.service")
     hint = {"sv": "Välj {name} som utgång i din UPnP-app", "en": "Choose {name} as the output in your UPnP app"}
-    terms = {"sv": "MPD hämtas från Debian och upmpdcli från dess upphovsmans paketförråd (lesbonscomptes.com) till den här enheten. Kontot hos Qobuz eller Tidal finns i din app, inte här.",
-             "en": "MPD is downloaded from Debian and upmpdcli from its author's package repository (lesbonscomptes.com) to this device. The Qobuz or Tidal account is in your app, not here."}
+    terms = {"sv": "MPD hämtas från Debian och upmpdcli från dess upphovsman (lesbonscomptes.com) till den här enheten. Kontot hos Qobuz eller Tidal finns i din app, inte här.",
+             "en": "MPD is downloaded from Debian and upmpdcli from its author (lesbonscomptes.com) to this device. The Qobuz or Tidal account is in your app, not here."}
     terms_url = "https://www.lesbonscomptes.com/upmpdcli/"
     transport = ("toggle", "play", "pause", "next", "prev", "seek")
     updates = "self"   # both come from apt repositories: they follow the system's updates

@@ -744,7 +744,7 @@ async def player_command(request):
     b = await body(request)
     src, c = hub.source, b.get("command")
     if src is None or c not in src.transport:
-        raise web.HTTPConflict(text=T("Källan tar inte det kommandot."))
+        raise web.HTTPConflict(text=T("Källan kan inte göra det."))
     kw: dict = {}
     if c == "seek":
         kw["position_ms"] = int(num(b.get("position_ms"), 0, 24 * 3600 * 1000, "position"))
@@ -802,7 +802,7 @@ async def source_install(request):
         raise web.HTTPNotFound(text=T("Okänd källa"))
     script = os.path.join(p.module_dir, "install.sh")
     if not os.path.exists(script):
-        raise web.HTTPNotFound(text=T("Installationsskriptet saknas: {path}", path=script))
+        raise web.HTTPNotFound(text=T("Installationen gick inte att starta. En fil saknas i mscOS: {path}", path=script))
     if overlay_active():
         raise web.HTTPConflict(text=T("Stäng av skrivskyddet först. Med skrivskyddat system försvinner installationen vid omstart."))
     # the shared helpers come with mscOS, also for a module installed beside it
@@ -1121,7 +1121,7 @@ MSCOS_VERIFY = os.path.join(collect.LIB, "bin", "mscos-verify")
 def catalogue_refused(e: Exception) -> str:
     if str(e) == "older":
         return T("Katalogen är äldre än den enheten redan har godkänt. Inget hämtades.")
-    return T("Katalogen bär inte mscOS-projektets signatur. Inget hämtades.")
+    return T("Katalogen gick inte att bekräfta som mscOS-projektets egen. Inget hämtades.")
 
 
 def signed_by_project(data: bytes, sig: bytes) -> bool:
@@ -1466,7 +1466,7 @@ USB_LOCK = asyncio.Lock()
 @routes.post("/api/system/usb-reconnect")
 async def usb_reconnect(request):
     if USB_LOCK.locked():
-        raise web.HTTPConflict(text=T("DAC:n ansluts redan på nytt"))
+        raise web.HTTPConflict(text=T("DAC:en ansluts redan på nytt"))
     async with USB_LOCK:
         r = await collect.usb_reconnect()
     hub._dac_cache = (0.0, None)
@@ -1579,7 +1579,7 @@ async def only_via_proxy(request, handler):
         # Local mode. DNS rebinding defence: a page on another site can point its own name at
         # this device; then Origin and Host agree, so the Host itself must be one of ours.
         if _host_only(request.host or "") not in await own_names():
-            raise web.HTTPMisdirectedRequest(text=T("Okänt värdnamn. Öppna panelen med enhetens namn eller IP-adress."))
+            raise web.HTTPMisdirectedRequest(text=T("Panelen känner inte igen adressen. Öppna den med enhetens namn eller IP-adress."))
         return await handler(request)
     if _peer(request) not in TRUSTED_PEERS:
         if request.path.startswith("/api/"):
@@ -1599,9 +1599,9 @@ async def same_origin_json(request, handler):
         # plain http, the only scheme the panel serves itself
         own = PUBLIC_URL or f"http://{request.host}"
         if origin and origin.rstrip("/").lower() != own.lower():
-            raise web.HTTPForbidden(text=T("Begäran kommer från en annan webbplats."))
+            raise web.HTTPForbidden(text=T("Det här kom från en annan webbplats och stoppades. Öppna panelen direkt och försök igen."))
         if request.content_type != "application/json":
-            raise web.HTTPUnsupportedMediaType(text=T("Begäran måste vara JSON."))
+            raise web.HTTPUnsupportedMediaType(text=T("Panelen förstod inte det som skickades. Ladda om sidan och försök igen."))
     return await handler(request)
 
 

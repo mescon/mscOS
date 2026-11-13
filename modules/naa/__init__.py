@@ -20,7 +20,7 @@ class Naa(SourcePlugin):
     system_units = ("networkaudiod.service",)
     hint = {"sv": "Välj den här enheten som utgång i HQPlayer", "en": "Choose this device as the output in HQPlayer"}
     terms = {"sv": "NAA-programmet hämtas från Signalyst till den här enheten. Det får bara användas med en giltig HQPlayer-licens, och genom att installera godkänner du Signalysts licensavtal.",
-             "en": "The NAA daemon is downloaded from Signalyst to this device. It may only be used with a valid HQPlayer licence, and by installing you accept Signalyst's licence agreement."}
+             "en": "The NAA program is downloaded from Signalyst to this device. It may only be used with a valid HQPlayer licence, and by installing you accept Signalyst's licence agreement."}
     terms_url = "https://signalyst.com/network-audio/"
 
     INDEX = "https://www.signalyst.eu/bins/naa/linux/trixie/"

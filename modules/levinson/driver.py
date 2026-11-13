@@ -145,7 +145,7 @@ class Levinson:
                 await self._w.drain()
             except OSError as e:
                 await self.close()
-                raise LevinsonError(T("sändningen misslyckades ({error})", error=e)) from e
+                raise LevinsonError(T("kommandot kom inte fram ({error})", error=e)) from e
             if not expect:
                 return None
             end = time.monotonic() + wait
@@ -214,7 +214,7 @@ class Levinson:
                 self.muted = d["muted"]
                 if not d["muted"]:
                     return
-        raise LevinsonError(T("mute gick inte att slå av"))
+        raise LevinsonError(T("ljudet gick inte att slå på igen"))
 
     async def read_display(self) -> dict | None:
         """What the front-panel display shows, via the unit's own web remote.

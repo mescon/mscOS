@@ -35,16 +35,16 @@ class Cm6632aDsd(Plugin):
     def status(self) -> dict:
         s = self.state()
         if s["offered"]:
-            return {"state": "ok", "text": {"sv": f"{s['dac'] or 'DAC:n'} tar emot nativ DSD.",
+            return {"state": "ok", "text": {"sv": f"{s['dac'] or 'DAC:en'} tar emot nativ DSD.",
                                             "en": f"{s['dac'] or 'The DAC'} takes native DSD."}}
         if not s["driver"]:
             return {"state": "warn", "text": {
-                "sv": "Kärnans ljuddrivrutin saknar DSD-tillägget. Installera paketet mscos-dsd-dkms, eller använd en mscOS-avbildning.",
-                "en": "The kernel's audio driver lacks the DSD addition. Install the mscos-dsd-dkms package, or use an mscOS image."}}
+                "sv": "Enheten saknar stödet för nativ DSD. Det följer med mscOS färdiga avbildning. På en egen installation installerar du paketet mscos-dsd-dkms.",
+                "en": "The device lacks the support for native DSD. It comes with the ready-made mscOS image. On an installation of your own, install the mscos-dsd-dkms package."}}
         if not s["dac"]:
-            return {"state": "idle", "text": {"sv": "Drivrutinen är på plats. Ingen DAC med CM6632A är ansluten.",
-                                              "en": "The driver is in place. No DAC with a CM6632A is connected."}}
-        return {"state": "warn", "text": {"sv": "DAC:n är ansluten men erbjuder inte DSD. Den behöver USB 2.0 (high speed).",
+            return {"state": "idle", "text": {"sv": "Ingen DAC med CM6632A är ansluten.",
+                                              "en": "No DAC with a CM6632A is connected."}}
+        return {"state": "warn", "text": {"sv": "DAC:en är ansluten men erbjuder inte DSD. Den behöver USB 2.0 (high speed).",
                                           "en": "The DAC is connected but does not offer DSD. It needs USB 2.0 (high speed)."}}
 
     def features(self) -> dict:

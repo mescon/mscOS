@@ -68,7 +68,7 @@ export async function maybeSetup({ access, post, toast }) {
         return true;
       } },
     { title: tr("Källor"), body: () => `
-        <p class="setup-lead">${tr("Välj hur du vill spela. En källa åt gången äger DAC:en, och du växlar mellan dem under Styrning. Spelarna hämtas från sina utgivare efter guiden.")}</p>
+        <p class="setup-lead">${tr("Välj hur du vill spela. En källa i taget använder DAC:en, och du byter under Styrning. Spelarna hämtas från sina utgivare efter guiden.")}</p>
         <ul class="mods">${srcs.map((m) => `
           <li><label class="toggle"><input type="checkbox" data-src="${esc(m.id)}" ${st.sources.includes(m.id) ? "checked" : ""}>
             <span class="toggle-ui" aria-hidden="true"></span>

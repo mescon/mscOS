@@ -33,8 +33,8 @@ def _bypass(text: str | None) -> bool:
 class LevinsonAmp(AmpPlugin):
     id = "levinson"
     name = {"sv": "Mark Levinson Nº585/585.5", "en": "Mark Levinson Nº585/585.5"}
-    description = {"sv": "Volym, ingångar, standby och mute över nätverket (TCP 7701).",
-                   "en": "Volume, inputs, standby and mute over the network (TCP 7701)."}
+    description = {"sv": "Volym, ingångar, standby och mute över nätverket.",
+                   "en": "Volume, inputs, standby and mute over the network."}
     defaults = {
         "ml_host": "",            # "" = find it on the LAN
         "ml_play_input": "USB",   # the input this device is connected to

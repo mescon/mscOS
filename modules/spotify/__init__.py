@@ -60,7 +60,7 @@ class Spotify(SourcePlugin):
     defaults = {"auto_verify": True, "soloist_normalization": False}
     alert_kinds = ({"id": "soloist", "label": {"sv": "Soloist har stannat", "en": "Soloist has stopped"}},
                    {"id": "verify", "label": {"sv": "En verifiering avviker", "en": "A verification deviates"}},
-                   {"id": "expiry", "label": {"sv": "Spotify-bygget går snart ut", "en": "The Spotify build expires soon"}})
+                   {"id": "expiry", "label": {"sv": "Soloist-versionen går snart ut", "en": "This version of Soloist expires soon"}})
 
     def __init__(self, hub):
         super().__init__(hub)
@@ -200,10 +200,10 @@ class Spotify(SourcePlugin):
         if hub._held("soloist", hub.soloist and so.api_key_info()["set"]
                      and solo.get("service") not in (None, "active"), 120):
             await hub.alert("soloist", T("Soloist har stannat"),
-                            T("Spotify-tjänsten är {state}. Starta om den under Moduler i panelen.", state=solo.get("service")))
+                            T("Spotify-spelaren är inte igång ({state}). Starta om den under Moduler i panelen.", state=solo.get("service")))
         days = solo.get("days_left")
         if days is not None and days <= 14:
-            await hub.alert("expiry", T("Soloist-bygget går snart ut"),
+            await hub.alert("expiry", T("Soloist-versionen går snart ut"),
                             T("{days} dagar kvar. Nattens uppdatering har inte hittat en nyare version; prova Sök ny version i panelen.", days=days),
                             cooldown=24 * 3600)
 
@@ -246,7 +246,7 @@ class Spotify(SourcePlugin):
             upd["auto_verify"] = bool(b["auto_verify"])
         if "soloist_normalization" in b:
             if not so.prefs_paths():
-                raise web.HTTPConflict(text=T("Soloist har inte loggat in än. Anslut från Spotify-appen först."))
+                raise web.HTTPConflict(text=T("Soloist är inte inloggad på Spotify än. Välj enheten i Spotify-appen först."))
             upd["soloist_normalization"] = bool(b["soloist_normalization"])
 
     async def settings_applied(self, upd: dict) -> None:
@@ -317,7 +317,7 @@ class Spotify(SourcePlugin):
         try:
             await self.web.finish(code, state)
         except webapi.WebApiError:
-            raise RuntimeError(T("Spotify tog inte emot svaret. Det gäller i tio minuter och bara en gång: börja om med Logga in med Spotify."))
+            raise RuntimeError(T("Spotify godtog inte svaret. Det gäller i tio minuter och bara en gång. Börja om med Logga in med Spotify."))
         try:
             self.hub.set_secret("spotify_user", (await self.web.me())["name"][:60])
         except webapi.WebApiError:
@@ -329,12 +329,12 @@ class Spotify(SourcePlugin):
         solo = self.hub.status.get("soloist") or {}
         days = solo.get("days_left")
         if not so.api_key_info()["set"]:
-            return {"state": "warn", "text": {"sv": "Ingen nyckel är inställd", "en": "No key is entered"}}
+            return {"state": "warn", "text": {"sv": "Ingen nyckel är angiven", "en": "No key is entered"}}
         if solo.get("service") not in (None, "active"):
-            return {"state": "warn", "text": {"sv": "Soloist kör inte", "en": "Soloist is not running"}}
+            return {"state": "warn", "text": {"sv": "Soloist är inte igång", "en": "Soloist is not running"}}
         if days is not None:
             return {"state": "warn" if days < 14 else "ok",
-                    "text": {"sv": f"Bygget gäller {days} dagar till", "en": f"The build is valid for {days} more days"}}
+                    "text": {"sv": f"Versionen gäller {days} dagar till", "en": f"This version is valid for {days} more days"}}
         return None
 
     def facts(self) -> list[dict]:
@@ -352,12 +352,12 @@ class Spotify(SourcePlugin):
             {"label": {"sv": "Spotify-konto", "en": "Spotify account"}, "account": True, "state": "good" if self.web.signed_in() else "",
              "value": ({"sv": f"Inloggad{' som ' + who if who else ''}", "en": f"Signed in{' as ' + who if who else ''}"} if self.web.signed_in()
                        else {"sv": "Inte inloggad: Musik visar inte ditt bibliotek", "en": "Not signed in: Music does not show your library"})},
-            {"label": {"sv": "Frågor till Spotifys webb-API", "en": "Questions to Spotify's Web API"}, "state": "warn" if asked["wait"] or asked["refused"] else "",
+            {"label": {"sv": "Frågor till Spotify", "en": "Questions to Spotify"}, "state": "warn" if asked["wait"] or asked["refused"] else "",
              "value": {"sv": f"{asked['half_minute']} senaste halvminuten (högst {asked['limit']}), {asked['hour']} senaste timmen"
                              + (f". Spotify har bett om paus {asked['refused']} gånger" if asked["refused"] else "") + (f", {asked['wait']} s kvar" if asked["wait"] else ""),
                        "en": f"{asked['half_minute']} in the last half minute (at most {asked['limit']}), {asked['hour']} in the last hour"
                              + (f". Spotify has asked for a pause {asked['refused']} times" if asked["refused"] else "") + (f", {asked['wait']} s left" if asked["wait"] else "")}},
-            {"label": {"sv": "Realtidsprioritet", "en": "Realtime priority"}, **yes(solo.get("rt_watcher") == "active", "Aktiv", "On", "Av", "Off")},
+            {"label": {"sv": "Förtur på enheten", "en": "Goes first on the device"}, **yes(solo.get("rt_watcher") == "active", "Aktiv", "On", "Av", "Off")},
             {"label": {"sv": "Nyckel", "en": "Key"}, **yes(k["set"], f"Inställd{', ändrad ' + changed if changed else ''}", f"Entered{', changed ' + changed if changed else ''}", "Saknas: Soloist kan inte starta", "Missing: Soloist cannot start")},
             {"label": {"sv": "Nästa versionskoll", "en": "Next version check"}, "value": nxt.group(0) if nxt else "–", "state": ""},
         ]
@@ -716,7 +716,7 @@ class Spotify(SourcePlugin):
     async def run_audio_test(self, secs: int, auto: bool = False):
         sink = (self.hub.status.get("pipewire") or {}).get("sink") or {}
         if not sink.get("name"):
-            raise web.HTTPConflict(text=T("Ingen USB-DAC hittades i PipeWire"))
+            raise web.HTTPConflict(text=T("Ingen USB-DAC hittades. Kontrollera kabeln och att DAC:en är på."))
         job = {"name": "audio-test", "running": True, "output": "", "rc": None, "started": time.time(),
                "seconds": secs, "auto": auto}
         self.hub.jobs["audio-test"] = job
@@ -928,7 +928,7 @@ class Spotify(SourcePlugin):
         """Replace the Spotify developer key. Never echoed or logged. Rolled back if Soloist
         does not stay up with the new key."""
         if not re.fullmatch(r"[A-Za-z0-9_\-.:+/=]{16,512}", key):
-            raise web.HTTPBadRequest(text=T("Nyckeln ser inte giltig ut: 16–512 tecken, bokstäver, siffror och _-.:+/=."))
+            raise web.HTTPBadRequest(text=T("Nyckeln ser inte giltig ut: 16 till 512 tecken, bokstäver, siffror och _-.:+/=."))
         path = so.SOLOIST_ENV
         old = collect.read(path)
         if f"SOLOIST_API_KEY={key}" in old:
@@ -975,7 +975,7 @@ class Spotify(SourcePlugin):
                        "set_repeat_context", "set_repeat_track", "get_state", "get_queue", "activate",
                        "deactivate", "add_to_queue"}
             if c not in allowed:
-                raise web.HTTPBadRequest(text=T("okänt kommando"))
+                raise web.HTTPBadRequest(text=T("Kommandot känns inte igen. Ladda om sidan."))
             uri = b.get("uri")
             if c == "add_to_queue" or uri is not None:
                 m = SPOTIFY_URI.fullmatch(uri) if isinstance(uri, str) else None
@@ -1000,7 +1000,7 @@ class Spotify(SourcePlugin):
                     if r and r.get("type") == "error":
                         raise web.HTTPBadGateway(text=f"Soloist: {r.get('message')}")
                     if not await sp.wait_active():
-                        raise web.HTTPGatewayTimeout(text=T("Soloist blev inte aktiv på Spotify"))
+                        raise web.HTTPGatewayTimeout(text=T("Soloist blev inte vald i Spotify. Välj enheten i Spotify-appen."))
                 r = await sp.soloist_cmd(msg, wait=2.0)
                 if not (r and r.get("type") == "error"):
                     hub.play_started(force=True)  # wake the amplifier, select this device's input
@@ -1135,7 +1135,7 @@ class Spotify(SourcePlugin):
         async def soloist_normalization(request):
             enabled = bool((await hub.body(request)).get("enabled"))
             if not so.prefs_paths():
-                raise web.HTTPConflict(text=T("Soloist har inte loggat in än. Anslut från Spotify-appen först."))
+                raise web.HTTPConflict(text=T("Soloist är inte inloggad på Spotify än. Välj enheten i Spotify-appen först."))
             hub.settings["soloist_normalization"] = enabled  # kept for every account, guests too
             await asyncio.get_running_loop().run_in_executor(None, hub.save_settings)
             await sp.apply_normalization(enabled)

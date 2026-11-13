@@ -27,9 +27,9 @@ export default function page(api) {
   api.slot("signal", `<details class="fold" id="f-ver" data-k="ver">
       <summary><span>${tr("Verifiering och logg")}</span><span class="fv" id="fv-ver"></span></summary>
       <div class="fold-body">
-        <p class="lead">${tr("Varje låt mäts kort när den börjar. Verifieringen här är den längre kontrollen: 20 sekunder av exakt det som går till DAC:en, varje sampel mot Spotifys FLAC-raster, och att inga avbrott finns.")}</p>
+        <p class="lead">${tr("Varje låt mäts kort när den börjar. Verifieringen här är den längre kontrollen: den spelar in 20 sekunder av exakt det som går till DAC:en och ser efter att inget sampel har räknats om och att det inte finns några avbrott.")}</p>
         <div class="verify" id="test-result"></div>
-        <p class="notice" id="test-other">${tr("Verifieringen mäter Spotify Lossless och fungerar därför bara med den källan.")}</p>
+        <p class="notice" id="test-other">${tr("Verifieringen fungerar bara med Spotify Lossless.")}</p>
         <div class="verify-run" id="test-ctl">
           <button class="btn primary" id="test-run">${tr("Verifiera nu")}</button>
         </div>
@@ -275,7 +275,7 @@ export default function page(api) {
     const mine = { albums: played.albums.filter((x) => hit(x.name, x.artist)), tracks: played.tracks.filter((t) => hit(t.name, t.artist, t.album)),
       artists: played.artists.filter((x) => hit(x.name)) };
     if (!played.tracks.length) { put(`<p class="none">${esc(M.search ? tr("Sök i Spotify ovan. Här under samlas det som spelas på enheten, att spela igen.") : tr("Här samlas det som spelas på enheten: album, låtar och artister, att spela igen. Starta något i Spotify-appen, eller klistra in en Spotify-länk ovan."))}</p>`); return; }
-    if (!mine.albums.length && !mine.tracks.length && !mine.artists.length) { out.innerHTML = link ? "" : `<p class="none">${esc(tr("Inget av det du spelat heter så. Att söka i hela Spotify kräver Spotifys webb-API, som inte är inkopplat än. Klistra in en Spotify-länk för att spela något nytt."))}</p>`; return; }
+    if (!mine.albums.length && !mine.tracks.length && !mine.artists.length) { out.innerHTML = link ? "" : `<p class="none">${esc(tr("Inget av det du spelat heter så. För att söka i hela Spotify anger du ett Client ID under System, Moduler, Spotify Lossless. Klistra in en Spotify-länk för att spela något nytt."))}</p>`; return; }
     put((M.search && !words.length ? `<p class="m-lead">${esc(tr("Senast spelat"))}</p>` : "") + sections(mine, words.length ? 60 : 18));
   }
   function pageHtml(pg) {
@@ -290,7 +290,7 @@ export default function page(api) {
     if (pg.kind === "playlist") {
       return back + hero + (d.about ? `<p class="m-about">${esc(d.about)}</p>` : "")
         + ((d.tracks || []).length ? trackList(d.tracks) : `<p class="none">${esc(M.user ? tr("Spotify visar bara låtarna i spellistor som är dina egna. Den här är någon annans, så den går att spela men inte att se in i. Låtarna visas under Härnäst när listan spelar.")
-          : tr("Spotify låter inte den här sortens app se vilka låtar en spellista innehåller, bara spela den. Låtarna visas under Härnäst när listan spelar."))}</p>`);
+          : tr("Spotify låter inte enheten se vilka låtar spellistan innehåller, bara spela den. Låtarna visas under Härnäst när listan spelar."))}</p>`);
     }
     if (pg.kind === "album") return back + hero + trackList(d.tracks, true);
     // an artist: the best-known tracks first (a quick way to the hits), then the albums as they came out
@@ -418,7 +418,7 @@ export default function page(api) {
     }
     if (sel === "liked") return `<h3>${esc(tr("Gillade låtar"))}</h3>${(lib.tracks || []).length ? trackList(lib.tracks) : `<p class="none">${esc(tr("Här finns inget."))}</p>`}<p class="m-src">${esc(tr("De senaste femtio."))}</p>`;
     if (sel === "albums") return `<h3>${esc(tr("Sparade album"))}</h3>${(lib.albums || []).length ? albumList(lib.albums) : `<p class="none">${esc(tr("Här finns inget."))}</p>`}`;
-    if (sel === "mine") return `<h3>${esc(tr("Mina spellistor"))}</h3><p class="m-src">${esc(tr("De som inte ligger i någon mapp. Den du senast lade en låt i står först."))}${lib.reading ? " " + esc(tr`${lib.reading} spellistor är inte avlästa än; ordningen blir klar efter hand.`) : ""}</p>${playlistCards(loose(true))}`;
+    if (sel === "mine") return `<h3>${esc(tr("Mina spellistor"))}</h3><p class="m-src">${esc(tr("De som inte ligger i någon mapp. Den du senast lade en låt i står först."))}${lib.reading ? " " + esc(tr`${lib.reading} spellistor är inte hämtade än. Ordningen blir klar efter hand.`) : ""}</p>${playlistCards(loose(true))}`;
     if (sel === "followed") return `<h3>${esc(tr("Följda spellistor"))}</h3><p class="m-src">${esc(tr("Andras spellistor som du följer, och som inte ligger i någon mapp."))}</p>${playlistCards(loose(false))}`;
     return rest;
   }
@@ -490,8 +490,8 @@ export default function page(api) {
     const sp = api.srcState(ID);
     if (sp.installed === false || sp.key_set === false) {  // chosen but not ready yet
       return { title: "Spotify Lossless", artist: sp.installed === false
-        ? tr("Soloist är inte installerat. Installera det under Moduler.")
-        : tr("Ange din Spotify-nyckel under Moduler, Spotify Lossless.") };
+        ? tr("Soloist är inte installerat. Installera det under System, Moduler.")
+        : tr("Ange din Spotify-nyckel under System, Moduler, Spotify Lossless.") };
     }
     // (buffering, between tracks or after a seek, is still playing as far as the button goes)
     const p = M.playback, it = p.item, playing = p.status === "playing" || p.status === "buffering", o = p.options || {};
@@ -501,7 +501,7 @@ export default function page(api) {
       artist: it ? artistsOf(it) || extra(it)?.artist || "" : (M.auth.logged_in ? tr("Starta musik i Spotify-appen") : tr`Välj ${devName()} i Spotify-appen`),
       album: it ? nameOf(deco(it).parent?.entity) : "",
       // "measuring" only while it plays
-      format: it && M.auth.is_active && (f || playing) ? { text: f ? f.text : tr("Mäter formatet …"), lossy: !!f?.lossy, pending: !f } : null,
+      format: it && M.auth.is_active && (f || playing) ? { text: f ? f.text : tr("Mäter formatet…"), lossy: !!f?.lossy, pending: !f } : null,
       cover: (it && (coverOf(it) || extra(it)?.cover_big || extra(it)?.cover)) || "", playing, shuffle: !!o.shuffle, repeat: o.repeat || "off",
     };
   }
@@ -605,7 +605,7 @@ export default function page(api) {
       { k: "soloist", name: "Soloist", tag: (solo.version || "").replace(/^soloist /, "").split(" ")[0],
         state: solo.service !== "active" ? "bad" : (volDigital || norm) ? "bad" : playing ? "ok" : "idle",
         facts: bridge ? tr`Volym ${vol} % styr ${outName}, normalisering ${norm ? tr("på") : tr("av")}` : tr`Volym ${vol} %, normalisering ${norm ? tr("på") : tr("av")}`,
-        note: solo.service !== "active" ? tr("Tjänsten kör inte") : (volDigital || norm) ? tr("Ändrar samplen digitalt") : solo.rt_watcher === "active" ? tr("Realtidsprioritet, avkodar orört") : tr("Avkodar orört") },
+        note: solo.service !== "active" ? tr("Är inte igång") : (volDigital || norm) ? tr("Ändrar samplen digitalt") : solo.rt_watcher === "active" ? tr("Har förtur på enheten, avkodar orört") : tr("Avkodar orört") },
       { k: "pipewire", name: "PipeWire", tag: "pro-audio",
         state: !sink.name ? "bad" : (!sinkUnity || resampling) ? "bad" : (stream && running ? "ok" : "idle"),
         facts: tr`${carry(sink.format || "S32LE")}, ${sink.rate ? khz(sink.rate) : khz(44100)} kHz, ingen omsampling`,
@@ -613,7 +613,7 @@ export default function page(api) {
       { k: "usb", name: "USB", tag: dac.usb_speed === "high" ? "high speed" : dac.present ? "full speed" : "",
         state: !dac.present ? "bad" : running ? "ok" : "idle",
         facts: dac.present ? tr`Asynkron överföring, ${dac.usb_speed === "high" ? "USB 2.0" : "USB 1.1"}` : tr("Ingen DAC ansluten"),
-        note: dac.present ? tr`DAC:ns egen klocka styr takten. ${dac.usb_speed === "high" ? tr("Upp till 192 kHz.") : tr`Upp till ${khz(dac.max_rate || 48000)} kHz, räcker för Spotify.`}` : tr("Kontrollera USB-kabeln") },
+        note: dac.present ? tr`DAC:ens egen klocka styr takten. ${dac.usb_speed === "high" ? tr("Upp till 192 kHz.") : tr`Upp till ${khz(dac.max_rate || 48000)} kHz, räcker för Spotify.`}` : tr("Kontrollera USB-kabeln") },
       { k: "dac", name: outName, tag: tr("DAC"),
         state: !dac.present ? "bad" : running ? "ok" : "idle",
         facts: running ? `${carry(dac.hw_params.format)}, ${khz(rate)} kHz` : dac.present ? tr("Ansluten, vilar") : tr("Inte ansluten"),
@@ -650,7 +650,7 @@ export default function page(api) {
     if (r.verdict === "silent" || (r.rms ?? 1) < 1e-4) head = tr("Inget ljud under testet");
     else if (r.verdict === "bitperfect") { head = gaps.length ? tr("Bitperfekt, men med avbrott") : tr("Bitperfekt"); warn = !!gaps.length; }
     else if (r.verdict === "scaled") head = tr`Skalat med ${dec(r.gain_db)} dB`;
-    else if (r.verdict === "lossy_or_processed") head = tr("Inte orört: förlustkodat eller bearbetat");
+    else if (r.verdict === "lossy_or_processed") head = tr("Inte orört: förlustkomprimerat eller bearbetat");
     else head = tr("Kunde inte avgöra");
     const silence = Math.round(gaps.reduce((a, g) => a + g[1], 0) / 44.1);
     el.innerHTML = `<p class="v-head ${warn ? "warn" : ""}">${esc(head)}</p>
@@ -687,7 +687,7 @@ export default function page(api) {
         if (!silent) M.lastTest = m.result;
         renderTest(m.result); api.render();
       }
-      else if (!m.auto) toast(m.error || tr("Verifieringen misslyckades"));
+      else if (!m.auto) toast(m.error || tr("Verifieringen gick inte att genomföra. Försök igen."));
     }
   }
 
@@ -764,7 +764,7 @@ export default function page(api) {
     // what needs attention, for the line at the top of System
     issues() {
       const d = S.status.soloist?.days_left;
-      return d != null && d < 14 ? [tr`Spotify-bygget går ut om ${d} dagar`] : [];
+      return d != null && d < 14 ? [tr`Soloist-versionen går ut om ${d} dagar`] : [];
     },
   };
 }

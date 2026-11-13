@@ -1,10 +1,10 @@
 {
  "format": 1,
- "serial": 83,
+ "serial": 84,
  "modules": [
   {
    "id": "about",
-   "version": "1.11.0",
+   "version": "1.11.1",
    "kind": "integration",
    "name": {
     "sv": "Om musiken",
@@ -12,12 +12,12 @@
    },
    "description": {
     "sv": "Text om artisten, albumet och låten som spelas, vilka som medverkar, och låttexten i takt med musiken. Ett omslag när spelaren saknar ett. Från Wikipedia, MusicBrainz, Cover Art Archive, Wikidata, Discogs, Last.fm och LRCLIB. Enheten frågar de tjänsterna om det som spelas.",
-    "en": "Notes on the artist, the album and the song that is playing, who plays on it, and the words in time with the music. A sleeve when the player has none. From Wikipedia, MusicBrainz, the Cover Art Archive, Wikidata, Discogs, Last.fm and LRCLIB. The device asks those services about what is playing."
+    "en": "Notes on the artist, the album and the song that is playing, who plays on it, and the lyrics in time with the music. A sleeve when the player has none. From Wikipedia, MusicBrainz, the Cover Art Archive, Wikidata, Discogs, Last.fm and LRCLIB. The device asks those services about what is playing."
    },
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "596cdffce38afa503e984dfcb11e9f15ef95606783e3ac1b5b4ae647e296d609",
+     "sha256": "caf836d5d067ae4ecc0597787e68149577f80cce608e1c36aa0c167bf7407678",
      "exec": false
     },
     {
@@ -27,7 +27,7 @@
     },
     {
      "path": "module.json",
-     "sha256": "3eca6863ee8d14eb858a7eed75a5c727704a1b4c391fbb427e913ff4ccfe3305",
+     "sha256": "726e4e711e5dda8e6c57aa6153e927c6040f042ff23c8fbf315e91ab87101a5f",
      "exec": false
     },
     {
@@ -37,14 +37,14 @@
     },
     {
      "path": "i18n/en.json",
-     "sha256": "a98e9a92e6f6b0251d4a56136edb461ad7e87d038a44e3e0083487926e1552f5",
+     "sha256": "23cad1a2273d75c386175fbc4cc83ac298c483f0f37383e36ad75bc7ea7bc3da",
      "exec": false
     }
    ]
   },
   {
    "id": "arcam",
-   "version": "1.0.0",
+   "version": "1.0.1",
    "kind": "integration",
    "name": {
     "sv": "Arcam AV-receiver",
@@ -57,7 +57,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "ea36d00e4a19a8b3b529c5f720ef3344cf50b06b0270a72206ed75c6ad92f937",
+     "sha256": "d7b7df31c1d5087404055edc505596066157c7aff1796076fca70a894c26a4d3",
      "exec": false
     },
     {
@@ -67,14 +67,14 @@
     },
     {
      "path": "module.json",
-     "sha256": "74a0ba00ad291cfc0e8327ab4ae2dd4a8d292e8a674908f25299f2f7eb4c66a4",
+     "sha256": "67e8753a89712421405f55dc663976f19197cd2454f121111ab4d0e49924ecee",
      "exec": false
     }
    ]
   },
   {
    "id": "cm6632a",
-   "version": "1.0.0",
+   "version": "1.0.1",
    "kind": "device",
    "name": {
     "sv": "Nativ DSD för CM6632A",
@@ -87,67 +87,67 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "6721a727119ce6a62fa155b4187f5664d7b1e23a5bf04c27b2b166a27f97c3bc",
+     "sha256": "91df5156f27f9c958969984e0f0db81154f78af58e2fd1e2bc7b2ad06a489bb9",
      "exec": false
     },
     {
      "path": "module.json",
-     "sha256": "945c6c03068fb77d1077098c00a8dab638bac72e11e9b429ae41076eab4bf74a",
+     "sha256": "91184397dc7fe49444a444b1720983b902b31868f9fa050ece73524920337099",
      "exec": false
     }
    ]
   },
   {
    "id": "homeassistant",
-   "version": "1.1.0",
+   "version": "1.1.1",
    "kind": "integration",
    "name": {
     "sv": "Home Assistant",
     "en": "Home Assistant"
    },
    "description": {
-    "sv": "Tillstånd för sensorer (/api/ha) och larm till telefonen via en webhook.",
-    "en": "State for sensors (/api/ha) and alerts to the phone through a webhook."
+    "sv": "Låter Home Assistant läsa av enheten och skickar larm till telefonen genom Home Assistant.",
+    "en": "Lets Home Assistant read the device and sends alerts to the phone through Home Assistant."
    },
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "bd5a726be26a65a6e714b677208062f5dee5f8ba9983a91c5858d6be95c24835",
+     "sha256": "27faa36f5347c4fb216d3af1d714c0acf3d0469bc26a921418f03412674c09c9",
      "exec": false
     },
     {
      "path": "module.json",
-     "sha256": "b7289f0a524fa8a1a95045f6e7dabc81e1cc4b81e25202a0496e8cd95dad4e02",
+     "sha256": "6f05dfea54e3e259bdaa46621bdebdf451ae8bcf612d1b1842377395fec66c78",
      "exec": false
     }
    ]
   },
   {
    "id": "levinson",
-   "version": "1.0.0",
+   "version": "1.0.1",
    "kind": "amp",
    "name": {
     "sv": "Mark Levinson Nº585/585.5",
     "en": "Mark Levinson Nº585/585.5"
    },
    "description": {
-    "sv": "Volym, ingångar, standby och mute över nätverket (TCP 7701).",
-    "en": "Volume, inputs, standby and mute over the network (TCP 7701)."
+    "sv": "Volym, ingångar, standby och mute över nätverket.",
+    "en": "Volume, inputs, standby and mute over the network."
    },
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "424c05f62b360c406640ccc385f2e981f510ccf3ffa6f7a877356b49fe25fe7f",
+     "sha256": "6578f1bcfaf35b7d78c7c5d3e05f4eac1ede79d808f66bc7b823d6e0ae0a4ad7",
      "exec": false
     },
     {
      "path": "driver.py",
-     "sha256": "ce89ff752182bc245687c991f9dbee3f4e2af2951a910f2e7344123a68af0a5d",
+     "sha256": "5be40872f7df55e9f35b462ceed6fea6507abda5da5c7deec7174a38e713f78b",
      "exec": false
     },
     {
      "path": "module.json",
-     "sha256": "dc8b867285efb7a54de3390f5d7c2aed26a8889e430196b3c02aeed19cf8f8d7",
+     "sha256": "8b607c97ec8352b91cafd955572abea3870e65f730c5f6364fe5d8aef4e0e226",
      "exec": false
     }
    ]
@@ -214,7 +214,7 @@
   },
   {
    "id": "naa",
-   "version": "1.0.0",
+   "version": "1.0.1",
    "kind": "source",
    "name": {
     "sv": "HQPlayer NAA",
@@ -227,7 +227,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "e5d178372707b8668c98c6645d7fdef0634d44f13ee8e65fc54df75f7d485404",
+     "sha256": "3e60fafd30458f1431f9573fe82b891e5a2bd450a76c22873948efc0114de12e",
      "exec": false
     },
     {
@@ -237,7 +237,7 @@
     },
     {
      "path": "module.json",
-     "sha256": "bd80e5dfb14d4a48901490f892faa63fb8b7e8523dc54fa4a8ba1990a85bdf2b",
+     "sha256": "0cc1cdcbfcfc4bf0819d0d96ff625cc098c3248f8d5529a4431f2e8f6f5c2156",
      "exec": false
     }
    ]
@@ -294,7 +294,7 @@
   },
   {
    "id": "roon",
-   "version": "1.10.0",
+   "version": "1.10.1",
    "kind": "source",
    "name": {
     "sv": "Roon Bridge",
@@ -317,12 +317,12 @@
     },
     {
      "path": "module.json",
-     "sha256": "b7e241c73cae213ea8d67acd4f42670b86b502ce949f5b0ae2807e25e9f26829",
+     "sha256": "72e7e870373c185bba951385023adee48b5f060a8bd27ba754af6ee7b2ef887b",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "27c7487ccfc694426d124180b470ca6da4ec56687503192339e31c68bb8e60cd",
+     "sha256": "3f9366ed3e9e30aff3d366a5867ea7eb5fe76bc0489f77993654bf7920c37a7a",
      "exec": false
     },
     {
@@ -357,7 +357,7 @@
     },
     {
      "path": "i18n/en.json",
-     "sha256": "4e8f03f86eada6f85cf9103258af0d22b016922d3144b3bce67083aece62e6a6",
+     "sha256": "424885d687e7f10c53cd897ac5ad0f37bd4a9ba453b2e498a269a3a6126e0fff",
      "exec": false
     },
     {
@@ -369,7 +369,7 @@
   },
   {
    "id": "spotify",
-   "version": "1.18.0",
+   "version": "1.18.1",
    "kind": "source",
    "name": {
     "sv": "Spotify Lossless (Soloist)",
@@ -382,7 +382,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "cc93828f22c5cc944dfac4058872942f6f3d6747be6357342f6c86057cc10592",
+     "sha256": "ebda17a4e5739cf8c584a13457692118adc749abaa196acffc54c5251feda046",
      "exec": false
     },
     {
@@ -397,12 +397,12 @@
     },
     {
      "path": "module.json",
-     "sha256": "7a6a75d184eecf2e6ede4eafaf01a8030e98c3713a84ce18e6d7c76e28b59bc0",
+     "sha256": "778ce53bc7d306009b09a0886270a3f598da4d406b24cb077a8350ad667da263",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "ddec52743c268ad46c9271cfc1ee8518a7993f339d1b564bf2664d96170acef1",
+     "sha256": "c72d23138c86d55cf83b8af2712f167723c4a34ce2f0024aa66245a9118d3150",
      "exec": false
     },
     {
@@ -447,14 +447,14 @@
     },
     {
      "path": "i18n/en.json",
-     "sha256": "4b68f3302dbfa790dde29e8ad824fd70592791b6eb603d1d00046b23e9972111",
+     "sha256": "703b1b5bd854be6d7a8cf0cdfb786f3903d46f23eb3b38fdc6c0d3947352e68b",
      "exec": false
     }
    ]
   },
   {
    "id": "tvmode",
-   "version": "1.0.0",
+   "version": "1.0.1",
    "kind": "integration",
    "name": {
     "sv": "TV-läge",
@@ -467,19 +467,19 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "564ded0f5ecc28c50c600b4542eb69d028412fd6f5a141e943eb0a8918fc131c",
+     "sha256": "18b94e7d765e40d9a20c6bbb8ff9cf1f17be17afff041d6fd49f0b1ff787f7ed",
      "exec": false
     },
     {
      "path": "module.json",
-     "sha256": "fc041154a38360e609b070448aaa538349f381cb0a0a6d1022a65313ed979dd7",
+     "sha256": "4a8ca9bc7f066457c54ede36f8213058124ceaac546b52cf7edeb374b8bf8a40",
      "exec": false
     }
    ]
   },
   {
    "id": "upnp",
-   "version": "1.0.0",
+   "version": "1.0.1",
    "kind": "source",
    "name": {
     "sv": "UPnP-mottagare",
@@ -492,7 +492,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "7cb49b1071187ad2d93b878a1121d5d54d82f588da4dfe041b05503f392072ef",
+     "sha256": "07b9317f2538cfee62c082d7b01e08cc43b106e5f77b5d65e77d146258cf30e3",
      "exec": false
     },
     {
@@ -502,7 +502,7 @@
     },
     {
      "path": "module.json",
-     "sha256": "0a8c2e485b76d39b3d87ccfc197ced952c54b67fc9068735ccfb3d498b47a070",
+     "sha256": "499e1578b11849cfa5823b341d3acfac166069ea204bfeff8a79de75ce631a92",
      "exec": false
     }
    ]
