@@ -924,7 +924,7 @@ input.masked:not(:placeholder-shown) { -webkit-text-security: disc; }
 .start-list > li p { margin: 2px 0 10px; color: var(--engraved); max-width: 60ch; }
 .start-list ol { margin: 0 0 12px; padding-left: 1.4em; max-width: 60ch; }
 .start-list ol li { margin: 0 0 6px; }
-.start-list .btn { text-decoration: none; display: inline-flex; align-items: center; }
+.start-list .btn { text-decoration: none; display: inline-flex; align-items: center; color: var(--ink); }
 /* an action that asks the listener for something: its steps and a field */
 .mod-ask { margin: 14px 0 6px; padding: 16px; border: 1px solid var(--hair); border-radius: 3px; background: var(--plate); }
 .mod-ask p { margin: 0 0 12px; }
