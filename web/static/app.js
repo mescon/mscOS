@@ -1369,9 +1369,13 @@ function renderStart() {
   const players = list.filter((p) => p.kind === "source" && p.running && p.installed === false);
   if (players.length) rows.push({ k: "players", head: players.length === 1 ? tr`Hämta spelaren för ${loc(players[0].name)}` : tr`Hämta ${players.length} spelare`,
     text: tr("Källorna du valde behöver sina spelare, som hämtas från sina utgivare."), go: ["/system/modules", tr("Till Moduler")] });
-  const keys = list.filter((p) => p.running).flatMap((p) => (p.options || []).filter((o) => o.type === "secret" && o.needed && !o.set).map((o) => `${loc(p.name)}: ${loc(o.label)}`));
-  if (keys.length) rows.push({ k: "keys", head: keys.length === 1 ? tr("Ange en nyckel") : tr`Ange ${keys.length} nycklar`,
-    text: tr`${keys.join(", ")}. Vid varje fält står hur du skaffar den, steg för steg.`, go: ["/profile/accounts", tr("Till Konton och nycklar")] });
+  // a row for each thing a module that is on still lacks, by name. A module one does not use
+  // after all (anything but a source) can be turned off from here instead.
+  for (const p of list.filter((p) => p.running)) for (const o of (p.options || []).filter((o) => o.type === "secret" && o.needed && !o.set)) {
+    rows.push({ k: `key-${o.key}`, head: tr`${loc(p.name)}: ange ${loc(o.label).toLowerCase()}`,
+      text: tr`${loc(p.name)} är på men kan inte användas utan den. Vid fältet står hur du skaffar den, steg för steg.`,
+      go: ["/profile/accounts", tr("Till Konton och nycklar")], off: p.kind === "source" ? null : [p.id, tr`Stäng av ${loc(p.name)}`] });
+  }
   if (!asApp() && !appLater() && matchMedia("(pointer: coarse)").matches) {
     const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
     rows.push({ k: "app", head: tr("Lägg mscOS på hemskärmen"), text: tr("Då öppnas panelen som en app, utan webbläsarens fält."),
@@ -1387,6 +1391,7 @@ function renderStart() {
   $("#start-list").innerHTML = rows.map((r) => `<li data-k="${r.k}"><b>${esc(r.head)}</b><p>${esc(r.text)}</p>
       ${r.steps ? `<ol>${r.steps.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>` : ""}
       <div class="row wrap">${r.go ? `<a class="btn" href="${r.go[0]}" data-go="1">${esc(r.go[1])}</a>` : ""}${r.act ? `<button class="btn primary" data-start="${r.act[0]}">${esc(r.act[1])}</button>` : ""}
+        ${r.off ? `<button class="btn" data-start-off="${esc(r.off[0])}">${esc(r.off[1])}</button>` : ""}
         ${r.later ? `<button class="btn" data-start="later">${esc(tr("Inte på den här enheten"))}</button>` : ""}</div></li>`).join("");
   // the row on Listen can be put away on this browser; it comes back when something else is left to do
   startSig = rows.map((r) => `${r.k}:${r.head}`).join("|");
@@ -1404,6 +1409,12 @@ document.addEventListener("click", (e) => {
     const [, view, ...sub] = new URL(a.href).pathname.split("/");
     const id = view === "system" && sub[0] === "modules" ? "v-mods" : Object.keys(PATHS).find((k) => PATHS[k] === `/${view}`);
     if (id) { go(id, id === "v-mods" ? sub.slice(1) : sub); routeInside(routeNow()); }
+    return;
+  }
+  const off = e.target.closest("[data-start-off]");
+  if (off) {      // a module that is on but not used: off, and the panel starts again without it
+    off.disabled = true;
+    post("/api/plugins/set", { id: off.dataset.startOff, enabled: false, restart: true }).then(() => { waiting(tr("Panelen startar om…")); }).catch(() => { off.disabled = false; });
     return;
   }
   const b = e.target.closest("[data-start]"); if (!b) return;
