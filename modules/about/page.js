@@ -434,14 +434,17 @@ export default function page(api) {
     if (want && lyr.hidden) { api.go("v-play", [], { replace: true }); return; }   // no words for this track
     lySet(want);
   };
+  let yearsHold = 0;
   return {
     route: wordsRoute,
     // when albums first came out, for a player's list that does not say: [{artist, title}] -> [year or null]
     years: async (albums) => {
+      if (Date.now() < yearsHold) return [];          // (the device did not answer a moment ago: not again at once)
       try {
         const r = await fetch("/api/about/years", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ albums }) });
-        return r.ok ? (await r.json()).years || [] : [];
-      } catch { return []; }
+        if (!r.ok) { yearsHold = Date.now() + 10000; return []; }
+        return (await r.json()).years || [];
+      } catch { yearsHold = Date.now() + 10000; return []; }
     },
     // a sleeve for when the player has none: the album's front from the Cover Art Archive
     coverFor: (t) => `/api/about/cover?${new URLSearchParams({ artist: String(t.artist || "").split(/, | \/ /)[0], ...(t.album ? { album: t.album } : { title: t.title || "" }) })}`,

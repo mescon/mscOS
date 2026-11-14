@@ -414,6 +414,7 @@ function renderFeatures() {
   $("#net-speed").hidden = $("#net-note").hidden = !b.link_mbps;
 }
 async function handle(m) {
+  if (m.type === "going") { going = { why: String(m.why || ""), at: Date.now() }; if (GONE[going.why]) waiting(goneText()); return; }
   const hello = m.type === "hello";
   if (m.type === "hello" || (m.type === "settings" && m.features)) {
     // a module switched on while the page is open: ask for the whole state again, with its part
@@ -425,7 +426,6 @@ async function handle(m) {
   // the history names each source as the panel does: drawn again once the sources are known
   if (m?.type === "hello" && document.body.dataset.view === "v-music") loadListened();
   if (hello) { heard = true; going = null; clearTimeout(lostTimer); waiting(""); }   // the device has said how things are: the page is whole
-  if (m.type === "going") { going = { why: String(m.why || ""), at: Date.now() }; if (GONE[going.why]) waiting(goneText()); return; }
 }
 function handleMsg(m) {
   switch (m.type) {

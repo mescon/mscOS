@@ -77,15 +77,26 @@ export default function page(api) {
     api.go("v-music", subOf(), { replace: !step });
   };
 
+  // Every question to the device about Roon goes through here. After one that failed (the
+  // device restarting, Roon away) the next is held back, a second at first and up to half a
+  // minute: whatever the page is in the middle of, it cannot ask in a circle.
+  let failed = 0, holdUntil = 0;
+  async function ask(path, body) {
+    if (Date.now() < holdUntil) return { error: tr("Roon svarar inte.") };
+    let d, ok = false;
+    try {
+      const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      ok = r.ok || r.status === 409;                 // (409: a later search took this one's place, which is no failure)
+      d = r.ok ? await r.json() : { error: (await r.text()) || tr("Roon svarar inte."), status: r.status };
+    } catch { d = { error: tr("Roon svarar inte.") }; }
+    if (ok) failed = 0; else { failed++; holdUntil = Date.now() + Math.min(30000, 1000 * 2 ** Math.min(failed, 5)); }
+    return d;
+  }
   // One step in Roon's lists, and the list that is there after it. True when a list was shown.
   // title: the name of the entry that was chosen (what the address is given for it).
   async function go(step, title, newStep, through = 0) {
     const n = ++seq;
-    let d;
-    try {
-      const r = await fetch("/api/roon/browse", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ hierarchy: hier, session: SESSION, ...step }) });
-      d = r.ok ? await r.json() : { error: (await r.text()) || tr("Roon svarar inte.") };
-    } catch { d = { error: tr("Roon svarar inte.") }; }
+    const d = await ask("/api/roon/browse", { hierarchy: hier, session: SESSION, ...step });
     if (n !== seq) return false;
     if (d.error) { shown = null; trail = []; $("#rm-head").innerHTML = ""; $("#rm-list").innerHTML = `<p class="none">${esc(d.error)}</p>`; return false; }
     if (d.action === "list") {
@@ -112,13 +123,8 @@ export default function page(api) {
     tell(step);
     if (!(found && found.q === q)) {
       if (!found) { $("#rm-head").innerHTML = ""; $("#rm-list").innerHTML = `<p class="none wait"><span class="spin" role="status"></span>${esc(tr("Söker…"))}</p>`; }
-      let d;
-      try {
-        const r = await fetch("/api/roon/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ q, session: SESSION }) });
-        if (r.status === 409 && n !== seq) return;      // typed on: the later search answers
-        d = r.ok ? await r.json() : { error: (await r.text()) || tr("Roon svarar inte.") };
-      } catch { d = { error: tr("Roon svarar inte.") }; }
-      if (n !== seq) return;
+      const d = await ask("/api/roon/search", { q, session: SESSION });
+      if (n !== seq) return;                            // (typed on: the later search answers)
       if (d.error) { found = null; $("#rm-head").innerHTML = ""; $("#rm-list").innerHTML = `<p class="none">${esc(d.error)}</p>`; return; }
       found = d;
     }
@@ -178,7 +184,7 @@ export default function page(api) {
   // Follow an address: to the search or the top it names, then into each list by its name.
   // sub: what the last entry says under its name, when two entries are called the same.
   // (one address at a time: two walks through Roon's lists at once would lead each other astray)
-  let walks = Promise.resolve();
+  let walks = Promise.resolve(), finding = 0;
   const follow = (sub, hint, step) => (walks = walks.then(() => followNow(sub, hint, step)).catch((e) => console.error(e)));
   async function followNow(sub, hint, step) {
     const wantHier = sub[0] === "roon-search" ? "search" : "browse";
@@ -335,6 +341,7 @@ export default function page(api) {
     route(view, sub) {
       if (view !== "v-music" || !current()) return;
       if (sub.length && !["roon", "roon-search"].includes(sub[0])) { api.go("v-music", subOf(), { replace: true }); return; }   // not an address of Roon's
+      if (finding && !sub.length) return;       // (Music was opened to look something up: that lookup says where to go)
       follow(sub);
     },
     // from Listen: the album or the artist that plays, looked up in Roon
@@ -344,11 +351,21 @@ export default function page(api) {
       const by = String(t.artist || "").split(/, | \/ /)[0];
       const text = (kind === "album" ? [t.album, by].filter(Boolean).join(" ") : by).replace(/\s+/g, " ").slice(0, 120);
       if (!text) return;
-      loaded = true; $("#rm-find").value = text; clearTimeout(timer);
-      await results(text, true);
-      if (kind !== "artist" || !found || found.q !== text || query !== text) return;
-      const albums = found.sections.find((sec) => sec.items.length && sec.items.every((i) => i.hint === "list" && i.subtitle && !/^\d+\s/.test(i.subtitle)));
-      if (albums) { byYear = text; follow(["roon-search", text, albums.title], "", true); }
+      // Coming here from another view opens Music first, and that sets off a walk to the top of
+      // Roon's lists a moment later. While this lookup is under way such a walk is left out,
+      // and the lookup makes sure of where it ended up before it goes on.
+      finding++;
+      try {
+        loaded = true; $("#rm-find").value = text; clearTimeout(timer);
+        const there = () => !!found && found.q === text && query === text && hier === "search";
+        await results(text, true); await walks;
+        for (let n = 0; n < 3 && !there(); n++) { await results(text, false); await walks; }
+        if (kind !== "artist" || !there()) return;
+        const albums = found.sections.find((sec) => sec.items.length && sec.items.every((i) => i.hint === "list" && i.subtitle && !/^\d+\s/.test(i.subtitle)));
+        if (!albums) return;
+        byYear = text;
+        for (let n = 0; n < 2 && !(hier === "search" && query === text && trail[0] === albums.title); n++) await follow(["roon-search", text, albums.title], "", n === 0);
+      } finally { finding--; }
     },
   };
 }

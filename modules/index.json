@@ -1,10 +1,10 @@
 {
  "format": 1,
- "serial": 93,
+ "serial": 97,
  "modules": [
   {
    "id": "about",
-   "version": "1.11.1",
+   "version": "1.11.2",
    "kind": "integration",
    "name": {
     "sv": "Om musiken",
@@ -27,12 +27,12 @@
     },
     {
      "path": "module.json",
-     "sha256": "726e4e711e5dda8e6c57aa6153e927c6040f042ff23c8fbf315e91ab87101a5f",
+     "sha256": "694d03f46bfd772e5e53093ae72071544076c2b1fdd3b63ee86664096d051281",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "29b19ed2ec4207e234d8f748c66b2bb2b2ffab4a76051a98b6d0dfdf011d7b23",
+     "sha256": "016a4d329c2a8d43f26f1f78fa498aa649f236093fb0df01140df7a90a34b427",
      "exec": false
     },
     {
@@ -294,7 +294,7 @@
   },
   {
    "id": "roon",
-   "version": "1.10.1",
+   "version": "1.10.5",
    "kind": "source",
    "name": {
     "sv": "Roon Bridge",
@@ -317,12 +317,12 @@
     },
     {
      "path": "module.json",
-     "sha256": "72e7e870373c185bba951385023adee48b5f060a8bd27ba754af6ee7b2ef887b",
+     "sha256": "06845a69045593753dc8672a6229e34cfd6fe130400f30463f01913bf9ae8f2e",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "3f9366ed3e9e30aff3d366a5867ea7eb5fe76bc0489f77993654bf7920c37a7a",
+     "sha256": "8f8ce86d3e7bb08bc90f1dec28820b9532a312b80ce152a93837205ba24cc14f",
      "exec": false
     },
     {
