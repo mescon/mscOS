@@ -1433,9 +1433,10 @@ function renderMods() {
   showMod();   // the card the address names, now that the cards are drawn
 }
 // A module's own settings (declared by the module), saved one at a time as they change.
-// A step of a guide as HTML: plain words, with [a link](https://…), `something to type` and
-// {panel} for this panel's own address. Nothing else of the text is taken as markup.
-const guideText = (x) => esc(String(x).replaceAll("{panel}", location.origin))
+// A step of a guide as HTML: plain words, with [a link](https://…), `something to type`,
+// {panel} for this panel's own address, and {https?this||that} for what differs between a
+// panel reached over https and one that is not. Nothing else of the text is taken as markup.
+const guideText = (x) => esc(String(x).replace(/\{https\?(.*?)\|\|(.*?)\}/g, (m, yes, no) => (location.protocol === "https:" ? yes : no)).replaceAll("{panel}", location.origin))
   .replace(/\[([^\]]{1,80})\]\((https:\/\/[^)\s"]{1,300})\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
   .replace(/`([^`]{1,200})`/g, "<code>$1</code>");
 // only: which of the options (all of them in the module's card; the keys alone under Profile).

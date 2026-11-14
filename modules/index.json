@@ -1,6 +1,6 @@
 {
  "format": 1,
- "serial": 86,
+ "serial": 87,
  "modules": [
   {
    "id": "about",
@@ -369,7 +369,7 @@
   },
   {
    "id": "spotify",
-   "version": "1.19.0",
+   "version": "1.19.1",
    "kind": "source",
    "name": {
     "sv": "Spotify Lossless (Soloist)",
@@ -382,7 +382,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "ed414e55c88aa58040d90928f8947adfdee98ae60fe3075fe12e1fb1e34f1ab1",
+     "sha256": "346e9e61481e5655a2c5a31b5578cd43b51e79eb45bd53ba988820822078ea04",
      "exec": false
     },
     {
@@ -397,7 +397,7 @@
     },
     {
      "path": "module.json",
-     "sha256": "c2ff93246286c36f98f9b1995b0bf1bbbdc015d0bd23d1c2506b820b917abe44",
+     "sha256": "175d3a54d6075eed76f5adad79d076281a45b0c1928a0ff02e2bb5bbbdfd2514",
      "exec": false
     },
     {
