@@ -1,6 +1,6 @@
 {
  "format": 1,
- "serial": 90,
+ "serial": 91,
  "modules": [
   {
    "id": "about",
@@ -447,7 +447,7 @@
     },
     {
      "path": "i18n/en.json",
-     "sha256": "4c394deedcd6663a8b2ea38de024f8600d5fe73ecf0d677a7ae98382b2d20e21",
+     "sha256": "50720952b0c58998ffc20ee592d07c3438d57d3ea0acdb690281b9eb82eedd8d",
      "exec": false
     }
    ]
