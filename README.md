@@ -2,8 +2,9 @@
 
 *by vivajAcoustics*
 
-mscOS ("music OS") turns a small computer into a network music player for a USB DAC. It
-plays Spotify, Roon, HQPlayer and UPnP bit-perfect, and it is set up and watched from a web
+mscOS ("music OS") turns a small computer, or a streamer whose maker no longer updates it,
+into a bit-perfect network music player for a USB DAC. It brings Spotify Lossless, Roon,
+HQPlayer and UPnP to hardware you already own, and it is set up and watched from a web
 panel on your phone, in Swedish or English.
 
 - **Bit-perfect, and it shows it.** The panel measures what actually reaches the DAC:
@@ -61,7 +62,7 @@ system, install the packages instead.
 | | State |
 |---|---|
 | SOtM sMS-200, sMS-200ultra (Allwinner A20) | in daily use, installed from a checkout; the image (`image/build.sh sotm`) builds and its contents are checked, but it has **not yet been started on a device** |
-| x86-64 PCs | the image builds and starts in a virtual machine: first boot, board profile, kernel arguments, the guide, and installing and starting a source from the panel; **not yet tested on hardware or with a DAC** |
+| x86-64 PCs | the image builds and starts in a virtual machine: first boot, board profile, kernel arguments, the guide and the list of what is left after it (last tried with the build of 2026-11-14), and installing and starting a source from the panel; **not yet tested on hardware or with a DAC** |
 | Raspberry Pi 4/5 | the image (`image/build.sh rpi`) builds and its contents are checked (packages, kernel with the DSD driver, board profile, first-boot setup); **not yet started on a device** |
 | Other arm64 boards with UEFI | the image (`image/build.sh arm64`) builds and its contents are checked; the board profile is chosen at first boot. **Not yet started on a device** |
 | Spotify Lossless (Soloist), Roon Bridge | in daily use on the SOtM |
