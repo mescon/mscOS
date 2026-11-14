@@ -90,7 +90,7 @@ export async function maybeSetup({ access, post, toast }) {
           <li><label class="toggle"><input type="checkbox" data-notify="${esc(m.id)}" ${st.notify.includes(m.id) ? "checked" : ""}>
             <span class="toggle-ui" aria-hidden="true"></span>
             <span class="mod-t"><b>${esc(loc(m.name))}</b><span>${esc(loc(m.description))}</span></span></label></li>`).join("")}</ul>
-        <p class="fine">${tr("Adressen dit larmen skickas anger du under Moduler efter guiden.")}</p>`,
+        <p class="fine">${tr("Adressen dit larmen skickas anger du efter guiden, under Profil, Konton och nycklar.")}</p>`,
       next: async () => { st.notify = [...el.querySelectorAll("input[data-notify]:checked")].map((i) => i.dataset.notify); return true; } },
   ];
   const short = [tr("Välkommen"), tr("Lösenord"), tr("Enheten"), tr("Källor"), tr("Förstärkare"), tr("Larm")];
@@ -110,7 +110,7 @@ export async function maybeSetup({ access, post, toast }) {
       const any = all[0];
       if (any) await post("/api/plugins/set", { id: any.id, enabled: want.has(any.id), restart: true });
     } catch (e) { $("#su-next").disabled = false; render(); return; }
-    try { sessionStorage.removeItem(KEY); if (want.size) localStorage.setItem("open-fold", "f-mods"); } catch (e) {}
+    try { sessionStorage.removeItem(KEY); localStorage.setItem("open-fold", "f-start"); } catch (e) {}
     for (let i = 0; i < 30; i++) {  // wait for the panel to come back
       await new Promise((r) => setTimeout(r, 1000));
       try { if (i > 2 && (await fetch("/api/auth")).ok) break; } catch (e) {}

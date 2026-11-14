@@ -104,6 +104,8 @@ class Rows(unittest.TestCase):
         self.assertEqual(q["redirect_uri"], "https://panel.example/api/spotify/callback")
         self.assertIn("user-library-modify", q["scope"].split(), "leave to like and save")
         self.assertNotIn("user-modify-playback-state", q["scope"], "the music is not steered this way")
+        for more in ("user-follow-modify", "playlist-modify-public", "playlist-modify-private"):
+            self.assertNotIn(more, q["scope"], "no leave beyond the library")
         self.assertNotIn(w.pending[1], u.query, "the verifier stays on the device")
         with self.assertRaises(webapi.WebApiError):
             webapi.WebApi(lambda: ("", "")).sign_in_address("https://panel.example/x")

@@ -39,12 +39,13 @@ ACCOUNTS = "https://accounts.spotify.com"
 # again meanwhile (the time is kept in a file). Spotify has been seen to ask for well over an
 # hour's pause after some two hundred questions in five minutes.
 PER_HALF_MINUTE = 20
-# To read: where it plays, the playlists, the library. To change: the library, which is what
-# liking a track and saving an album are. Spotify's one call for saving covers tracks, albums,
-# artists and playlists alike and asks for the leave of all of them, so the last three are asked
-# for too, though the device only ever saves and removes tracks and albums.
+# To read: where it plays, the playlists, the library. To change: the library alone, which is
+# what liking a track and saving an album are. Spotify's one call for saving also covers artists
+# and playlists and its description lists the leave for those too; the device never saves
+# those, so it does not ask for that leave. (Should Spotify refuse a track or an album without
+# it, the listener is told that it is not allowed, and nothing more is taken.)
 SCOPES = ("user-read-playback-state playlist-read-private playlist-read-collaborative user-library-read"
-          " user-library-modify user-follow-read user-follow-modify playlist-modify-public")
+          " user-library-modify")
 SAVES = re.compile(r"spotify:(track|album):[A-Za-z0-9]{22}")
 
 

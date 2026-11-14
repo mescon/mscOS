@@ -913,6 +913,18 @@ body.no-dock .dock { display: none; }
 .acct .spec { margin-bottom: 12px; }
 /* a key in a module's card: hidden like a password */
 input.masked:not(:placeholder-shown) { -webkit-text-security: disc; }
+/* getting started: what is left after the first-start guide */
+.start-bar { position: relative; z-index: 2; display: flex; align-items: center; margin: 0 0 18px; border: 1px solid var(--btn-line); border-radius: 3px; background: var(--plate); }
+.start-bar a { flex: 1 1 auto; min-width: 0; padding: 12px 16px; color: var(--ink); text-decoration: none; }
+.start-bar a::after { content: " ›"; color: var(--engraved); }
+.start-bar button { appearance: none; flex: none; width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: none; color: var(--engraved); cursor: pointer; }
+.start-bar button svg { width: 18px; height: 18px; }
+.start-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 22px; }
+.start-list > li b { display: block; font-family: var(--serif); font-weight: 600; font-size: 1.1875rem; }
+.start-list > li p { margin: 2px 0 10px; color: var(--engraved); max-width: 60ch; }
+.start-list ol { margin: 0 0 12px; padding-left: 1.4em; max-width: 60ch; }
+.start-list ol li { margin: 0 0 6px; }
+.start-list .btn { text-decoration: none; display: inline-flex; align-items: center; }
 /* an action that asks the listener for something: its steps and a field */
 .mod-ask { margin: 14px 0 6px; padding: 16px; border: 1px solid var(--hair); border-radius: 3px; background: var(--plate); }
 .mod-ask p { margin: 0 0 12px; }

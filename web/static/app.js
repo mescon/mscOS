@@ -1281,7 +1281,7 @@ refreshAuth().then(() => maybeSetup({ access: S.access || {}, post, toast })).ca
 connect();
 try {  // after the first-start guide: straight to the modules, where the chosen players are installed
   const f = localStorage.getItem("open-fold");
-  if (f) { localStorage.removeItem("open-fold"); const d = document.getElementById(f); if (f === "f-mods") go("v-mods", [], { replace: true }); else if (d) { go(d.closest(".view").id, [], { replace: true }); d.open = true; d.scrollIntoView(); } }
+  if (f) { localStorage.removeItem("open-fold"); const d = document.getElementById(f); if (f === "f-start") { go("v-me", ["start"], { replace: true }); routeInside(routeNow()); } else if (f === "f-mods") go("v-mods", [], { replace: true }); else if (d) { go(d.closest(".view").id, [], { replace: true }); d.open = true; d.scrollIntoView(); } }
 } catch (e) {}
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 document.addEventListener("visibilitychange", () => { if (!document.hidden && ws && ws.readyState > 1) connect(); });
@@ -1353,8 +1353,64 @@ function modCard(p, open) {
     ${more ? `<details class="mod-more"${open ? " open" : ""}><summary>${tr("Inställningar")}</summary><div class="mod-body">${facts}${acts}${modOptions(p)}${logbox}</div></details>` : ""}
   </li>`;
 }
+// ------------------------------------------------------------------ getting started
+// What is left to do after the first-start guide, worked out from how things are: players that
+// are chosen but not fetched yet, keys a module needs, and the panel as an app on this phone.
+// A row goes away when it is done; nothing here is a setting of its own.
+let installAsk = null;       // Chrome's offer to install the page as an app, kept for the button
+addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installAsk = e; renderStart(); });
+addEventListener("appinstalled", () => { installAsk = null; renderStart(); });
+const asApp = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const appLater = () => { try { return localStorage.getItem("start-app") === "later"; } catch { return false; } };
+function renderStart() {
+  const list = MODS.plugins || [], rows = [];
+  const players = list.filter((p) => p.kind === "source" && p.running && p.installed === false);
+  if (players.length) rows.push({ k: "players", head: players.length === 1 ? tr`Hämta spelaren för ${loc(players[0].name)}` : tr`Hämta ${players.length} spelare`,
+    text: tr("Källorna du valde behöver sina spelare, som hämtas från sina utgivare."), go: ["/system/modules", tr("Till Moduler")] });
+  const keys = list.filter((p) => p.running).flatMap((p) => (p.options || []).filter((o) => o.type === "secret" && o.needed && !o.set).map((o) => `${loc(p.name)}: ${loc(o.label)}`));
+  if (keys.length) rows.push({ k: "keys", head: keys.length === 1 ? tr("Ange en nyckel") : tr`Ange ${keys.length} nycklar`,
+    text: tr`${keys.join(", ")}. Vid varje fält står hur du skaffar den, steg för steg.`, go: ["/profile/accounts", tr("Till Konton och nycklar")] });
+  if (!asApp() && !appLater() && matchMedia("(pointer: coarse)").matches) {
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    rows.push({ k: "app", head: tr("Lägg mscOS på hemskärmen"), text: tr("Då öppnas panelen som en app, utan webbläsarens fält."),
+      steps: installAsk ? null : ios
+        ? [tr("Öppna den här sidan i Safari."), tr("Tryck på Dela, rutan med en pil uppåt."), tr("Välj Lägg till på hemskärmen och tryck Lägg till.")]
+        : [tr("Tryck på webbläsarens meny, de tre prickarna."), tr("Välj Lägg till på startskärmen eller Installera app."), tr("Bekräfta. mscOS ligger sedan bland dina appar.")],
+      act: installAsk ? ["install", tr("Installera appen")] : null, later: true });
+  }
+  const fold = $("#f-start"), bar = $("#start-bar");
+  fold.hidden = !rows.length;
+  if (!rows.length && fold.open) fold.open = false;
+  fv("start", rows.length === 1 ? tr("En sak kvar") : tr`${rows.length} saker kvar`, true);
+  $("#start-list").innerHTML = rows.map((r) => `<li data-k="${r.k}"><b>${esc(r.head)}</b><p>${esc(r.text)}</p>
+      ${r.steps ? `<ol>${r.steps.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>` : ""}
+      <div class="row wrap">${r.go ? `<a class="btn" href="${r.go[0]}" data-go="1">${esc(r.go[1])}</a>` : ""}${r.act ? `<button class="btn primary" data-start="${r.act[0]}">${esc(r.act[1])}</button>` : ""}
+        ${r.later ? `<button class="btn" data-start="later">${esc(tr("Inte på den här enheten"))}</button>` : ""}</div></li>`).join("");
+  // the row on Listen can be put away on this browser; it comes back when something else is left to do
+  startSig = rows.map((r) => `${r.k}:${r.head}`).join("|");
+  let away = ""; try { away = localStorage.getItem("start-away") || ""; } catch {}
+  bar.hidden = !rows.length || away === startSig;
+  $("#start-go").textContent = rows.length === 1 ? tr`Kom igång: ${rows[0].head}` : tr`Kom igång: ${rows.length} saker kvar`;
+}
+let startSig = "";
+$("#start-hide").addEventListener("click", () => { try { localStorage.setItem("start-away", startSig); } catch {} $("#start-bar").hidden = true; });
+// (links inside the panel go by its own addresses, without loading the page again)
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("a#start-go, #start-list a[data-go]");
+  if (a) {
+    e.preventDefault();
+    const [, view, ...sub] = new URL(a.href).pathname.split("/");
+    const id = view === "system" && sub[0] === "modules" ? "v-mods" : Object.keys(PATHS).find((k) => PATHS[k] === `/${view}`);
+    if (id) { go(id, id === "v-mods" ? sub.slice(1) : sub); routeInside(routeNow()); }
+    return;
+  }
+  const b = e.target.closest("[data-start]"); if (!b) return;
+  if (b.dataset.start === "later") { try { localStorage.setItem("start-app", "later"); } catch {} renderStart(); }
+  else if (b.dataset.start === "install" && installAsk) { const ask = installAsk; installAsk = null; ask.prompt(); ask.userChoice.finally(renderStart); }
+});
+matchMedia("(display-mode: standalone)").addEventListener("change", renderStart);
 function renderMods() {
-  renderAccounts();
+  renderAccounts(); renderStart();
   const box = $("#mods");
   if ((box.contains(document.activeElement) && /^(text|password|number)$/.test(document.activeElement.type || "")) || optsDirty(box)) return;   // (not while something is being typed or waits to be saved)
   const open = new Set([...box.querySelectorAll("details[open]")].map((d) => d.closest("li").dataset.id));

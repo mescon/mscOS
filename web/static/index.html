@@ -88,6 +88,7 @@
   <section class="view" id="v-play" aria-labelledby="h-play">
     <h2 id="h-play" class="vh">Lyssna</h2>
     <div class="ambient" id="ambient" aria-hidden="true"></div>
+    <div class="start-bar" id="start-bar" hidden><a id="start-go" href="/profile/start"></a><button id="start-hide" aria-label="Visa inte den här raden"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
     <div class="stage">
       <div class="deck">
         <figure class="sleeve">
@@ -395,6 +396,13 @@
       </div>
     </div>
     <div class="panels">
+<details class="fold" id="f-start" data-k="start" hidden>
+        <summary><span>Kom igång</span><span class="fv" id="fv-start"></span></summary>
+        <div class="fold-body">
+          <p class="lead">Det som är kvar innan allt är på plats. Raderna försvinner när de är klara.</p>
+          <ol class="start-list" id="start-list"></ol>
+        </div>
+      </details>
 <details class="fold" id="access" data-k="access">
         <summary><span>Åtkomst</span><span class="fv" id="fv-access"></span></summary>
         <div class="fold-body">
