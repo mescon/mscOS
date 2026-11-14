@@ -146,6 +146,7 @@ export default function page(api) {
         .m-tree-head { display: flex; align-items: center; justify-content: space-between; margin: 20px 0 4px; font-size: .8125rem; letter-spacing: .04em; color: var(--engraved); }
         .m-new { appearance: none; min-height: 32px; padding: 0 10px; border: 1px solid var(--hair); border-radius: 2px; background: none; color: var(--engraved); font: inherit; cursor: pointer; }
         .m-new:hover { color: var(--ink); border-color: var(--btn-line); }
+        .m-read { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 14px 0 0; color: var(--engraved); font-size: .8125rem; }
         .m-node { display: flex; align-items: center; border-radius: 3px; }
         .m-leaf { appearance: none; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; width: 100%; min-height: 38px; padding: 0 8px; border: 0; border-radius: 3px; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
         .m-leaf span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -367,14 +368,14 @@ export default function page(api) {
   }
   let lib = null, libAt = 0;       // the signed-in listener's playlists, saved albums and liked tracks
   let libBusy = false;
-  async function loadLib(force) {
+  async function loadLib(force, fresh) {
     // one question at a time, and after an answer of any kind (also "log in first", also none) not
     // again for two minutes: this runs on every message from the device
     if (!M.user || libBusy || (!force && Date.now() - libAt < 120000)) return;
     libBusy = true; libAt = Date.now();
     try {
-      const [r, f] = await Promise.all([fetch("/api/spotify/library"), fetch("/api/spotify/folders")]);
-      if (r.ok) { lib = await r.json(); if (f.ok) tree = await f.json(); } else if (r.status === 401) lib = { locked: true };
+      const [r, f] = await Promise.all([fetch("/api/spotify/library" + (fresh ? "?fresh=1" : "")), fetch("/api/spotify/folders")]);
+      if (r.ok) { lib = await r.json(); if (f.ok) tree = await f.json(); } else if (r.status === 401) lib = { locked: true }; else if (fresh) toast((await r.text()).slice(0, 200));
       drawMusic();
     } catch {}
     libBusy = false;
@@ -408,7 +409,9 @@ export default function page(api) {
       <ul>${leaf("", tr("Senast spelat"))}${leaf("liked", tr("Gillade låtar"), (lib.tracks || []).length)}${leaf("albums", tr("Sparade album"), (lib.albums || []).length)}</ul>
       <div class="m-tree-head"><span>${esc(tr("Mappar"))}</span><button class="m-new" data-newfolder="">${esc(tr("Ny mapp"))}</button></div>
       <ul class="m-folders">${kids(null).map((f) => node(f, 0)).join("") || `<li class="m-hint">${esc(tr("Inga mappar än. Skapa en och lägg spellistor i den."))}</li>`}</ul>
-      <ul>${leaf("mine", tr("Mina spellistor"), loose(true).length)}${leaf("followed", tr("Följda spellistor"), loose(false).length)}</ul></nav>`;
+      <ul>${leaf("mine", tr("Mina spellistor"), loose(true).length)}${leaf("followed", tr("Följda spellistor"), loose(false).length)}</ul>
+      <p class="m-read">${lib.at ? esc(tr`Hämtat från Spotify ${new Date(lib.at * 1000).toLocaleString(api.lang(), { weekday: "short", hour: "2-digit", minute: "2-digit" })}`) : ""}
+        <button class="m-new" data-reread="1"${libBusy ? " disabled" : ""}>${esc(tr("Hämta igen"))}</button></p></nav>`;
   // where a playlist is kept, as a choice under its sleeve (dragging it onto a folder does the same)
   const moveSelect = (pl) => (tree.folders.length ? `<select class="m-move" data-move="${esc(pl.id)}" aria-label="${esc(tr`Mapp för ${pl.name}`)}"><option value="">${esc(tr("Ingen mapp"))}</option>${tree.folders
     .map((f) => [pathOf(f.id).join(" / "), f.id]).sort((x, y) => x[0].localeCompare(y[0], api.lang())).map(([name, id]) => `<option value="${esc(id)}"${tree.place[pl.id] === id ? " selected" : ""}>${esc(name)}</option>`).join("")}</select>` : "");
@@ -473,9 +476,10 @@ export default function page(api) {
   music.addEventListener("dragleave", (e) => e.target.closest?.("[data-drop]")?.classList.remove("drop"));
   music.addEventListener("drop", (e) => { const d = dragged && e.target.closest?.("[data-drop]"); if (!d) return; e.preventDefault(); const pl = dragged; dragged = ""; if (d.dataset.drop) { opened.add(d.dataset.drop); keepOpened(); } folderOp({ op: "place", playlist: pl, folder: d.dataset.drop || null }); });
   music.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-lib], [data-twist], [data-newfolder], [data-rename], [data-rmfolder], [data-edit-cancel]");
+    const t = e.target.closest("[data-lib], [data-twist], [data-newfolder], [data-rename], [data-rmfolder], [data-edit-cancel], [data-reread]");
     if (t) {
       const d = t.dataset;
+      if (d.reread) { loadLib(true, true); return; }
       if (d.twist != null) { if (opened.has(d.twist)) opened.delete(d.twist); else opened.add(d.twist); keepOpened(); drawMusic(); }
       else if (d.newfolder != null) { edit = { kind: "new", parent: d.newfolder || null }; drawMusic(); $("#m-edit-name")?.focus(); }
       else if (d.rename) { edit = { kind: "rename", id: d.rename }; drawMusic(); $("#m-edit-name")?.select(); }

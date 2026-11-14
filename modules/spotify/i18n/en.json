@@ -166,5 +166,7 @@
  "Spara i biblioteket": "Save in the library",
  "En post visas inte: ett poddavsnitt, en egen fil eller en låt som inte längre finns hos Spotify.": "One entry is not shown: a podcast episode, a file of your own or a track Spotify no longer has.",
  "{0} poster visas inte: poddavsnitt, egna filer eller låtar som inte längre finns hos Spotify.": "{0} entries are not shown: podcast episodes, files of your own or tracks Spotify no longer has.",
- "Listan har {0} låtar till. De spelas när du spelar listan, men visas inte här.": "The list has {0} more tracks. They play when you play the list, but are not shown here."
+ "Listan har {0} låtar till. De spelas när du spelar listan, men visas inte här.": "The list has {0} more tracks. They play when you play the list, but are not shown here.",
+ "Hämtat från Spotify {0}": "Read from Spotify {0}",
+ "Hämta igen": "Read again"
 }

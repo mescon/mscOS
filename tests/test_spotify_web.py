@@ -76,6 +76,63 @@ class Rows(unittest.TestCase):
         asyncio.run(go())
         self.assertLessEqual(30 / webapi.EVERY * 10, 120, "over five minutes: well under what brought a pause")
 
+    def test_no_more_than_the_hour_allows(self):
+        import asyncio
+        import time
+
+        async def go():
+            w = webapi.WebApi(lambda: ("id", "secret"))
+            w.sent.extend((time.time() - 100, "search") for _ in range(webapi.QUIET))
+            self.assertFalse(w.may_ask(quiet=True), "what runs by itself stops early")
+            self.assertTrue(w.may_ask())
+            w.sent.extend((time.time() - 100, "me/player") for _ in range(webapi.HOUR - webapi.QUIET))
+            with self.assertRaises(webapi.WebApiError):
+                await w._my_turn("search")
+            self.assertIn("me/player", w.about())
+        asyncio.run(go())
+
+    def test_answers_are_kept_on_the_device(self):
+        import asyncio, tempfile, os, stat
+
+        async def go(f):
+            asked = []
+
+            def client():
+                w = webapi.WebApi(lambda: ("id", ""), refresh=lambda: "r", store_file=f)
+                w.http = object()
+
+                async def fake(path, key, keep, params):
+                    asked.append(path)
+                    if path == "me":
+                        return {"id": "someone", "display_name": "Someone"}
+                    if path == "me/library/contains":
+                        return [True] * len(params["uris"].split(","))
+                    if path.startswith("tracks/"):
+                        return {"uri": "spotify:track:" + path[7:], "name": "A song", "artists": [{"name": "A"}]}
+                    return {"items": [], "total": 0}
+                w._get = fake
+                return w
+            w = client()
+            t = "t" * 22
+            lib = await w.library()
+            self.assertEqual(lib["me"], "someone")
+            await w.tracks([t])
+            self.assertEqual(await w.saved(["spotify:track:" + t]), {"spotify:track:" + t: True})
+            n = len(asked)
+            await w.library(); await w.tracks([t]); await w.saved(["spotify:track:" + t])
+            self.assertEqual(len(asked), n, "the second time nothing is asked")
+            w.write_long()
+            self.assertEqual(stat.S_IMODE(os.stat(f).st_mode), 0o600, "the listener's own: for root only")
+            again = client()                    # (the panel started anew)
+            await again.library(); await again.tracks([t]); await again.saved(["spotify:track:" + t, "spotify:track:" + "u" * 22])
+            self.assertEqual(asked[n:], ["me/library/contains"], "after a restart only what was not known is asked")
+            await again.library(fresh=True)
+            self.assertEqual(asked[n + 1:].count("me/playlists"), 1, "asked for: read again")
+            again.sign_out()
+            self.assertFalse([k for k in again.long if k.startswith(("library:", "saved:", "me:"))], "signing out forgets the library")
+        with tempfile.TemporaryDirectory() as d:
+            asyncio.run(go(os.path.join(d, "kept.json")))
+
     def test_the_same_question_is_asked_once(self):
         import asyncio
 

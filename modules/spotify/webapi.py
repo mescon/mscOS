@@ -15,10 +15,13 @@ album): the device never does anything else with it.
 from __future__ import annotations
 
 import asyncio
+import atexit
 import base64
 import collections
 import hashlib
+import json
 import logging
+import os
 import re
 import secrets
 import time
@@ -38,8 +41,14 @@ ACCOUNTS = "https://accounts.spotify.com"
 # question every three seconds, with room for a burst when a page needs several at once
 # (an artist's page asks a dozen). When Spotify says wait (429 with Retry-After), nothing at
 # all is asked until that time has passed, also if the panel starts again meanwhile.
-BURST = 15              # questions that may be asked at once, after a quiet while
-EVERY = 3.0             # seconds for one more to become available
+BURST = 10              # questions that may be asked at once, after a quiet while
+EVERY = 6.0             # seconds for one more to become available
+HOUR = 240              # and no more than this many in an hour, whatever the rest says
+QUIET = 60              # what runs by itself (nobody is waiting for it) stops at this many in an hour
+# For how long an answer kept on the device is good, in seconds. Kept across restarts of the
+# panel: what Spotify counts is every question, also the ones asked a second time.
+DAY = 86400
+GOOD = {"library": 6 * 3600, "me": 30 * DAY, "playlist": 3600, "track": 30 * DAY, "album": 7 * DAY, "artist": DAY, "saved": 6 * 3600, "search": DAY}
 PER_HALF_MINUTE = int(30 / EVERY)    # what that comes to over time (shown in the module's card)
 # To read: where it plays, the playlists, the library. To change: the library alone, which is
 # what liking a track and saving an album are. Spotify's one call for saving also covers artists
@@ -118,14 +127,25 @@ def artist_row(a: dict) -> dict:
 
 class WebApi:
     def __init__(self, credentials, lastfm_key=lambda: "", refresh=lambda: "", keep_refresh=lambda token: None, wait_file: str = "",
-                 granted=lambda: "", keep_granted=lambda scope: None):
+                 granted=lambda: "", keep_granted=lambda scope: None, store_file: str = ""):
+        self.store_file = store_file        # where finished answers are kept across restarts (the listener's own: for root only)
+        self.long: dict[str, list] = {}     # those answers: key -> [when, what]
+        self.long_dirty = False
+        try:
+            with open(store_file) as f:
+                d = json.load(f)
+            self.long = {k: v for k, v in d.items() if isinstance(v, list) and len(v) == 2} if isinstance(d, dict) else {}
+        except (OSError, ValueError):
+            pass
+        if store_file:
+            atexit.register(self.write_long)   # (what the last seconds brought is not lost when the panel stops)
         self.granted = granted              # () -> what the sign-in gave leave for, as Spotify wrote it
         self.keep_granted = keep_granted
         self.credentials = credentials      # () -> (client id, client secret)
         self.refresh = refresh              # () -> the signed-in listener's refresh token, or ""
         self.keep_refresh = keep_refresh    # (token) -> keeps it; "" forgets it
         self.pending: tuple | None = None   # a sign-in under way: (state, verifier, redirect address, until)
-        self.sent: collections.deque = collections.deque(maxlen=5000)   # when each question of the last hour was asked
+        self.sent: collections.deque = collections.deque(maxlen=5000)   # each question of the last hour: (when, what about)
         self.wait_file = wait_file          # where the time of a pause Spotify asked for is kept
         self.wait_until = 0.0               # Spotify asked for a pause until then
         try:
@@ -154,12 +174,71 @@ class WebApi:
             except OSError:
                 pass
 
-    async def _my_turn(self) -> None:
-        """Wait until a question may be asked (BURST, EVERY), or refuse while Spotify has asked for a pause."""
+    # ---- answers kept on the device
+    def known(self, kind: str, key: str, old: bool = False):
+        """A kept answer that is still good; with old, or while nothing may be asked, also one that is not."""
+        hit = self.long.get(f"{kind}:{key}")
+        if hit and (old or time.time() - hit[0] < GOOD[kind] or not self.may_ask()):
+            return hit[1]
+        return None
+
+    def keep(self, kind: str, key: str, what) -> None:
+        self.long[f"{kind}:{key}"] = [time.time(), what]
+        if len(self.long) > 3000:              # (the oldest go)
+            for k in sorted(self.long, key=lambda k: self.long[k][0])[:500]:
+                del self.long[k]
+        self._long_changed()
+
+    def forget(self, *starts: str) -> None:
+        for k in [k for k in self.long if k.startswith(starts)]:
+            del self.long[k]
+        self._long_changed()
+
+    def _long_changed(self) -> None:
+        if self.long_dirty or not self.store_file:
+            return
+        self.long_dirty = True
+        try:
+            asyncio.get_running_loop().call_later(20, self.write_long)     # (written at most every twenty seconds)
+        except RuntimeError:
+            self.write_long()
+
+    def write_long(self) -> None:
+        if not self.long_dirty or not self.store_file:
+            return
+        self.long_dirty = False
+        try:
+            fd = os.open(self.store_file + ".tmp", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w") as f:
+                json.dump(self.long, f, separators=(",", ":"))
+            os.replace(self.store_file + ".tmp", self.store_file)
+        except OSError:
+            pass
+
+    def in_hour(self) -> int:
+        now = time.time()
+        return sum(1 for t, _ in self.sent if now - t < 3600)
+
+    def may_ask(self, quiet: bool = False) -> bool:
+        """Whether a question would be let through now. quiet: for what runs by itself."""
+        return time.time() >= self.wait_until and self.in_hour() < (QUIET if quiet else HOUR)
+
+    def about(self) -> str:
+        """What the last hour's questions were about, the most asked first: for the log."""
+        return ", ".join(f"{k} {n}" for k, n in collections.Counter(w for t, w in self.sent if time.time() - t < 3600).most_common(8))
+
+    async def _my_turn(self, what: str = "") -> None:
+        """Wait until a question may be asked (BURST, EVERY), or refuse while Spotify has asked
+        for a pause or the hour is full (HOUR)."""
         async with self.turn:
             while True:
                 now = time.time()
                 if now < self.wait_until:
+                    raise WebApiError("busy")
+                if self.in_hour() >= HOUR:
+                    if now - getattr(self, "full_said", 0) > 600:
+                        self.full_said = now
+                        log.warning("spotify web api: %s questions in an hour, no more for now (%s)", HOUR, self.about())
                     raise WebApiError("busy")
                 self.left = min(float(BURST), self.left + (now - self.left_at) / EVERY)
                 self.left_at = now
@@ -167,13 +246,13 @@ class WebApi:
                     break
                 await asyncio.sleep(min(EVERY, (1 - self.left) * EVERY) + 0.01)
             self.left -= 1
-            self.sent.append(time.time())
+            self.sent.append((time.time(), what))
 
     def asked(self) -> dict:
         """How much has been asked of Spotify: for the module's card, so that it can be seen."""
         now = time.time()
-        return {"half_minute": sum(1 for t in self.sent if now - t < 30), "hour": sum(1 for t in self.sent if now - t < 3600),
-                "limit": PER_HALF_MINUTE, "refused": self.refused, "wait": max(0, int(self.wait_until - now))}
+        return {"half_minute": sum(1 for t, _ in self.sent if now - t < 30), "hour": self.in_hour(), "hour_limit": HOUR,
+                "limit": PER_HALF_MINUTE, "refused": self.refused, "wait": max(0, int(self.wait_until - now)), "until": self.wait_until}
 
     def ready(self) -> bool:
         cid, secret = self.credentials()
@@ -226,6 +305,7 @@ class WebApi:
         self.keep_refresh("")
         self.token, self.until = "", 0.0
         self.kept.clear()
+        self.forget("library:", "saved:", "playlist:", "me:")      # (the listener's own: gone with the sign-in)
 
     async def _user_token(self, cid: str, refresh: str) -> str | None:
         """A token as the listener, from the refresh token. None when Spotify no longer takes
@@ -298,7 +378,7 @@ class WebApi:
     async def _get(self, path: str, key: str, keep: float, params: dict) -> dict:
         for attempt in (0, 1):
             token = await self._token()
-            await self._my_turn()
+            await self._my_turn(re.sub(r"/[A-Za-z0-9]{22}", "", path))
             try:
                 async with self.http.get(f"{API}/{path}", params=params, headers={"Authorization": f"Bearer {token}"}) as r:
                     if r.status == 401 and attempt == 0:     # the token went stale early: a new one, once
@@ -307,7 +387,7 @@ class WebApi:
                     if r.status == 429:
                         after = r.headers.get("Retry-After", "")
                         self._pause(after)
-                        log.warning("spotify web api: asked to wait (429) at %s, Retry-After %s", path.split("/")[0], after or "?")
+                        log.warning("spotify web api: asked to wait (429) at %s, Retry-After %s; the last hour: %s", path.split("/")[0], after or "?", self.about())
                         raise WebApiError("busy")
                     if r.status in (204, 404):               # (204: nothing plays anywhere)
                         return {}
@@ -330,13 +410,29 @@ class WebApi:
         raise WebApiError("credentials")
 
     async def search(self, q: str) -> dict:
+        hit = self.known("search", q.casefold())
+        if hit:
+            return hit
         d = await self.get("search", q=q, type="album,artist,track,playlist", limit=8)
         items = lambda k: [x for x in ((d.get(k) or {}).get("items") or []) if isinstance(x, dict) and x.get("uri")]   # noqa: E731
+        out = self._search_rows(d, items)
+        self.keep("search", q.casefold(), out)
+        return out
+
+    @staticmethod
+    def _search_rows(d: dict, items) -> dict:
         return {"artists": [artist_row(a) for a in items("artists")][:6], "albums": [album_row(a) for a in items("albums")],
                 "playlists": [playlist_row(p) for p in items("playlists")], "tracks": [track_row(t) for t in items("tracks")]}
 
     async def playlist(self, playlist_id: str, items: bool = False) -> dict | None:
         """items: also what is in it, for the owner (asked as the signed-in listener)."""
+        key = f"{playlist_id}:{int(bool(items and self.signed_in()))}"
+        hit = self.long.get(f"playlist:{key}")
+        if hit:
+            # as long as the library names the same snapshot, nothing in it has changed: no question at all
+            snap = next((p.get("snap") for p in (self.known("library", "playlists", old=True) or []) if p.get("id") == playlist_id), None)
+            if (snap and snap == hit[1].get("snap")) or time.time() - hit[0] < GOOD["playlist"] or not self.may_ask():
+                return hit[1]
         d = await self.get(f"playlists/{playlist_id}", keep=60)
         if not d.get("uri"):
             return None
@@ -362,48 +458,70 @@ class WebApi:
                 out["tracks"], out["count"] = rows, total if isinstance(total, int) else out.get("count")
                 out["hidden"] = hidden
                 out["more"] = max(0, (total or 0) - len(rows) - hidden) if isinstance(total, int) else 0     # (beyond the three hundred that are read)
+        self.keep("playlist", key, out)
         return out
 
     async def me(self) -> dict:
-        d = await self.get("me")
-        return {"name": d.get("display_name") or d.get("id") or ""}
+        hit = self.known("me", "")
+        if not hit:
+            d = await self.get("me")
+            hit = {"name": d.get("display_name") or d.get("id") or "", "id": d.get("id") or ""}
+            self.keep("me", "", hit)
+        return hit
 
     async def where(self) -> dict | None:
         """The device the account plays on right now: {"name", "type"}, or None when nothing plays."""
         try:
-            d = await self.get("me/player", keep=8)
+            d = await self.get("me/player", keep=30)
         except WebApiError:           # (not worth an error on the page: the device is just not named)
             return None
         dev = d.get("device") or {}
         return {"name": str(dev.get("name") or "")[:80], "type": str(dev.get("type") or "")[:30]} if dev.get("name") else None
 
-    async def library(self) -> dict:
+    async def library(self, fresh: bool = False) -> dict:
         """What the listener has gathered: every playlist (their own and those they follow), the
         saved albums, and the latest two hundred liked tracks. "me": the listener's id, to tell their own
-        playlists from the followed ones."""
+        playlists from the followed ones. Each part is kept on the device for hours (a large
+        library is dozens of questions); fresh asks Spotify again."""
         whole = True
 
         async def part(path, row, most):
             nonlocal whole
-            out = []
+            name = path.split("/")[1]
+            was_whole = whole_before.get(name, True)
+            if not (self.may_ask() and (fresh or not was_whole)):       # (one cut short is asked again as soon as it may be)
+                hit = self.known("library", name)
+                if hit is not None:
+                    whole = whole and was_whole
+                    return hit
+            out, cut = [], False
             for offset in range(0, most, 50):
                 try:
                     d = await self.get(path, keep=900, limit=50, offset=offset)     # (a quarter of an hour: a large library is many questions)
                 except WebApiError as e:
                     if e.kind == "leave" or out:      # (not allowed, or cut short: what there is)
                         whole = False
+                        cut = True
                         break
+                    older = self.known("library", name, old=True)
+                    if older is not None:             # (no answer now: what was known before)
+                        return older
                     raise
                 out += [x for x in (row(i) for i in d.get("items") or [] if isinstance(i, dict)) if x and x.get("uri")]
                 if not d.get("items") or offset + 50 >= (d.get("total") or 0):
                     break
+            whole_before[name] = not cut
+            self.keep("library", "whole", whole_before)
+            self.keep("library", name, out)
             return out
+        whole_before = dict(self.known("library", "whole", old=True) or {})
         playlists, albums, tracks, me = await asyncio.gather(
             part("me/playlists", playlist_row, 1000),
             part("me/albums", lambda i: album_row(i.get("album") or {}), 500),
             part("me/tracks", lambda i: track_row(i.get("track") or {}), 200),
-            self.get("me"))
-        return {"playlists": playlists, "albums": albums, "tracks": tracks, "me": me.get("id") or "", "whole": whole}
+            self.me())
+        at = min((self.long.get(f"library:{n}") or [time.time()])[0] for n in ("playlists", "albums", "tracks"))
+        return {"playlists": playlists, "albums": albums, "tracks": tracks, "me": me.get("id") or "", "whole": whole, "at": int(at)}
 
     async def _change(self, method: str, path: str, **params) -> None:
         """A change on the account (PUT or DELETE). Raises as get() does."""
@@ -411,7 +529,7 @@ class WebApi:
             self.http = ClientSession(timeout=ClientTimeout(total=10))
         for attempt in (0, 1):
             token = await self._token()
-            await self._my_turn()
+            await self._my_turn(method.lower() + " " + path)
             try:
                 async with self.http.request(method, f"{API}/{path}", params=params, headers={"Authorization": f"Bearer {token}"}) as r:
                     if r.status == 401 and attempt == 0:
@@ -435,8 +553,15 @@ class WebApi:
         uris = [u for u in dict.fromkeys(uris) if SAVES.fullmatch(u)][:40]
         if not uris:
             return {}
-        d = await self.get("me/library/contains", keep=20, uris=",".join(uris))
-        return dict(zip(uris, (bool(x) for x in d))) if isinstance(d, list) and len(d) == len(uris) else {}
+        out = {u: self.known("saved", u) for u in uris}
+        ask = [u for u in uris if out[u] is None]
+        if ask:                                # (only those not known already)
+            d = await self.get("me/library/contains", keep=20, uris=",".join(ask))
+            if isinstance(d, list) and len(d) == len(ask):
+                for u, x in zip(ask, d):
+                    out[u] = bool(x)
+                    self.keep("saved", u, bool(x))
+        return {u: v for u, v in out.items() if v is not None}
 
     async def save(self, uri: str, on: bool) -> None:
         """Put a track or an album in the listener's library, or take it out."""
@@ -445,6 +570,8 @@ class WebApi:
         await self._change("PUT" if on else "DELETE", "me/library", uris=uri)
         for k in [k for k in self.kept if k.startswith(("me/library/contains", "me/tracks", "me/albums"))]:   # (what was known of the library is no longer so)
             del self.kept[k]
+        self.keep("saved", uri, on)
+        self.forget("library:tracks" if uri.startswith("spotify:track:") else "library:albums")
 
     async def last_added(self, playlist_id: str, total: int) -> str:
         """When a track was last added to the playlist (one of the listener's own), as Spotify
@@ -457,22 +584,37 @@ class WebApi:
         """{id: row} for tracks known only by their id (the far end of the queue, which the
         player hands over as bare addresses). One question each, kept; those not found are left out."""
         async def one(i):
+            hit = self.known("track", i)
+            if hit:
+                return hit
             try:
                 t = await self.get(f"tracks/{i}")
             except WebApiError:
                 return None
-            return {**track_row(t), "cover_big": image((t.get("album") or {}).get("images"), 640)} if t.get("name") else None
+            if not t.get("name"):
+                return None
+            row = {**track_row(t), "cover_big": image((t.get("album") or {}).get("images"), 640)}
+            self.keep("track", i, row)
+            return row
         rows = await asyncio.gather(*(one(i) for i in ids))
         return {i: r for i, r in zip(ids, rows) if r}
 
     async def album(self, album_id: str) -> dict | None:
+        hit = self.known("album", album_id)
+        if hit:
+            return hit
         d = await self.get(f"albums/{album_id}")
         if not d.get("uri"):
             return None
-        return {**album_row(d), "cover": image(d.get("images"), 640), "label": d.get("label") or "",
-                "tracks": [track_row(t, d) for t in ((d.get("tracks") or {}).get("items") or []) if t.get("uri")]}
+        out = {**album_row(d), "cover": image(d.get("images"), 640), "label": d.get("label") or "",
+               "tracks": [track_row(t, d) for t in ((d.get("tracks") or {}).get("items") or []) if t.get("uri")]}
+        self.keep("album", album_id, out)
+        return out
 
     async def artist(self, artist_id: str) -> dict | None:
+        hit = self.known("artist", artist_id)
+        if hit:
+            return hit
         d = await self.get(f"artists/{artist_id}")
         if not d.get("uri"):
             return None
@@ -487,7 +629,9 @@ class WebApi:
             if offset + 10 >= (al.get("total") or 0):
                 break
         albums.sort(key=lambda a: a["year"] or "9999")   # in the order they came out
-        return {**artist_row(d), "cover": image(d.get("images"), 320), "albums": albums, **(await self.top_tracks(d.get("name", "")))}
+        out = {**artist_row(d), "cover": image(d.get("images"), 320), "albums": albums, **(await self.top_tracks(d.get("name", "")))}
+        self.keep("artist", artist_id, out)
+        return out
 
     async def top_tracks(self, name: str) -> dict:
         """The artist's best-known tracks: {"top": [track rows], "top_from": "lastfm" | "spotify"}.

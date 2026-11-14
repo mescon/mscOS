@@ -109,6 +109,7 @@ class Spotify(SourcePlugin):
                                       lambda: self.hub.secret("about_lastfm_key") or "",
                                       refresh=lambda: self.hub.secret("spotify_refresh") or "", keep_refresh=self._keep_refresh,
                                       wait_file=os.path.join(collect.STATE_DIR, "spotify-webapi-wait"),
+                                      store_file=os.path.join(collect.STATE_DIR, "spotify-webapi-kept.json"),
                                       granted=lambda: self.hub.secret("spotify_scope") or "",
                                       keep_granted=lambda scope: self.hub.set_secret("spotify_scope", scope))
         return self._web
@@ -139,7 +140,7 @@ class Spotify(SourcePlugin):
         """A while after the panel starts, go on reading off the playlists where it was left:
         it takes an hour or more for a large library, and should not wait for someone to open Music."""
         await asyncio.sleep(120)
-        if not self.web.signed_in() or self.web.asked()["wait"]:
+        if not self.web.signed_in() or not self.web.may_ask(quiet=True):
             return
         try:
             d = await self.web.library()
@@ -151,7 +152,7 @@ class Spotify(SourcePlugin):
         """Start reading off the playlists that are new or have changed; how many there are."""
         known = self.added()
         todo = [(p["id"], p.get("snap") or "", p.get("count") or 0) for p in own if p.get("id") and known.get(p["id"], {}).get("snap") != (p.get("snap") or "")]
-        if todo and not self.web.asked()["wait"] and not (getattr(self, "_added_task", None) and not self._added_task.done()):
+        if todo and self.web.may_ask(quiet=True) and not (getattr(self, "_added_task", None) and not self._added_task.done()):
             # (playlists that are no more are forgotten only when the whole list was read: a list cut short names too few)
             self._added_task = asyncio.create_task(self._read_added(todo, {p["id"] for p in own if p.get("id")} if whole else None))
         return len(todo)
@@ -160,7 +161,7 @@ class Spotify(SourcePlugin):
         known, n = self.added(), 0
         try:
             for pid, snap, count in todo:
-                if not self.web.signed_in():
+                if not self.web.signed_in() or not self.web.may_ask(quiet=True):     # (nobody waits for this: it leaves the hour to the listener)
                     break
                 try:
                     known[pid] = {"snap": snap, "added": await self.web.last_added(pid, count)}
@@ -173,7 +174,7 @@ class Spotify(SourcePlugin):
                     self._added_save()
                 if n % 40 == 0:
                     await self.hub.broadcast({"type": "spotify_added"})
-                await asyncio.sleep(12)        # (very slowly, two or three in a half minute: Spotify allows an app like this one little)
+                await asyncio.sleep(60)        # (very slowly, one a minute: Spotify allows an app like this one little)
         finally:
             for pid in [k for k in known if own is not None and k not in own]:        # (playlists that are no more)
                 del known[pid]
@@ -375,10 +376,10 @@ class Spotify(SourcePlugin):
                         "en": f"Signed in{' as ' + who if who else ''}" + ("" if self.web.can_save() else ". Sign in once more to like tracks and save albums from here")} if self.web.signed_in()
                        else {"sv": "Inte inloggad: Musik visar inte ditt bibliotek", "en": "Not signed in: Music does not show your library"})},
             {"label": {"sv": "Frågor till Spotify", "en": "Questions to Spotify"}, "state": "warn" if asked["wait"] or asked["refused"] else "",
-             "value": {"sv": f"{asked['half_minute']} senaste halvminuten (högst {asked['limit']}), {asked['hour']} senaste timmen"
-                             + (f". Spotify har bett om paus {asked['refused']} gånger" if asked["refused"] else "") + (f", {asked['wait']} s kvar" if asked["wait"] else ""),
-                       "en": f"{asked['half_minute']} in the last half minute (at most {asked['limit']}), {asked['hour']} in the last hour"
-                             + (f". Spotify has asked for a pause {asked['refused']} times" if asked["refused"] else "") + (f", {asked['wait']} s left" if asked["wait"] else "")}},
+             "value": {"sv": f"{asked['hour']} senaste timmen (högst {asked['hour_limit']})"
+                             + (f". Spotify har bett om paus {asked['refused']} gånger" if asked["refused"] else "") + (time.strftime(", paus till %H:%M", time.localtime(asked["until"])) if asked["wait"] else ""),
+                       "en": f"{asked['hour']} in the last hour (at most {asked['hour_limit']})"
+                             + (f". Spotify has asked for a pause {asked['refused']} times" if asked["refused"] else "") + (time.strftime(", paused until %H:%M", time.localtime(asked["until"])) if asked["wait"] else "")}},
             {"label": {"sv": "Förtur på enheten", "en": "Priority on the device"}, **yes(solo.get("rt_watcher") == "active", "Aktiv", "On", "Av", "Off")},
             {"label": {"sv": "Nyckel", "en": "Key"}, **yes(k["set"], f"Inställd{', ändrad ' + changed if changed else ''}", f"Entered{', changed ' + changed if changed else ''}", "Saknas: Soloist kan inte starta", "Missing: Soloist cannot start")},
             {"label": {"sv": "Nästa versionskoll", "en": "Next version check"}, "value": nxt.group(0) if nxt else "–", "state": ""},
@@ -1035,7 +1036,8 @@ class Spotify(SourcePlugin):
         def failed(e: webapi.WebApiError):
             text = {"credentials": T("Spotify godtog inte appens Client ID och Client secret. Kontrollera dem under Moduler, Spotify Lossless."),
                     "leave": T("Spotify tillåter inte det för den här appen."),
-                    "busy": T("Spotify tar inte emot fler frågor just nu. Försök igen om en stund.")}.get(e.kind, T("Spotify svarar inte."))
+                    "busy": (T("Spotify har bett panelen vänta med nya frågor till klockan") + time.strftime(" %H:%M.", time.localtime(sp.web.wait_until)) if sp.web.asked()["wait"]
+                             else T("Panelen har frågat Spotify så mycket den får den här timmen. Försök igen om en stund."))}.get(e.kind, T("Spotify svarar inte."))
             return web.HTTPBadGateway(text=text)
 
         @routes.get("/api/spotify/search")
@@ -1111,7 +1113,7 @@ class Spotify(SourcePlugin):
             if not sp.web.signed_in():
                 raise web.HTTPConflict(text=T("Logga in med Spotify under Moduler, Spotify Lossless."))
             try:
-                d = await sp.web.library()
+                d = await sp.web.library(fresh=request.query.get("fresh") == "1")
             except webapi.WebApiError as e:
                 raise failed(e)
             known = sp.added()
