@@ -30,10 +30,18 @@ What you need:
    takes a few minutes: the card is expanded, and on PCs the device restarts once by itself.
 4. Open **`http://mscos.local`** in a browser on the same network. If the name does not
    resolve, use the device's IP address (your router lists it as `mscos`).
-5. Follow the guide: language, a password for the panel, names, sources, amplifier.
-6. Under **Modules**, press **Install** for each source you chose. The player is
-   downloaded from its publisher (Spotify, Roon Labs, Signalyst, GitHub).
-   - Spotify Lossless: afterwards, enter your developer key in the module's settings.
+5. Follow the guide: language, a password for the panel, names, sources, amplifier, alerts.
+6. The panel then opens **Profile, Getting started**, which lists what is left and takes
+   each row away when it is done:
+   - **Fetch the players** for the sources you chose: under **Modules**, press **Install**.
+     Each player is downloaded from its publisher (Spotify, Roon Labs, Signalyst, GitHub).
+   - **Enter your keys** under **Profile, Accounts and keys**. Under each field,
+     "How to get it, step by step" walks you through the other site. Spotify Lossless
+     needs your own developer key. Searching Spotify and seeing your library needs an app
+     of your own at Spotify (its Client ID) and **Sign in with Spotify**.
+   - **Put mscOS on your phone's home screen**, so it opens like an app. On an iPhone:
+     Safari, Share, Add to Home Screen. On Android: the browser's menu, Add to Home screen
+     or Install app.
 7. Choose the source at the top of the panel and play: pick the device in the Spotify app,
    in Roon (Settings, Audio) or in HQPlayer.
 

@@ -2,30 +2,41 @@
 
 *by vivajAcoustics*
 
-mscOS ("music OS") turns a small computer into a network music player for a USB DAC: a
-bit-perfect endpoint for Spotify, Roon and HQPlayer, set up and watched from a web panel
-in Swedish or English.
+mscOS ("music OS") turns a small computer into a network music player for a USB DAC. It
+plays Spotify, Roon, HQPlayer and UPnP bit-perfect, and it is set up and watched from a web
+panel on your phone, in Swedish or English.
 
 - **Bit-perfect, and it shows it.** The panel measures what actually reaches the DAC:
-  16 or 24 bit, lossless or not, dropouts, the DAC's own clock.
-- **Sources as modules.** One at a time owns the DAC:
+  16 or 24 bit, lossless or not, dropouts, the DAC's own clock. Every stage from the source
+  to the DAC has a lamp, for every source.
+- **Sources as modules.** One at a time uses the DAC:
   - Spotify Lossless (Soloist, with your own developer key),
   - Spotify Connect without a key (go-librespot, 320 kbit/s),
-  - Roon Bridge,
+  - Roon Bridge, with Roon's library, search and transport in the panel,
   - HQPlayer NAA,
   - a UPnP and OpenHome renderer (MPD with upmpdcli): Qobuz, Tidal and your own files from
     apps such as mconnect and BubbleUPnP.
-- **About the music.** Notes on the song, the album and the artist that is playing, from
-  Wikipedia, Discogs and MusicBrainz (a module, off by default).
+- **Your music in the panel.** Search Spotify or Roon, open an artist and see every album
+  in the order it came out, with the tracks under each. Signed in with Spotify you get your
+  playlists, saved albums and liked tracks, in folders of your own, and a heart on what
+  plays. Every artist and album name leads to its page, and every page has an address you
+  can keep.
+- **About the music.** Notes on the song, the album and the artist that is playing, who
+  plays on it, and lyrics that follow the music, from Wikipedia, MusicBrainz, Discogs,
+  Last.fm and LRCLIB (a module, off by default: the device then asks those services about
+  what plays).
 - **Your equipment as modules.** Amplifier volume and inputs over the network (Mark
   Levinson Nº585/585.5), an Arcam AV receiver, alerts to your phone (ntfy, Home Assistant),
-  native DSD for C-Media CM6632A DACs, and modules of your own. The core needs none of
-  them: any USB DAC works.
-- **A quiet machine.** One CPU core for audio and the USB interrupts, no frequency
-  scaling, nothing unscheduled while music plays; the panel lists each measure and checks
+  a listening diary (ListenBrainz), native DSD for C-Media CM6632A DACs, and modules of
+  your own. The core needs none of them: any USB DAC works.
+- **A quiet machine.** One CPU core for audio and the DAC's USB traffic, no frequency
+  scaling, nothing unscheduled while music plays. The panel lists each measure and checks
   it live.
 - **No keys, no player binaries included.** Players are downloaded on the device from
-  their publishers; keys and accounts are your own.
+  their publishers. Keys and accounts are your own, and the panel walks you through
+  getting each one.
+- **An app on your phone without an app store.** The panel is a web app: add it to the
+  home screen and it opens like any other app.
 
 ![The signal chain in the panel: sample rate, bit depth and gain as measured, and a lamp per stage](docs/img/signal.png)
 
@@ -40,8 +51,10 @@ tested on; see [status](#status).
 ## Install
 
 See [docs/INSTALL.md](docs/INSTALL.md). In short: write the image to an SD card, start the
-device on wired network, open `http://mscos.local` and follow the guide. On an existing
-Debian 13 or Armbian system, install the packages instead.
+device on wired network, open `http://mscos.local` and follow the guide. The panel then
+lists what is left: the players to fetch, the keys to enter (each with its steps), and
+how to put the panel on your phone's home screen. On an existing Debian 13 or Armbian
+system, install the packages instead.
 
 ## Status
 
@@ -52,18 +65,20 @@ Debian 13 or Armbian system, install the packages instead.
 | Raspberry Pi 4/5 | the image (`image/build.sh rpi`) builds and its contents are checked (packages, kernel with the DSD driver, board profile, first-boot setup); **not yet started on a device** |
 | Other arm64 boards with UEFI | the image (`image/build.sh arm64`) builds and its contents are checked; the board profile is chosen at first boot. **Not yet started on a device** |
 | Spotify Lossless (Soloist), Roon Bridge | in daily use on the SOtM |
-| Roon: what plays, and the panel's buttons (Roon's extension API) | the client is tested against a stand-in server; on the SOtM it finds the Roon server and asks to be let in. **Not yet seen approved and showing a track** |
+| Roon: what plays, the library and search in the panel (Roon's extension API) | in use on the SOtM against a Roon server: approved there, shows what plays, browses and searches |
+| Spotify in the panel: search, artist and album pages, the listener's library, liking a track | search, pages and the library in use on the SOtM with a signed-in account; **liking and saving not yet tried against Spotify** |
+| Signing in with Spotify where the panel has no HTTPS | the steps and the checks verified on a new installation; **not yet completed against Spotify** |
 | Spotify Connect (go-librespot) | playback, transport, and the Spotify slider driving the amplifier verified on the SOtM |
 | HQPlayer NAA | install, start and source switching verified on the SOtM; **playback not yet tested** |
-| UPnP renderer | the module's code verified against MPD and upmpdcli in a container (a track sent as an app would, with a null output); **not yet played through a DAC** |
+| UPnP renderer | installed on the SOtM; the module's code verified against MPD and upmpdcli in a container (a track sent as an app would, with a null output); **not yet played through a DAC** |
 | Native DSD for CM6632A | in use as a kernel patch (6.18); the DKMS package builds the driver for Debian 13's own kernel (6.12), **not yet tried with a DAC on that kernel** |
 | Panel in Swedish and English | complete |
-| A new installation from the packages | installs in an empty Debian 13 container; the guide and every view checked there |
+| A new installation from the packages | installs in an empty Debian 13 container; the guide, the list of what is left to do after it, and entering keys checked there |
 | Modules of your own, the module catalogue | installing, updating and removing verified on the SOtM against a test catalogue |
 | Alerts through ntfy | a test alert delivered to a real ntfy topic from a new installation |
 | Updating mscOS from the panel | written; **not yet tested against a published release** |
 
-Planned: UPnP/OpenHome (Qobuz and Tidal through a control app), Squeezelite, AirPlay.
+Planned: Squeezelite, AirPlay.
 Tidal Connect and Qobuz Connect are only offered to certified manufacturers and are not
 part of mscOS. See [docs/PLATFORM-PLAN.md](docs/PLATFORM-PLAN.md) (Swedish) for the reasoning.
 
