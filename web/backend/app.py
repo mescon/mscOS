@@ -489,6 +489,12 @@ class Hub:
         os.replace(p + ".tmp", p)
         persist(p)
 
+    async def going(self, why: str) -> None:
+        """Tell the open pages why the panel is about to stop answering ("panel", "modules",
+        "update", "reboot", "poweroff"), so that they can say so instead of guessing."""
+        self.going_why = why
+        await self.broadcast({"type": "going", "why": why})
+
     async def broadcast(self, msg: dict):
         data = json.dumps(msg)
         for ws in list(self.clients):
@@ -1099,6 +1105,7 @@ async def plugins_set(request):
     await asyncio.get_running_loop().run_in_executor(None, hub.save_settings)
     if b.get("restart"):
         log.info("modules now %s; restarting the panel", en)
+        await hub.going("modules")
         asyncio.get_running_loop().call_later(0.5, lambda: os._exit(0))  # systemd starts it again
     return ok(plugins=await _plugin_list(), restart_needed=_plugins_restart_needed())
 
@@ -1319,6 +1326,7 @@ async def mscos_update_run(request):
     rc, _, err = await collect.run(["systemd-run", "--collect", "--unit", "mscos-self-update", MSCOS_UPDATE], timeout=20)
     if rc:
         raise web.HTTPConflict(text=T("Uppdateringen kunde inte startas: {why}", why=err.strip()[-200:]))
+    await hub.going("update")
     return ok()
 
 
@@ -1432,6 +1440,7 @@ async def auth_password(request):
 # ---- System
 @routes.post("/api/system/reboot")
 async def reboot(request):
+    await hub.going("reboot")
     asyncio.get_running_loop().call_later(1.0, lambda: subprocess.Popen(["systemctl", "reboot"]))
     hub.save()
     return ok()
@@ -1439,6 +1448,7 @@ async def reboot(request):
 
 @routes.post("/api/system/poweroff")
 async def poweroff(request):
+    await hub.going("poweroff")
     asyncio.get_running_loop().call_later(1.0, lambda: subprocess.Popen(["systemctl", "poweroff"]))
     hub.save()
     return ok()
@@ -1663,6 +1673,16 @@ async def on_startup(app):
     app["tasks"] += [asyncio.create_task(c) for c in core]
 
 
+async def on_shutdown(app):
+    """The panel is stopped from outside (a restart of its service, an update of its package):
+    the pages are told, unless they already know why."""
+    if not getattr(hub, "going_why", ""):
+        try:
+            await hub.going("panel")
+        except Exception:      # (nothing may stand in the way of stopping)
+            pass
+
+
 async def on_cleanup(app):
     for t in app["tasks"]:
         t.cancel()
@@ -1684,6 +1704,7 @@ def make_app(background: bool = True) -> web.Application:
     app.router.add_static("/", STATIC, show_index=False)
     if background:
         app.on_startup.append(on_startup)
+        app.on_shutdown.append(on_shutdown)
         app.on_cleanup.append(on_cleanup)
     return app
 

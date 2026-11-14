@@ -224,6 +224,21 @@ function veil() {
 }
 const waiting = (text) => { VEIL.waiting = text; veil(); };
 let heard = false, lostTimer = 0;
+// Why the device stopped answering, when it said so before it did (a "going" message): the
+// veil says that, and for how long, instead of guessing. Without a word from it: what may be.
+let going = null;       // {why, at}
+const GONE = {
+  panel: [() => tr("Panelen startar om. Det tar ungefär en halv minut. Musiken påverkas inte."), 180],
+  modules: [() => tr("Panelen startar om med de moduler du valt. Det tar ungefär en halv minut."), 180],
+  update: [() => tr("mscOS uppdateras. Panelen startar om när det är klart, vilket kan ta några minuter."), 900],
+  reboot: [() => tr("Enheten startar om. Det tar ett par minuter."), 600],
+  poweroff: [() => tr("Enheten är avstängd. Sidan kommer tillbaka när den slås på igen."), Infinity],
+};
+const goneText = () => {
+  const g = going && GONE[going.why];
+  if (g && (Date.now() - going.at) / 1000 < g[1]) return g[0]();
+  return heard ? tr("Enheten svarar inte. Den kan vara avstängd, hålla på att starta om eller sakna nätverk. Sidan försöker igen av sig själv.") : tr("Ingen kontakt med enheten. Försöker igen…");
+};
 waiting("\u00a0");   // (the ring alone at first: the words come if it takes more than a moment)
 setTimeout(() => { if (!heard && VEIL.waiting === "\u00a0") waiting(tr("Hämtar läget från enheten…")); }, 1500);
 function connect() {
@@ -234,8 +249,9 @@ function connect() {
     $("#dev-sub").textContent = tr("ingen kontakt, försöker igen…");
     // (a moment's grace: a module switched on closes and opens the connection at once)
     clearTimeout(lostTimer);
-    lostTimer = setTimeout(() => { if (!ws || ws.readyState !== 1) waiting(heard ? tr("Enheten svarar inte just nu, den kanske startar om. Sidan kommer tillbaka av sig själv.") : tr("Ingen kontakt med enheten. Försöker igen…")); }, 1500);
+    lostTimer = setTimeout(() => { if (!ws || ws.readyState !== 1) waiting(goneText()); }, 1500);
     setTimeout(connect, retry); retry = Math.min(retry * 2, 15000);
+    if (VEIL.waiting && VEIL.waiting !== "\u00a0" && heard) waiting(goneText());    // (each try: the words follow how long it has been)
   };
   ws.onmessage = (e) => { const m = JSON.parse(e.data); inbox = inbox.then(() => handle(m)).catch((err) => console.error(err)); };
 }
@@ -408,7 +424,8 @@ async function handle(m) {
   pagesDo("render"); renderDock(); stageLayout();
   // the history names each source as the panel does: drawn again once the sources are known
   if (m?.type === "hello" && document.body.dataset.view === "v-music") loadListened();
-  if (hello) { heard = true; clearTimeout(lostTimer); waiting(""); }   // the device has said how things are: the page is whole
+  if (hello) { heard = true; going = null; clearTimeout(lostTimer); waiting(""); }   // the device has said how things are: the page is whole
+  if (m.type === "going") { going = { why: String(m.why || ""), at: Date.now() }; if (GONE[going.why]) waiting(goneText()); return; }
 }
 function handleMsg(m) {
   switch (m.type) {
