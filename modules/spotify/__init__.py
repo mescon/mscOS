@@ -99,7 +99,7 @@ class Spotify(SourcePlugin):
 
     def hello(self) -> dict:
         return {"playback": self.playback, "auth": self.auth, "queue": self.queue, "last_test": self.last_test,
-                "quality": self.track_quality, "tests": list(self.tests)[-30:], "spotify_search": self.web.ready(), "spotify_user": self.web.signed_in()}
+                "quality": self.track_quality, "tests": list(self.tests)[-30:], "spotify_search": self.web.ready(), "spotify_user": self.web.signed_in(), "spotify_save": self.web.can_save()}
 
     @property
     def web(self):
@@ -108,7 +108,9 @@ class Spotify(SourcePlugin):
             self._web = webapi.WebApi(lambda: (self.hub.secret("spotify_client_id") or "", self.hub.secret("spotify_client_secret") or ""),
                                       lambda: self.hub.secret("about_lastfm_key") or "",
                                       refresh=lambda: self.hub.secret("spotify_refresh") or "", keep_refresh=self._keep_refresh,
-                                      wait_file=os.path.join(collect.STATE_DIR, "spotify-webapi-wait"))
+                                      wait_file=os.path.join(collect.STATE_DIR, "spotify-webapi-wait"),
+                                      granted=lambda: self.hub.secret("spotify_scope") or "",
+                                      keep_granted=lambda scope: self.hub.set_secret("spotify_scope", scope))
         return self._web
 
     # When a track was last added to each of the listener's own playlists, so that the ones in
@@ -238,7 +240,9 @@ class Spotify(SourcePlugin):
     )
 
     def actions_now(self) -> list[dict]:
-        gone = "login" if self.web.signed_in() else "logout"      # (one of the two at a time)
+        # one of the two at a time; both when the sign-in is an older one without leave to save
+        # to the library, so that signing in again gives it
+        gone = "logout" if not self.web.signed_in() else "login" if self.web.can_save() else ""
         return [a for a in self.actions if a["name"] != gone]
 
     def update_settings(self, b: dict, upd: dict) -> None:
@@ -322,7 +326,7 @@ class Spotify(SourcePlugin):
             self.hub.set_secret("spotify_user", (await self.web.me())["name"][:60])
         except webapi.WebApiError:
             pass
-        await self.hub.broadcast({"type": "spotify_user", "on": True})
+        await self.hub.broadcast({"type": "spotify_user", "on": True, "save": self.web.can_save()})
         return {"toast": {"sv": "Inloggad med Spotify", "en": "Signed in with Spotify"}}
 
     def status(self) -> dict | None:
@@ -350,7 +354,8 @@ class Spotify(SourcePlugin):
             {"label": {"sv": "Tjänst", "en": "Service"}, **yes(solo.get("service") == "active", "Igång", "Running", str(solo.get("service") or "Okänd"), str(solo.get("service") or "Unknown"))},
             {"label": {"sv": "Spotify", "en": "Spotify"}, **yes(bool(self.auth.get("logged_in")), "Inloggad", "Signed in", "Inte inloggad: välj enheten i Spotify-appen", "Not signed in: choose the device in the Spotify app")},
             {"label": {"sv": "Spotify-konto", "en": "Spotify account"}, "account": True, "state": "good" if self.web.signed_in() else "",
-             "value": ({"sv": f"Inloggad{' som ' + who if who else ''}", "en": f"Signed in{' as ' + who if who else ''}"} if self.web.signed_in()
+             "value": ({"sv": f"Inloggad{' som ' + who if who else ''}" + ("" if self.web.can_save() else ". Logga in en gång till för att kunna gilla låtar och spara album härifrån"),
+                        "en": f"Signed in{' as ' + who if who else ''}" + ("" if self.web.can_save() else ". Sign in once more to like tracks and save albums from here")} if self.web.signed_in()
                        else {"sv": "Inte inloggad: Musik visar inte ditt bibliotek", "en": "Not signed in: Music does not show your library"})},
             {"label": {"sv": "Frågor till Spotify", "en": "Questions to Spotify"}, "state": "warn" if asked["wait"] or asked["refused"] else "",
              "value": {"sv": f"{asked['half_minute']} senaste halvminuten (högst {asked['limit']}), {asked['hour']} senaste timmen"
@@ -1038,7 +1043,7 @@ class Spotify(SourcePlugin):
                     hub.set_secret("spotify_user", (await sp.web.me())["name"][:60])
                 except webapi.WebApiError:
                     pass
-                await hub.broadcast({"type": "spotify_user", "on": True})
+                await hub.broadcast({"type": "spotify_user", "on": True, "save": sp.web.can_save()})
             except webapi.WebApiError:
                 log.warning("spotify sign-in was not completed (%s)", "refused" if q.get("error") else "no valid code")
             raise web.HTTPFound("/system/modules/spotify")
@@ -1052,6 +1057,33 @@ class Spotify(SourcePlugin):
                 return web.json_response({"device": await sp.web.where()})
             except webapi.WebApiError as e:
                 raise failed(e)
+
+        @routes.get("/api/spotify/saved")
+        async def spotify_saved(request):
+            """Which of these tracks and albums are in the listener's library (the owner's own: for someone logged in to the panel)."""
+            if not hub.logged_in(request) or not sp.web.signed_in():
+                return web.json_response({"saved": {}})
+            try:
+                return web.json_response({"saved": await sp.web.saved(request.query.get("uris", "")[:4000].split(","))})
+            except webapi.WebApiError as e:
+                raise failed(e)
+
+        @routes.post("/api/spotify/save")
+        async def spotify_save(request):
+            """Like a track or save an album on the listener's Spotify account, or undo it."""
+            if not hub.logged_in(request):
+                raise web.HTTPUnauthorized(text=T("Logga in under Profil för att göra det här."))
+            b = await hub.body(request)
+            uri = str(b.get("uri") or "")
+            if not webapi.SAVES.fullmatch(uri):
+                raise web.HTTPBadRequest()
+            if not sp.web.can_save():
+                raise web.HTTPConflict(text=T("Logga in med Spotify en gång till under Profil, Konton och nycklar, så får panelen spara i ditt bibliotek."))
+            try:
+                await sp.web.save(uri, bool(b.get("on")))
+            except webapi.WebApiError as e:
+                raise failed(e)
+            return hub.ok(on=bool(b.get("on")))
 
         @routes.get("/api/spotify/library")
         async def spotify_library(request):

@@ -512,8 +512,20 @@ function setCover(url) {
   };
   pre.src = abs;
 }
+// The heart beside what plays: for a source whose module can like a track (its fav() hook
+// gives {on, toggle} for the track that plays, or nothing when it cannot).
+function renderFav() {
+  const b = $("#np-fav"); let f = null;
+  try { f = VIEW().fav?.() || null; } catch (e) { console.error(e); }
+  b.hidden = !f;
+  if (f) { b.setAttribute("aria-pressed", String(!!f.on)); b.setAttribute("aria-label", f.on ? tr("Ta bort från gillade låtar") : tr("Gilla låten")); }
+}
+$("#np-fav").addEventListener("click", async (e) => {
+  const b = e.currentTarget, f = VIEW().fav?.(); if (!f) return;
+  b.disabled = true; try { await f.toggle(); } catch {} b.disabled = false; renderFav();
+});
 function renderPlay() {
-  renderSource();
+  renderSource(); renderFav();
   const can = SRC()?.transport || [];
   const own = VIEW().play;
   document.body.classList.toggle("has-transport", can.includes("toggle") && (!!own || !!S.now));

@@ -168,5 +168,11 @@
  "Spara": "Save",
  "påfylld {0}": "added to {0}",
  "De som inte ligger i någon mapp. Den du senast lade en låt i står först.": "Those that are in no folder. The one you last added a track to comes first.",
- "{0} spellistor är inte hämtade än. Ordningen blir klar efter hand.": "{0} playlists have not been fetched yet. The order settles as they are."
+ "{0} spellistor är inte hämtade än. Ordningen blir klar efter hand.": "{0} playlists have not been fetched yet. The order settles as they are.",
+ "{0} ligger i ditt bibliotek": "{0} is in your library",
+ "{0} är borttagen ur ditt bibliotek": "{0} is removed from your library",
+ "Låten": "The track",
+ "Albumet": "The album",
+ "Sparat i biblioteket": "Saved in the library",
+ "Spara i biblioteket": "Save in the library"
 }

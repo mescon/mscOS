@@ -83,6 +83,17 @@ class Rows(unittest.TestCase):
         self.assertEqual(parts("something else"), ("", "", ""))
         self.assertEqual(parts(None), ("", "", ""))
 
+    def test_leave_to_save(self):
+        kept = {"refresh": "r", "scope": "user-library-read user-read-playback-state"}
+        w = webapi.WebApi(lambda: ("id", ""), refresh=lambda: kept["refresh"], granted=lambda: kept["scope"], keep_granted=lambda s: kept.update(scope=s))
+        self.assertFalse(w.can_save(), "an older sign-in reads only")
+        kept["scope"] += " user-library-modify"
+        self.assertTrue(w.can_save())
+        for ok in ("spotify:track:" + "a" * 22, "spotify:album:" + "b" * 22):
+            self.assertTrue(webapi.SAVES.fullmatch(ok))
+        for bad in ("spotify:artist:" + "a" * 22, "spotify:playlist:" + "a" * 22, "spotify:track:short", "spotify:track:" + "a" * 22 + ",x", ""):
+            self.assertIsNone(webapi.SAVES.fullmatch(bad), bad)
+
     def test_the_sign_in_address(self):
         from urllib.parse import parse_qs, urlsplit
         w = webapi.WebApi(lambda: ("my id", ""))
@@ -91,7 +102,8 @@ class Rows(unittest.TestCase):
         self.assertEqual((u.scheme, u.netloc, u.path), ("https", "accounts.spotify.com", "/authorize"))
         self.assertEqual((q["client_id"], q["response_type"], q["code_challenge_method"]), ("my id", "code", "S256"))
         self.assertEqual(q["redirect_uri"], "https://panel.example/api/spotify/callback")
-        self.assertNotIn("modify", q["scope"], "leave to read, not to change")
+        self.assertIn("user-library-modify", q["scope"].split(), "leave to like and save")
+        self.assertNotIn("user-modify-playback-state", q["scope"], "the music is not steered this way")
         self.assertNotIn(w.pending[1], u.query, "the verifier stays on the device")
         with self.assertRaises(webapi.WebApiError):
             webapi.WebApi(lambda: ("", "")).sign_in_address("https://panel.example/x")

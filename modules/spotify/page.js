@@ -286,7 +286,9 @@ export default function page(api) {
     const hero = `<div class="m-hero ${pg.kind}">${img(d.cover)}<div>
         <p class="part">${esc(kindLine)}</p>
         <h3>${esc(d.name)}</h3>${pg.kind === "album" ? `<p class="by">${artistLinks(d.artist, d.artists)}</p>` : pg.kind === "playlist" ? `<p class="by">${esc(d.owner)}</p>` : ""}
-        <button class="btn primary" data-play="${esc(d.uri)}" data-name="${esc(d.name)}">${esc(tr("Spela"))}</button></div></div>`;
+        <button class="btn primary" data-play="${esc(d.uri)}" data-name="${esc(d.name)}">${esc(tr("Spela"))}</button>${pg.kind === "album" && M.save && liked.get(d.uri) != null
+          ? `<button class="btn" data-save="${esc(d.uri)}" data-name="${esc(d.name)}" aria-pressed="${liked.get(d.uri)}">${esc(liked.get(d.uri) ? tr("Sparat i biblioteket") : tr("Spara i biblioteket"))}</button>` : ""}</div></div>`;
+    if (pg.kind === "album" && d.uri) askLiked([d.uri]);
     if (pg.kind === "playlist") {
       return back + hero + (d.about ? `<p class="m-about">${esc(d.about)}</p>` : "")
         + ((d.tracks || []).length ? trackList(d.tracks) : `<p class="none">${esc(M.user ? tr("Spotify visar bara låtarna i spellistor som är dina egna. Den här är någon annans, så den går att spela men inte att se in i. Låtarna visas under Härnäst när listan spelar.")
@@ -474,6 +476,8 @@ export default function page(api) {
       else { edit = null; if (folderOf(d.lib)) { opened.add(d.lib); keepOpened(); } api.go("v-music", d.lib ? ["library", d.lib] : []); }
       return;
     }
+    const sv = e.target.closest("[data-save]");
+    if (sv) { sv.disabled = true; setLiked(sv.dataset.save, sv.getAttribute("aria-pressed") !== "true", sv.dataset.name || tr("Albumet")); return; }
     const as = e.target.closest("[data-disc-as]");
     if (as) { try { localStorage.setItem("sp-disc", as.dataset.discAs); } catch {} drawMusic(); return; }
     const b = e.target.closest("[data-play], [data-queue], [data-album], [data-artist], [data-playlist], [data-back]"); if (!b) return;
@@ -539,6 +543,31 @@ export default function page(api) {
       if (queued.size > 400) [...queued.keys()].slice(0, 200).forEach((k) => queued.delete(k));
       renderQueue(); api.render();
     }).catch(() => {});
+  }
+  // ---- liking a track and saving an album on the listener's Spotify account (signed in, with leave for it)
+  const liked = new Map();     // uri -> true | false; undefined: not asked yet; null: asked, no answer yet
+  function askLiked(uris) {
+    const ask = uris.filter((u) => u && liked.get(u) === undefined).slice(0, 40);
+    if (!ask.length || !M.save) return;
+    ask.forEach((u) => liked.set(u, null));
+    fetch(`/api/spotify/saved?uris=${encodeURIComponent(ask.join(","))}`).then((r) => (r.ok ? r.json() : null)).then((d) => {
+      for (const u of ask) { const v = d?.saved?.[u]; if (typeof v === "boolean") liked.set(u, v); else liked.delete(u); }
+      if (liked.size > 600) [...liked.keys()].slice(0, 300).forEach((k) => liked.delete(k));
+      api.render(); if (page) drawMusic();
+    }).catch(() => ask.forEach((u) => liked.delete(u)));
+  }
+  async function setLiked(uri, on, what) {
+    try { await post("/api/spotify/save", { uri, on }); } catch { return; }
+    liked.set(uri, on); lib = null; libAt = 0;
+    toast(on ? tr`${what} ligger i ditt bibliotek` : tr`${what} är borttagen ur ditt bibliotek`);
+    api.render(); if (page) drawMusic();
+  }
+  // the heart beside what plays (the panel asks for it)
+  function fav() {
+    const it = M.playback.item, uri = it?.uri || "";
+    if (!M.save || !/^spotify:track:/.test(uri)) return null;
+    askLiked([uri]);
+    return { on: liked.get(uri) === true, toggle: () => setLiked(uri, liked.get(uri) !== true, nameOf(it) || tr("Låten")) };
   }
   // The account plays on another device: Soloist says only that it is not this one. Signed in
   // with Spotify, the device is asked for by name (now and then, while it lasts).
@@ -708,7 +737,7 @@ export default function page(api) {
     // the first message on the socket: this module's part of the state
     hello(m) {
       Object.assign(M, { playback: m.playback || {}, auth: m.auth || {}, queue: m.queue || {}, quality: m.quality || {},
-        lastTest: m.last_test || null, tests: m.tests || [], search: !!m.spotify_search, user: !!m.spotify_user });
+        lastTest: m.last_test || null, tests: m.tests || [], search: !!m.spotify_search, user: !!m.spotify_user, save: !!m.spotify_save });
       $("#sp-find").placeholder = M.search ? tr("Sök i Spotify, eller klistra in en Spotify-länk") : tr("Sök i det du spelat, eller klistra in en Spotify-länk");
       renderQueue(); renderTest(M.lastTest); renderVlog();
       // (an address with a search in it was followed before it was known that Spotify can be asked: ask now)
@@ -720,7 +749,7 @@ export default function page(api) {
       if (m.type === "soloist") { soloistEvent(m.event); return true; }
       if (m.type === "quality") { M.quality = m.quality; api.render(); return true; }
       if (m.type === "job" && m.name === "audio-test") { testJob(m); return true; }
-      if (m.type === "spotify_user") { M.user = !!m.on; M.search = M.search || M.user; lib = null; sel = ""; where = null; loadMusic(true); api.render(); return true; }
+      if (m.type === "spotify_user") { M.user = !!m.on; M.save = !!m.save; liked.clear(); M.search = M.search || M.user; lib = null; sel = ""; where = null; loadMusic(true); api.render(); return true; }
       if (m.type === "spotify_added") { loadLib(true); return true; }
       if (m.type === "history_cleared") { M.tests = []; renderVlog(); loadMusic(true); }
       return false;
@@ -759,7 +788,7 @@ export default function page(api) {
     // where the page is: /music/album/<id> and the like open that, /music alone closes it
     route(view, sub) { routed(view, sub); },
     // as the current source: the Listen view, the progress bar, the signal chain
-    play, track, duration, position, chain, carry,
+    play, track, duration, position, chain, carry, fav,
     playing: () => M.playback.status === "playing" && M.auth.is_active !== false,
     // what needs attention, for the line at the top of System
     issues() {

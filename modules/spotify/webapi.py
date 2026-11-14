@@ -8,7 +8,9 @@ the listener's own account: the app's own token ("client credentials") reads the
 The listener may also sign in with their Spotify account (authorization code with PKCE: the
 Client ID alone, no secret). Then the questions are asked as the listener, which adds what
 belongs to the account: where it plays, the playlists, the saved albums and the liked tracks.
-What is kept is a refresh token, root-only on the device, with leave to read and nothing more.
+What is kept is a refresh token, root-only on the device. Its leave is to read the playback
+state and the library, and to save to and remove from the library (a liked track, a saved
+album): the device never does anything else with it.
 """
 from __future__ import annotations
 
@@ -37,7 +39,13 @@ ACCOUNTS = "https://accounts.spotify.com"
 # again meanwhile (the time is kept in a file). Spotify has been seen to ask for well over an
 # hour's pause after some two hundred questions in five minutes.
 PER_HALF_MINUTE = 20
-SCOPES = "user-read-playback-state playlist-read-private playlist-read-collaborative user-library-read"
+# To read: where it plays, the playlists, the library. To change: the library, which is what
+# liking a track and saving an album are. Spotify's one call for saving covers tracks, albums,
+# artists and playlists alike and asks for the leave of all of them, so the last three are asked
+# for too, though the device only ever saves and removes tracks and albums.
+SCOPES = ("user-read-playback-state playlist-read-private playlist-read-collaborative user-library-read"
+          " user-library-modify user-follow-read user-follow-modify playlist-modify-public")
+SAVES = re.compile(r"spotify:(track|album):[A-Za-z0-9]{22}")
 
 
 LOOPBACK = "http://127.0.0.1:8888/callback"     # the one kind of plain-http address Spotify sends a sign-in's answer to
@@ -103,7 +111,10 @@ def artist_row(a: dict) -> dict:
 
 
 class WebApi:
-    def __init__(self, credentials, lastfm_key=lambda: "", refresh=lambda: "", keep_refresh=lambda token: None, wait_file: str = ""):
+    def __init__(self, credentials, lastfm_key=lambda: "", refresh=lambda: "", keep_refresh=lambda token: None, wait_file: str = "",
+                 granted=lambda: "", keep_granted=lambda scope: None):
+        self.granted = granted              # () -> what the sign-in gave leave for, as Spotify wrote it
+        self.keep_granted = keep_granted
         self.credentials = credentials      # () -> (client id, client secret)
         self.refresh = refresh              # () -> the signed-in listener's refresh token, or ""
         self.keep_refresh = keep_refresh    # (token) -> keeps it; "" forgets it
@@ -181,11 +192,16 @@ class WebApi:
         if not d or not d.get("refresh_token") or not d.get("access_token"):
             raise WebApiError("credentials")
         async with self.lock:
+            self.keep_granted(str(d.get("scope") or "")[:400])
             self.keep_refresh(d["refresh_token"])
             self.token, self.until = d["access_token"], time.time() + max(60, int(d.get("expires_in", 3600)) - 120)
             self.kept.clear()
 
+    def can_save(self) -> bool:
+        return self.signed_in() and "user-library-modify" in self.granted().split()
+
     def sign_out(self) -> None:
+        self.keep_granted("")
         self.keep_refresh("")
         self.token, self.until = "", 0.0
         self.kept.clear()
@@ -349,6 +365,49 @@ class WebApi:
             part("me/tracks", lambda i: track_row(i.get("track") or {}), 50),
             self.get("me"))
         return {"playlists": playlists, "albums": albums, "tracks": tracks, "me": me.get("id") or ""}
+
+    async def _change(self, method: str, path: str, **params) -> None:
+        """A change on the account (PUT or DELETE). Raises as get() does."""
+        if self.http is None:
+            self.http = ClientSession(timeout=ClientTimeout(total=10))
+        for attempt in (0, 1):
+            token = await self._token()
+            await self._my_turn()
+            try:
+                async with self.http.request(method, f"{API}/{path}", params=params, headers={"Authorization": f"Bearer {token}"}) as r:
+                    if r.status == 401 and attempt == 0:
+                        self.token = ""
+                        continue
+                    if r.status == 429:
+                        after = r.headers.get("Retry-After", "")
+                        self.wait_until = time.time() + min(86400, int(after) if after.isdigit() else 60)
+                        self.refused += 1
+                        raise WebApiError("busy")
+                    if r.status in (401, 403):
+                        raise WebApiError("leave")
+                    if r.status not in (200, 201, 204):
+                        log.warning("spotify web api: %s at %s %s", r.status, method, path.split("/")[0])
+                        raise WebApiError("down")
+                    return
+            except (OSError, asyncio.TimeoutError):
+                raise WebApiError("down")
+        raise WebApiError("credentials")
+
+    async def saved(self, uris: list[str]) -> dict:
+        """{uri: whether it is in the listener's library} for tracks and albums."""
+        uris = [u for u in dict.fromkeys(uris) if SAVES.fullmatch(u)][:40]
+        if not uris:
+            return {}
+        d = await self.get("me/library/contains", keep=20, uris=",".join(uris))
+        return dict(zip(uris, (bool(x) for x in d))) if isinstance(d, list) and len(d) == len(uris) else {}
+
+    async def save(self, uri: str, on: bool) -> None:
+        """Put a track or an album in the listener's library, or take it out."""
+        if not SAVES.fullmatch(uri):
+            raise WebApiError("down")
+        await self._change("PUT" if on else "DELETE", "me/library", uris=uri)
+        for k in [k for k in self.kept if k.startswith(("me/library/contains", "me/tracks", "me/albums"))]:   # (what was known of the library is no longer so)
+            del self.kept[k]
 
     async def last_added(self, playlist_id: str, total: int) -> str:
         """When a track was last added to the playlist (one of the listener's own), as Spotify
