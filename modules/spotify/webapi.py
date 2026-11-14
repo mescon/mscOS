@@ -343,7 +343,7 @@ class WebApi:
         out = {**playlist_row(d), "cover": image(d.get("images"), 640), "followers": (d.get("followers") or {}).get("total")}
         # what is in it: Spotify says so for the signed-in listener's own playlists only
         if items and self.signed_in():
-            rows, total = [], None
+            rows, total, hidden = [], None, 0
             for offset in range(0, 300, 50):
                 try:
                     page = await self.get(f"playlists/{playlist_id}/items", keep=60, limit=50, offset=offset)
@@ -353,11 +353,15 @@ class WebApi:
                     t = it.get("item") or it.get("track") or {}
                     if t.get("uri", "").startswith("spotify:track:"):
                         rows.append(track_row(t))
+                    else:                      # a podcast episode, a file of the listener's own, or a track Spotify no longer has
+                        hidden += 1
                 total = page.get("total")
                 if not page.get("items") or offset + 50 >= (total or 0):
                     break
             if rows:
                 out["tracks"], out["count"] = rows, total if isinstance(total, int) else out.get("count")
+                out["hidden"] = hidden
+                out["more"] = max(0, (total or 0) - len(rows) - hidden) if isinstance(total, int) else 0     # (beyond the three hundred that are read)
         return out
 
     async def me(self) -> dict:

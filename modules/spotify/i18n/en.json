@@ -23,7 +23,7 @@
  "av": "off",
  "Är inte igång": "Not running",
  "Ändrar samplen digitalt": "Changes the samples digitally",
- "Har förtur på enheten, avkodar orört": "Goes first on the device, decodes untouched",
+ "Har förtur på enheten, avkodar orört": "Has priority on the device, decodes untouched",
  "Avkodar orört": "Decodes untouched",
  "inga avbrott vid DAC:en": "no dropouts at the DAC",
  "Upp till 192 kHz.": "Up to 192 kHz.",
@@ -163,5 +163,8 @@
  "Låten": "The track",
  "Albumet": "The album",
  "Sparat i biblioteket": "Saved in the library",
- "Spara i biblioteket": "Save in the library"
+ "Spara i biblioteket": "Save in the library",
+ "En post visas inte: ett poddavsnitt, en egen fil eller en låt som inte längre finns hos Spotify.": "One entry is not shown: a podcast episode, a file of your own or a track Spotify no longer has.",
+ "{0} poster visas inte: poddavsnitt, egna filer eller låtar som inte längre finns hos Spotify.": "{0} entries are not shown: podcast episodes, files of your own or tracks Spotify no longer has.",
+ "Listan har {0} låtar till. De spelas när du spelar listan, men visas inte här.": "The list has {0} more tracks. They play when you play the list, but are not shown here."
 }

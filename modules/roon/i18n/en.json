@@ -26,7 +26,7 @@
  "Har DAC:en för sig själv, {0}": "Has the DAC to itself, {0}",
  "Igång, väntar på Roon": "Running, waiting for Roon",
  "Byt källa igen eller starta om enheten": "Switch source again or restart the device",
- "Ljudet har förtur på enheten.": "The audio goes first on the device.",
+ "Ljudet har förtur på enheten.": "The audio has priority on the device.",
  "Buffert {0} sampel ({1} ms).": "Buffer {0} samples ({1} ms).",
  "Enheten blandar inte ljudet med annat och samplar inte om.": "The device does not mix the audio with anything else and does not resample it.",
  "Välj den här enheten som zon i Roon": "Choose this device as the zone in Roon",

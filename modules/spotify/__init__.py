@@ -379,7 +379,7 @@ class Spotify(SourcePlugin):
                              + (f". Spotify har bett om paus {asked['refused']} gånger" if asked["refused"] else "") + (f", {asked['wait']} s kvar" if asked["wait"] else ""),
                        "en": f"{asked['half_minute']} in the last half minute (at most {asked['limit']}), {asked['hour']} in the last hour"
                              + (f". Spotify has asked for a pause {asked['refused']} times" if asked["refused"] else "") + (f", {asked['wait']} s left" if asked["wait"] else "")}},
-            {"label": {"sv": "Förtur på enheten", "en": "Goes first on the device"}, **yes(solo.get("rt_watcher") == "active", "Aktiv", "On", "Av", "Off")},
+            {"label": {"sv": "Förtur på enheten", "en": "Priority on the device"}, **yes(solo.get("rt_watcher") == "active", "Aktiv", "On", "Av", "Off")},
             {"label": {"sv": "Nyckel", "en": "Key"}, **yes(k["set"], f"Inställd{', ändrad ' + changed if changed else ''}", f"Entered{', changed ' + changed if changed else ''}", "Saknas: Soloist kan inte starta", "Missing: Soloist cannot start")},
             {"label": {"sv": "Nästa versionskoll", "en": "Next version check"}, "value": nxt.group(0) if nxt else "–", "state": ""},
         ]

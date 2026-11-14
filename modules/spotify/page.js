@@ -292,7 +292,10 @@ export default function page(api) {
     if (pg.kind === "album" && d.uri) askLiked([d.uri]);
     if (pg.kind === "playlist") {
       return back + hero + (d.about ? `<p class="m-about">${esc(d.about)}</p>` : "")
-        + ((d.tracks || []).length ? trackList(d.tracks) : `<p class="none">${esc(M.user ? tr("Spotify visar bara låtarna i spellistor som är dina egna. Den här är någon annans, så den går att spela men inte att se in i. Låtarna visas under Härnäst när listan spelar.")
+        + ((d.tracks || []).length ? trackList(d.tracks)
+          + (d.hidden ? `<p class="m-src">${esc(d.hidden === 1 ? tr("En post visas inte: ett poddavsnitt, en egen fil eller en låt som inte längre finns hos Spotify.") : tr`${d.hidden} poster visas inte: poddavsnitt, egna filer eller låtar som inte längre finns hos Spotify.`)}</p>` : "")
+          + (d.more ? `<p class="m-src">${esc(tr`Listan har ${d.more} låtar till. De spelas när du spelar listan, men visas inte här.`)}</p>` : "")
+          : `<p class="none">${esc(M.user ? tr("Spotify visar bara låtarna i spellistor som är dina egna. Den här är någon annans, så den går att spela men inte att se in i. Låtarna visas under Härnäst när listan spelar.")
           : tr("Spotify låter inte enheten se vilka låtar spellistan innehåller, bara spela den. Låtarna visas under Härnäst när listan spelar."))}</p>`);
     }
     if (pg.kind === "album") return back + hero + trackList(d.tracks, true);
