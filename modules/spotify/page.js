@@ -247,6 +247,7 @@ export default function page(api) {
 
   let found = null, findSeq = 0, findTimer = 0, page = null;   // the search's answer; the album or artist that is open
   function drawMusic() {
+    if (edit && document.activeElement?.id === "m-edit-name" && music.contains(document.activeElement)) return;    // (a folder's name is being typed: it is not drawn over)
     const text = $("#sp-find").value.trim(), link = spotifyUri(text), box = $("#sp-link"), out = $("#sp-results");
     box.hidden = !link;
     if (link) {
@@ -308,15 +309,19 @@ export default function page(api) {
       <div class="m-disc-top"><button class="m-disc-pic" data-album="${esc(a.id || idOf(a.uri))}" aria-label="${esc(a.name)}">${img(a.cover)}</button>
         <div><p class="part">${esc([KIND.album, a.year].filter(Boolean).join(" · "))}</p><h4><button data-album="${esc(a.id || idOf(a.uri))}">${esc(a.name)}</button></h4>
           <button class="btn" data-play="${esc(a.uri)}" data-name="${esc(a.name)}">${esc(tr("Spela"))}</button></div></div>
-      <div class="m-disc-tracks"><p class="none wait">${esc(tr("Hämtar…"))}</p></div></section>`).join("");
+      <div class="m-disc-tracks">${discTracks.get(a.id || idOf(a.uri)) || `<p class="none wait">${esc(tr("Hämtar…"))}</p>`}</div></section>`).join("");
+  const discTracks = new Map();     // album id -> its track list as drawn
   // each album's tracks are asked for when the album comes into sight, not all at once
   const discSeen = new IntersectionObserver((entries) => {
     for (const en of entries) {
       if (!en.isIntersecting) continue;
-      const sec = en.target; discSeen.unobserve(sec);
-      fetch(`/api/spotify/album/${encodeURIComponent(sec.dataset.disc)}`).then((r) => (r.ok ? r.json() : null)).then((d) => {
-        if (!sec.isConnected) return;
-        sec.querySelector(".m-disc-tracks").innerHTML = d && (d.tracks || []).length ? trackList(d.tracks, true) : `<p class="none">${esc(tr("Spotify svarar inte."))}</p>`;
+      const sec = en.target, id = sec.dataset.disc; discSeen.unobserve(sec);
+      if (discTracks.has(id)) continue;
+      fetch(`/api/spotify/album/${encodeURIComponent(id)}`).then((r) => (r.ok ? r.json() : null)).then((d) => {
+        const ok = d && (d.tracks || []).length;
+        if (ok) { if (discTracks.size > 200) discTracks.clear(); discTracks.set(id, trackList(d.tracks, true)); }
+        const at = music.querySelector(`.m-disc[data-disc="${CSS.escape(id)}"] .m-disc-tracks`);
+        if (at) at.innerHTML = ok ? discTracks.get(id) : `<p class="none">${esc(tr("Spotify svarar inte."))}</p>`;
       }).catch(() => {});
     }
   }, { rootMargin: "300px 0px" });
@@ -358,15 +363,18 @@ export default function page(api) {
     }, 220);
   }
   let lib = null, libAt = 0;       // the signed-in listener's playlists, saved albums and liked tracks
+  let libBusy = false;
   async function loadLib(force) {
-    if (!M.user || (!force && lib && Date.now() - libAt < 120000)) return;
-    libAt = Date.now();
-    // (one's own library is shown to someone logged in to the panel; others are told so)
+    // one question at a time, and after an answer of any kind (also "log in first", also none) not
+    // again for two minutes: this runs on every message from the device
+    if (!M.user || libBusy || (!force && Date.now() - libAt < 120000)) return;
+    libBusy = true; libAt = Date.now();
     try {
       const [r, f] = await Promise.all([fetch("/api/spotify/library"), fetch("/api/spotify/folders")]);
-      if (r.ok) { lib = await r.json(); if (f.ok) tree = await f.json(); } else if (r.status === 401) { lib = { locked: true }; libAt = 0; }
+      if (r.ok) { lib = await r.json(); if (f.ok) tree = await f.json(); } else if (r.status === 401) lib = { locked: true };
       drawMusic();
     } catch {}
+    libBusy = false;
   }
   // ---- the listener's library as a tree, like a file manager's side: liked tracks, saved albums,
   // folders of one's own with playlists in them, and the playlists not yet put anywhere. The
@@ -450,7 +458,7 @@ export default function page(api) {
     const name = $("#m-edit-name").value, was = edit;
     if (await folderOp(was.kind === "rename" ? { op: "rename", id: was.id, name } : { op: "add", name, parent: was.parent })) {
       if (was.kind === "new" && was.parent) { opened.add(was.parent); keepOpened(); }
-      edit = null; drawMusic();
+      edit = null; document.activeElement?.blur?.(); drawMusic();
     }
   });
   music.addEventListener("change", (e) => { const m = e.target.closest("[data-move]"); if (m) folderOp({ op: "place", playlist: m.dataset.move, folder: m.value || null }); });
@@ -468,7 +476,7 @@ export default function page(api) {
       if (d.twist != null) { if (opened.has(d.twist)) opened.delete(d.twist); else opened.add(d.twist); keepOpened(); drawMusic(); }
       else if (d.newfolder != null) { edit = { kind: "new", parent: d.newfolder || null }; drawMusic(); $("#m-edit-name")?.focus(); }
       else if (d.rename) { edit = { kind: "rename", id: d.rename }; drawMusic(); $("#m-edit-name")?.select(); }
-      else if (d.editCancel) { edit = null; drawMusic(); }
+      else if (d.editCancel) { edit = null; document.activeElement?.blur?.(); drawMusic(); }
       else if (d.rmfolder) {      // (a second press: what is in the folder moves up, nothing is lost, but the order one made is)
         if (sure !== d.rmfolder) { sure = d.rmfolder; drawMusic(); setTimeout(() => { if (sure === d.rmfolder) { sure = ""; drawMusic(); } }, 4000); }
         else { const up = folderOf(d.rmfolder)?.parent || ""; sure = ""; folderOp({ op: "remove", id: d.rmfolder }).then((ok) => { if (ok) api.go("v-music", up ? ["library", up] : [], { replace: true }); }); }
@@ -545,27 +553,30 @@ export default function page(api) {
     }).catch(() => {});
   }
   // ---- liking a track and saving an album on the listener's Spotify account (signed in, with leave for it)
-  const liked = new Map();     // uri -> true | false; undefined: not asked yet; null: asked, no answer yet
+  const liked = new Map();     // uri -> true | false, as last heard
+  const likedAsked = new Map(); // uri -> when it was last asked for: once a minute at most, whatever the answer (or the lack of one)
   function askLiked(uris) {
-    const ask = uris.filter((u) => u && liked.get(u) === undefined).slice(0, 40);
-    if (!ask.length || !M.save) return;
-    ask.forEach((u) => liked.set(u, null));
+    const now = Date.now();
+    const ask = uris.filter((u) => u && typeof liked.get(u) !== "boolean" && now - (likedAsked.get(u) || 0) > 60000).slice(0, 40);
+    if (!ask.length || !M.save || !S.access?.logged_in) return;
+    ask.forEach((u) => likedAsked.set(u, now));
     fetch(`/api/spotify/saved?uris=${encodeURIComponent(ask.join(","))}`).then((r) => (r.ok ? r.json() : null)).then((d) => {
-      for (const u of ask) { const v = d?.saved?.[u]; if (typeof v === "boolean") liked.set(u, v); else liked.delete(u); }
-      if (liked.size > 600) [...liked.keys()].slice(0, 300).forEach((k) => liked.delete(k));
-      api.render(); if (page) drawMusic();
-    }).catch(() => ask.forEach((u) => liked.delete(u)));
+      let heard = false;
+      for (const u of ask) { const v = d?.saved?.[u]; if (typeof v === "boolean") { liked.set(u, v); heard = true; } }
+      if (liked.size > 600) [...liked.keys()].slice(0, 300).forEach((k) => { liked.delete(k); likedAsked.delete(k); });
+      if (heard) { api.render(); if (page) drawMusic(); }      // (only when something is known that was not: nothing is drawn, or asked, in a circle)
+    }).catch(() => {});
   }
   async function setLiked(uri, on, what) {
-    try { await post("/api/spotify/save", { uri, on }); } catch { return; }
-    liked.set(uri, on); lib = null; libAt = 0;
+    try { await post("/api/spotify/save", { uri, on }); } catch { if (page) drawMusic(); return; }    // (the button comes back to press again)
+    liked.set(uri, on); libAt = 0;       // (the library is read again the next time it is looked at)
     toast(on ? tr`${what} ligger i ditt bibliotek` : tr`${what} är borttagen ur ditt bibliotek`);
     api.render(); if (page) drawMusic();
   }
   // the heart beside what plays (the panel asks for it)
   function fav() {
     const it = M.playback.item, uri = it?.uri || "";
-    if (!M.save || !/^spotify:track:/.test(uri)) return null;
+    if (!M.save || !S.access?.logged_in || !/^spotify:track:/.test(uri)) return null;    // (a change on the owner's account: for someone logged in to the panel)
     askLiked([uri]);
     return { on: liked.get(uri) === true, toggle: () => setLiked(uri, liked.get(uri) !== true, nameOf(it) || tr("Låten")) };
   }
@@ -749,7 +760,7 @@ export default function page(api) {
       if (m.type === "soloist") { soloistEvent(m.event); return true; }
       if (m.type === "quality") { M.quality = m.quality; api.render(); return true; }
       if (m.type === "job" && m.name === "audio-test") { testJob(m); return true; }
-      if (m.type === "spotify_user") { M.user = !!m.on; M.save = !!m.save; liked.clear(); M.search = M.search || M.user; lib = null; sel = ""; where = null; loadMusic(true); api.render(); return true; }
+      if (m.type === "spotify_user") { M.user = !!m.on; M.save = !!m.save; M.search = "search" in m ? !!m.search : M.search || M.user; liked.clear(); likedAsked.clear(); lib = null; libAt = 0; sel = ""; where = null; loadMusic(true); api.render(); return true; }
       if (m.type === "spotify_added") { loadLib(true); return true; }
       if (m.type === "history_cleared") { M.tests = []; renderVlog(); loadMusic(true); }
       return false;

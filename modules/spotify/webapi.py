@@ -33,12 +33,14 @@ ID = re.compile(r"[A-Za-z0-9]{22}")
 ACCOUNTS = "https://accounts.spotify.com"
 # what the sign-in asks leave for: to see where the account plays and what is in its library
 # Spotify counts an app's questions over a rolling half minute and does not say how many it
-# allows (few, for an app in development mode). So the device holds itself well back: at most
-# this many in any half minute, the rest wait their turn. And when Spotify says wait (429 with
-# Retry-After), nothing at all is asked until that time has passed, also if the panel starts
-# again meanwhile (the time is kept in a file). Spotify has been seen to ask for well over an
-# hour's pause after some two hundred questions in five minutes.
-PER_HALF_MINUTE = 20
+# allows (few, for an app in development mode): some two hundred in five minutes brought a
+# pause of well over an hour. So the device holds itself to half of that over time, one
+# question every three seconds, with room for a burst when a page needs several at once
+# (an artist's page asks a dozen). When Spotify says wait (429 with Retry-After), nothing at
+# all is asked until that time has passed, also if the panel starts again meanwhile.
+BURST = 15              # questions that may be asked at once, after a quiet while
+EVERY = 3.0             # seconds for one more to become available
+PER_HALF_MINUTE = int(30 / EVERY)    # what that comes to over time (shown in the module's card)
 # To read: where it plays, the playlists, the library. To change: the library alone, which is
 # what liking a track and saving an album are. Spotify's one call for saving also covers artists
 # and playlists and its description lists the leave for those too; the device never saves
@@ -56,8 +58,11 @@ def answer_parts(pasted: str) -> tuple[str, str, str]:
     """(code, state, error) from the address the browser ended up at after the sign-in, as the
     listener copied it from the address field (the whole address, or what follows the "?")."""
     text = "".join(str(pasted or "").split())[:4000]
-    query = urlsplit(text).query if "?" in text else text
-    q = {k: v[0] for k, v in parse_qs(query).items() if v}
+    try:
+        query = urlsplit(text).query if "?" in text else text
+        q = {k: v[0] for k, v in parse_qs(query).items() if v}
+    except ValueError:          # (not an address at all)
+        return "", "", ""
     return q.get("code", "")[:2000], q.get("state", "")[:200], q.get("error", "")[:100]
 
 
@@ -130,23 +135,38 @@ class WebApi:
             pass
         self.refused = 0                    # how many times it has (since the panel started)
         self.turn = asyncio.Lock()
+        self.left, self.left_at = float(BURST), time.time()      # how many may be asked right now, and as of when
+        self.flying: dict[str, asyncio.Future] = {}              # questions under way: the same one is not asked twice at once
         self.lastfm_key = lastfm_key        # () -> the listener's Last.fm key, when there is one
         self.http: ClientSession | None = None
         self.token, self.until = "", 0.0
         self.kept: dict[str, tuple[float, dict]] = {}   # answers of the last minutes: typing asks the same again and again
         self.lock = asyncio.Lock()
 
+    def _pause(self, after: str) -> None:
+        """Spotify asked for a pause (429): nothing is asked until it has passed, kept across a restart."""
+        self.wait_until = time.time() + min(86400, int(after) if after.isdigit() else 60)
+        self.refused += 1
+        if self.wait_file:
+            try:
+                with open(self.wait_file, "w") as f:
+                    f.write(str(int(self.wait_until)))
+            except OSError:
+                pass
+
     async def _my_turn(self) -> None:
-        """Wait until a question may be asked (see PER_HALF_MINUTE), or refuse while Spotify has asked for a pause."""
+        """Wait until a question may be asked (BURST, EVERY), or refuse while Spotify has asked for a pause."""
         async with self.turn:
-            for _ in range(3):
+            while True:
                 now = time.time()
                 if now < self.wait_until:
                     raise WebApiError("busy")
-                lately = [t for t in self.sent if now - t < 30]
-                if len(lately) < PER_HALF_MINUTE:
+                self.left = min(float(BURST), self.left + (now - self.left_at) / EVERY)
+                self.left_at = now
+                if self.left >= 1:
                     break
-                await asyncio.sleep(min(30.0, max(0.05, lately[0] + 30 - now)))
+                await asyncio.sleep(min(EVERY, (1 - self.left) * EVERY) + 0.01)
+            self.left -= 1
             self.sent.append(time.time())
 
     def asked(self) -> dict:
@@ -177,7 +197,7 @@ class WebApi:
     async def finish(self, code: str, state: str) -> None:
         """The code Spotify sent back, traded for the tokens. Only for the sign-in that was begun here."""
         p = self.pending
-        if not p or not secrets.compare_digest(p[0], state or ""):
+        if not p or not secrets.compare_digest(p[0].encode(), str(state or "").encode()):
             raise WebApiError("credentials")       # (not the sign-in that was begun: it stays as it was)
         self.pending = None
         if time.time() > p[3] or not code:
@@ -259,6 +279,23 @@ class WebApi:
             return hit[1]
         if self.http is None:
             self.http = ClientSession(timeout=ClientTimeout(total=10))
+        if key in self.flying:                 # (the same question is under way: its answer is this one's too)
+            return await asyncio.shield(self.flying[key])
+        fut = self.flying[key] = asyncio.get_running_loop().create_future()
+        try:
+            d = await self._get(path, key, keep, params)
+        except BaseException as e:
+            if not fut.done():
+                fut.set_exception(e)
+                fut.exception()                # (looked at here, so that an answer nobody else waited for is not reported as lost)
+            raise
+        finally:
+            self.flying.pop(key, None)
+        if not fut.done():
+            fut.set_result(d)
+        return d
+
+    async def _get(self, path: str, key: str, keep: float, params: dict) -> dict:
         for attempt in (0, 1):
             token = await self._token()
             await self._my_turn()
@@ -269,14 +306,7 @@ class WebApi:
                         continue
                     if r.status == 429:
                         after = r.headers.get("Retry-After", "")
-                        self.wait_until = time.time() + min(86400, int(after) if after.isdigit() else 60)
-                        if self.wait_file:
-                            try:
-                                with open(self.wait_file, "w") as f:
-                                    f.write(str(int(self.wait_until)))
-                            except OSError:
-                                pass
-                        self.refused += 1
+                        self._pause(after)
                         log.warning("spotify web api: asked to wait (429) at %s, Retry-After %s", path.split("/")[0], after or "?")
                         raise WebApiError("busy")
                     if r.status in (204, 404):               # (204: nothing plays anywhere)
@@ -347,13 +377,17 @@ class WebApi:
         """What the listener has gathered: every playlist (their own and those they follow), the
         saved albums, and the latest two hundred liked tracks. "me": the listener's id, to tell their own
         playlists from the followed ones."""
+        whole = True
+
         async def part(path, row, most):
+            nonlocal whole
             out = []
             for offset in range(0, most, 50):
                 try:
                     d = await self.get(path, keep=900, limit=50, offset=offset)     # (a quarter of an hour: a large library is many questions)
                 except WebApiError as e:
                     if e.kind == "leave" or out:      # (not allowed, or cut short: what there is)
+                        whole = False
                         break
                     raise
                 out += [x for x in (row(i) for i in d.get("items") or [] if isinstance(i, dict)) if x and x.get("uri")]
@@ -365,7 +399,7 @@ class WebApi:
             part("me/albums", lambda i: album_row(i.get("album") or {}), 500),
             part("me/tracks", lambda i: track_row(i.get("track") or {}), 200),
             self.get("me"))
-        return {"playlists": playlists, "albums": albums, "tracks": tracks, "me": me.get("id") or ""}
+        return {"playlists": playlists, "albums": albums, "tracks": tracks, "me": me.get("id") or "", "whole": whole}
 
     async def _change(self, method: str, path: str, **params) -> None:
         """A change on the account (PUT or DELETE). Raises as get() does."""
@@ -380,9 +414,7 @@ class WebApi:
                         self.token = ""
                         continue
                     if r.status == 429:
-                        after = r.headers.get("Retry-After", "")
-                        self.wait_until = time.time() + min(86400, int(after) if after.isdigit() else 60)
-                        self.refused += 1
+                        self._pause(r.headers.get("Retry-After", ""))
                         raise WebApiError("busy")
                     if r.status in (401, 403):
                         raise WebApiError("leave")

@@ -63,10 +63,10 @@ class Rows(unittest.TestCase):
 
         async def go():
             w = webapi.WebApi(lambda: ("id", "secret"))
-            for _ in range(webapi.PER_HALF_MINUTE):
+            for _ in range(webapi.BURST):
                 await w._my_turn()
-            self.assertEqual(w.asked()["half_minute"], webapi.PER_HALF_MINUTE)
-            with self.assertRaises(asyncio.TimeoutError, msg="one more in the same half minute waits its turn"):
+            self.assertEqual(w.asked()["half_minute"], webapi.BURST, "a burst goes through at once")
+            with self.assertRaises(asyncio.TimeoutError, msg="the next one waits for its turn"):
                 await asyncio.wait_for(w._my_turn(), 0.2)
             w2 = webapi.WebApi(lambda: ("id", "secret"))
             w2.wait_until = time.time() + 60
@@ -74,6 +74,34 @@ class Rows(unittest.TestCase):
                 await w2._my_turn()
             self.assertEqual(w2.asked()["half_minute"], 0)
         asyncio.run(go())
+        self.assertLessEqual(30 / webapi.EVERY * 10, 120, "over five minutes: well under what brought a pause")
+
+    def test_the_same_question_is_asked_once(self):
+        import asyncio
+
+        async def go():
+            w = webapi.WebApi(lambda: ("id", "secret"))
+            w.http = object()
+            asked = []
+
+            async def fake(path, key, keep, params):
+                asked.append(path)
+                await asyncio.sleep(0.05)
+                return {"n": len(asked)}
+            w._get = fake
+            got = await asyncio.gather(w.get("me/playlists", limit=50), w.get("me/playlists", limit=50), w.get("me/albums", limit=50))
+            self.assertEqual(asked.count("me/playlists"), 1)
+            self.assertEqual(got[0], got[1])
+        asyncio.run(go())
+
+    def test_a_pause_is_kept(self):
+        import tempfile, os
+        with tempfile.TemporaryDirectory() as t:
+            f = os.path.join(t, "wait")
+            w = webapi.WebApi(lambda: ("id", "secret"), wait_file=f)
+            w._pause("3000")
+            again = webapi.WebApi(lambda: ("id", "secret"), wait_file=f)
+            self.assertGreater(again.asked()["wait"], 2900, "a restart does not forget it")
 
     def test_the_answer_brought_back_by_hand(self):
         parts = webapi.answer_parts
@@ -82,6 +110,7 @@ class Rows(unittest.TestCase):
         self.assertEqual(parts("http://127.0.0.1:8888/callback?error=access_denied&state=xyz"), ("", "xyz", "access_denied"))
         self.assertEqual(parts("something else"), ("", "", ""))
         self.assertEqual(parts(None), ("", "", ""))
+        self.assertEqual(parts("http://[not-an-address?code=x"), ("", "", ""))
 
     def test_leave_to_save(self):
         kept = {"refresh": "r", "scope": "user-library-read user-read-playback-state"}

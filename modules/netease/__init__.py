@@ -18,6 +18,7 @@ import unicodedata
 
 from aiohttp import ClientSession, ClientTimeout
 
+import collect
 from plugins import Plugin
 
 log = logging.getLogger("netease")
@@ -92,7 +93,9 @@ class NetEase(Plugin):
             async with self.http.get(SITE + path, params=params, headers=HEADERS, allow_redirects=False) as r:
                 if r.status != 200:
                     return {}
-                body = await r.content.read(600_000)      # (an answer is a few kilobytes: more is not one)
+                body = await collect.read_capped(r, 600_000)      # (an answer is a few kilobytes: more is not one)
+                if len(body) > 600_000:
+                    return {}
                 d = json.loads(body)
                 return d if isinstance(d, dict) else {}
         except (OSError, asyncio.TimeoutError, ValueError):

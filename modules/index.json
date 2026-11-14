@@ -1,6 +1,6 @@
 {
  "format": 1,
- "serial": 91,
+ "serial": 92,
  "modules": [
   {
    "id": "about",
@@ -244,7 +244,7 @@
   },
   {
    "id": "netease",
-   "version": "1.0.1",
+   "version": "1.0.2",
    "kind": "integration",
    "name": {
     "sv": "Låttexter från NetEase",
@@ -257,12 +257,12 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "53ce5adad4e220da563b9a03820493f44fce945ed01a178630c981483fa9cfe9",
+     "sha256": "fe76bf2364f9d6b807d460603efdd9245c629324e9d3883552d47fb4c7812378",
      "exec": false
     },
     {
      "path": "module.json",
-     "sha256": "3597f3753381a093ba3382279fc70498d44e8fd06f7647f5708d921766d2e3b1",
+     "sha256": "aa29bb2ebac25ae731f2e4d2e9bdd388af0db1fa6ea8018e8517759d0c2cdd0b",
      "exec": false
     }
    ]
@@ -369,7 +369,7 @@
   },
   {
    "id": "spotify",
-   "version": "1.19.3",
+   "version": "1.19.4",
    "kind": "source",
    "name": {
     "sv": "Spotify Lossless (Soloist)",
@@ -382,7 +382,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "6e9f6d0f4955a8e7a213ac03002c74274743f9d5fc2a5d61b8a309b36f9b80b0",
+     "sha256": "c418dbf61dea9c579c1f5bb0a72cbd9bbe9704c0861ff591700677461ac05cce",
      "exec": false
     },
     {
@@ -397,12 +397,12 @@
     },
     {
      "path": "module.json",
-     "sha256": "e4afe99f64e3ebfbc8f2a6b60c0f85a187c28f51e9709d6a2921d5b28c36587d",
+     "sha256": "27e0cc0c2c5364b5aa19743055ecd18ee6ae1b054d215d7a9dd9048eda7a035c",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "d3210766ca220c91c0fd87d0735bae46312b67145be0988a3e0a7dffcc0d281c",
+     "sha256": "50201fc1392c34e308d9fa0c99071bba7ab2fb7436495d9a36e9a6fe5b60b7d8",
      "exec": false
     },
     {
@@ -442,7 +442,7 @@
     },
     {
      "path": "webapi.py",
-     "sha256": "5e06078f659bac3d60f266900715aa1dfa85efa5cfc7044ef2a59c3b8a026688",
+     "sha256": "1ed1e4e077800f2747c92430586f3952c5a0992f35f91c2fba8a7e26652861df",
      "exec": false
     },
     {

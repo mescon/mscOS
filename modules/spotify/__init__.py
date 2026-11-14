@@ -145,17 +145,18 @@ class Spotify(SourcePlugin):
             d = await self.web.library()
         except webapi.WebApiError:
             return
-        self.read_added([p for p in d["playlists"] if p.get("owner_id") == d["me"]])
+        self.read_added([p for p in d["playlists"] if p.get("owner_id") == d["me"]], d.get("whole", True))
 
-    def read_added(self, own: list[dict]) -> int:
+    def read_added(self, own: list[dict], whole: bool = True) -> int:
         """Start reading off the playlists that are new or have changed; how many there are."""
         known = self.added()
         todo = [(p["id"], p.get("snap") or "", p.get("count") or 0) for p in own if p.get("id") and known.get(p["id"], {}).get("snap") != (p.get("snap") or "")]
         if todo and not self.web.asked()["wait"] and not (getattr(self, "_added_task", None) and not self._added_task.done()):
-            self._added_task = asyncio.create_task(self._read_added(todo, {p["id"] for p in own if p.get("id")}))
+            # (playlists that are no more are forgotten only when the whole list was read: a list cut short names too few)
+            self._added_task = asyncio.create_task(self._read_added(todo, {p["id"] for p in own if p.get("id")} if whole else None))
         return len(todo)
 
-    async def _read_added(self, todo: list, own: set) -> None:
+    async def _read_added(self, todo: list, own: set | None) -> None:
         known, n = self.added(), 0
         try:
             for pid, snap, count in todo:
@@ -174,7 +175,7 @@ class Spotify(SourcePlugin):
                     await self.hub.broadcast({"type": "spotify_added"})
                 await asyncio.sleep(12)        # (very slowly, two or three in a half minute: Spotify allows an app like this one little)
         finally:
-            for pid in [k for k in known if k not in own]:        # (playlists that are no more)
+            for pid in [k for k in known if own is not None and k not in own]:        # (playlists that are no more)
                 del known[pid]
             if n:
                 self._added_save()
@@ -182,8 +183,12 @@ class Spotify(SourcePlugin):
 
     def _keep_refresh(self, token: str) -> None:
         self.hub.set_secret("spotify_refresh", token)
-        if not token:
+        if not token:        # signed out, or Spotify no longer takes the token: the pages are told, so that they stop asking as the listener
             self.hub.set_secret("spotify_user", "")
+            try:
+                asyncio.get_running_loop().create_task(self.hub.broadcast({"type": "spotify_user", "on": False, "save": False, "search": self.web.ready()}))
+            except RuntimeError:
+                pass
 
     def summary(self) -> dict:
         return {"soloist": self._ha_soloist()}
@@ -318,7 +323,6 @@ class Spotify(SourcePlugin):
                             "label": {"sv": "Klar", "en": "Done"}, "placeholder": "http://127.0.0.1:8888/callback?code=…"}}
         if name == "logout":
             self.web.sign_out()
-            await self.hub.broadcast({"type": "spotify_user", "on": False})
             return {"toast": {"sv": "Utloggad från Spotify på den här enheten", "en": "Signed out of Spotify on this device"}}
         await self.hub.run_job("soloist-update", ["/usr/local/sbin/soloist-update"])
         return None
@@ -339,7 +343,7 @@ class Spotify(SourcePlugin):
             self.hub.set_secret("spotify_user", (await self.web.me())["name"][:60])
         except webapi.WebApiError:
             pass
-        await self.hub.broadcast({"type": "spotify_user", "on": True, "save": self.web.can_save()})
+        await self.hub.broadcast({"type": "spotify_user", "on": True, "save": self.web.can_save(), "search": True})
         return {"toast": {"sv": "Inloggad med Spotify", "en": "Signed in with Spotify"}}
 
     def status(self) -> dict | None:
@@ -1056,7 +1060,7 @@ class Spotify(SourcePlugin):
                     hub.set_secret("spotify_user", (await sp.web.me())["name"][:60])
                 except webapi.WebApiError:
                     pass
-                await hub.broadcast({"type": "spotify_user", "on": True, "save": sp.web.can_save()})
+                await hub.broadcast({"type": "spotify_user", "on": True, "save": sp.web.can_save(), "search": True})
             except webapi.WebApiError:
                 log.warning("spotify sign-in was not completed (%s)", "refused" if q.get("error") else "no valid code")
             raise web.HTTPFound("/system/modules/spotify")
@@ -1112,7 +1116,7 @@ class Spotify(SourcePlugin):
                 raise failed(e)
             known = sp.added()
             d = {**d, "playlists": [{**p, "added": known.get(p.get("id"), {}).get("added", "")} for p in d["playlists"]]}
-            d["reading"] = sp.read_added([p for p in d["playlists"] if p.get("owner_id") == d["me"]])     # (how many are still to be read off)
+            d["reading"] = sp.read_added([p for p in d["playlists"] if p.get("owner_id") == d["me"]], d.get("whole", True))     # (how many are still to be read off)
             return web.json_response(d)
 
         FOLDERS = os.path.join(collect.STATE_DIR, "spotify-folders.json")

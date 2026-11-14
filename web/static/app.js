@@ -1505,8 +1505,9 @@ for (const box of ["#mods", "#accounts"]) {
   $(box).addEventListener("submit", async (e) => {
     const f = e.target.closest(".mod-ask"); if (!f) return;
     e.preventDefault();
-    const value = f.querySelector("input").value.trim(); if (!value) return;
-    try { const r = await post("/api/plugins/answer", { id: f.closest("[data-id]").dataset.id, name: f.dataset.ask, value }); if (r.toast) toast(locs(r.toast)); f.remove(); loadMods(); } catch {}
+    const value = f.querySelector("input").value.trim(), go = f.querySelector("button.primary"); if (!value || go.disabled) return;
+    go.disabled = true;         // (the answer is good once: a second press would be refused though the first went through)
+    try { const r = await post("/api/plugins/answer", { id: f.closest("[data-id]").dataset.id, name: f.dataset.ask, value }); if (r.toast) toast(locs(r.toast)); f.remove(); loadMods(); } catch { go.disabled = false; }
   });
 }
 // Everything that is the listener's own, gathered from the modules that run: their keys, and
