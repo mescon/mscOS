@@ -1,6 +1,6 @@
 {
  "format": 1,
- "serial": 88,
+ "serial": 90,
  "modules": [
   {
    "id": "about",
@@ -99,7 +99,7 @@
   },
   {
    "id": "homeassistant",
-   "version": "1.1.1",
+   "version": "1.1.2",
    "kind": "integration",
    "name": {
     "sv": "Home Assistant",
@@ -112,12 +112,12 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "27faa36f5347c4fb216d3af1d714c0acf3d0469bc26a921418f03412674c09c9",
+     "sha256": "7c9d705efb051c7b34b602fae2ffc05dbbcfe7a1c87ddb766419a74a0f8dba68",
      "exec": false
     },
     {
      "path": "module.json",
-     "sha256": "6f05dfea54e3e259bdaa46621bdebdf451ae8bcf612d1b1842377395fec66c78",
+     "sha256": "97a82eb91aa896cef18196a4c01c1a0d71bf2c22ea3e91a91ed7b64477251698",
      "exec": false
     }
    ]
@@ -369,7 +369,7 @@
   },
   {
    "id": "spotify",
-   "version": "1.19.2",
+   "version": "1.19.3",
    "kind": "source",
    "name": {
     "sv": "Spotify Lossless (Soloist)",
@@ -397,12 +397,12 @@
     },
     {
      "path": "module.json",
-     "sha256": "e15b64aed1bf3f29764a9d83147963b855300b8653a0f4bb607af349ce65f1a9",
+     "sha256": "e4afe99f64e3ebfbc8f2a6b60c0f85a187c28f51e9709d6a2921d5b28c36587d",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "241e93af50ad5e7937672357268ef2cd863631d3f0cb1d412ec0fe99a7551c50",
+     "sha256": "d3210766ca220c91c0fd87d0735bae46312b67145be0988a3e0a7dffcc0d281c",
      "exec": false
     },
     {
@@ -442,12 +442,12 @@
     },
     {
      "path": "webapi.py",
-     "sha256": "bbdd02047589a7a39fa76bd8a52a81a3e8d265f42270f0ed60bf61d703cd85f3",
+     "sha256": "5e06078f659bac3d60f266900715aa1dfa85efa5cfc7044ef2a59c3b8a026688",
      "exec": false
     },
     {
      "path": "i18n/en.json",
-     "sha256": "6d9ef55c8e3665a055608a7302be7bba686b0597f507a9517681d375dc625b15",
+     "sha256": "4c394deedcd6663a8b2ea38de024f8600d5fe73ecf0d677a7ae98382b2d20e21",
      "exec": false
     }
    ]

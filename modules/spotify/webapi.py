@@ -345,7 +345,7 @@ class WebApi:
 
     async def library(self) -> dict:
         """What the listener has gathered: every playlist (their own and those they follow), the
-        saved albums, and the latest liked tracks. "me": the listener's id, to tell their own
+        saved albums, and the latest two hundred liked tracks. "me": the listener's id, to tell their own
         playlists from the followed ones."""
         async def part(path, row, most):
             out = []
@@ -363,7 +363,7 @@ class WebApi:
         playlists, albums, tracks, me = await asyncio.gather(
             part("me/playlists", playlist_row, 1000),
             part("me/albums", lambda i: album_row(i.get("album") or {}), 500),
-            part("me/tracks", lambda i: track_row(i.get("track") or {}), 50),
+            part("me/tracks", lambda i: track_row(i.get("track") or {}), 200),
             self.get("me"))
         return {"playlists": playlists, "albums": albums, "tracks": tracks, "me": me.get("id") or ""}
 

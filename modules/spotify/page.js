@@ -418,7 +418,7 @@ export default function page(api) {
         ${listsIn(f.id).length || !sub.length ? playlistCards(listsIn(f.id)) : ""}
         ${!listsIn(f.id).length ? `<p class="none">${esc(tr("Lägg spellistor här genom att dra dem hit, eller välj mappen under en spellista i Mina spellistor."))}</p>` : ""}`;
     }
-    if (sel === "liked") return `<h3>${esc(tr("Gillade låtar"))}</h3>${(lib.tracks || []).length ? trackList(lib.tracks) : `<p class="none">${esc(tr("Här finns inget."))}</p>`}<p class="m-src">${esc(tr("De senaste femtio."))}</p>`;
+    if (sel === "liked") return `<h3>${esc(tr("Gillade låtar"))}</h3>${(lib.tracks || []).length ? trackList(lib.tracks) : `<p class="none">${esc(tr("Här finns inget."))}</p>`}${(lib.tracks || []).length >= 200 ? `<p class="m-src">${esc(tr("De senaste tvåhundra."))}</p>` : ""}`;
     if (sel === "albums") return `<h3>${esc(tr("Sparade album"))}</h3>${(lib.albums || []).length ? albumList(lib.albums) : `<p class="none">${esc(tr("Här finns inget."))}</p>`}`;
     if (sel === "mine") return `<h3>${esc(tr("Mina spellistor"))}</h3><p class="m-src">${esc(tr("De som inte ligger i någon mapp. Den du senast lade en låt i står först."))}${lib.reading ? " " + esc(tr`${lib.reading} spellistor är inte hämtade än. Ordningen blir klar efter hand.`) : ""}</p>${playlistCards(loose(true))}`;
     if (sel === "followed") return `<h3>${esc(tr("Följda spellistor"))}</h3><p class="m-src">${esc(tr("Andras spellistor som du följer, och som inte ligger i någon mapp."))}</p>${playlistCards(loose(false))}`;

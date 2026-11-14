@@ -49,6 +49,10 @@ class HomeAssistant(Plugin):
     def can_notify(self) -> bool:
         return self.webhook.startswith(("http://", "https://"))
 
+    def secret_set(self, key: str) -> bool:
+        # (the address may also come from the device's own settings file: it is not missing then)
+        return bool(self.webhook) if key == "ha_webhook" else super().secret_set(key)
+
     def status(self) -> dict | None:
         return {"state": "ok", "text": {"sv": "Larm skickas via webhook", "en": "Alerts go through the webhook"}} if self.can_notify() \
             else {"state": "idle", "text": {"sv": "Ingen webhook för larm är angiven", "en": "No webhook for alerts is entered"}}

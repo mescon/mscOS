@@ -1251,6 +1251,8 @@ function findPlaying(kind) {
 }
 $$(".np-find").forEach((b) => b.addEventListener("click", () => findPlaying(b.dataset.find)));
 for (const kind of ["artist", "album"]) $(`#np-${kind}`).addEventListener("click", (e) => { if (e.currentTarget.classList.contains("can-find")) findPlaying(kind); });
+// (the artist's name in the bar at the bottom too: the rest of the bar opens Listen as before)
+$("#dk-artist").addEventListener("click", (e) => { if (VIEW().find && nowTrack()?.artist) { e.stopPropagation(); e.preventDefault(); findPlaying("artist"); } }, true);
 // ------------------------------------------------------------------ source switch
 // The veil over the page while something slow is done on the device; "" lifts it.
 function busy(text) { VEIL.busy = text; veil(); }
