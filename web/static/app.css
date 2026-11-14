@@ -890,9 +890,12 @@ a.lnk:hover { color: var(--ink); text-decoration: underline; text-decoration-thi
    flat colour and the blurred sleeve look a little less digital. Drawn by the browser from
    noise; no picture is fetched. */
 /* (mid-grey specks, plainly laid over: they lighten a dark ground and darken a light one) */
-body::before { content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .16;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 .5  0 0 0 1.4 -.25'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 220px 220px; }
+/* Film grain: medium coarse and soft, laid over the whole frame (sleeves and text too) the way
+   grain lies over a film frame, and blended so that it moves the light and dark of what is
+   under it instead of greying it. */
+body::before { content: ""; position: fixed; inset: 0; z-index: 9000; pointer-events: none; opacity: .34; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='420'%3E%3Cfilter id='n' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.62' numOctaves='3' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeGaussianBlur stdDeviation='.45'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='2.2' intercept='-.6'/%3E%3CfeFuncG type='linear' slope='2.2' intercept='-.6'/%3E%3CfeFuncB type='linear' slope='2.2' intercept='-.6'/%3E%3CfeFuncA type='linear' slope='0' intercept='1'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url%28%23n%29'/%3E%3C/svg%3E");
+  background-size: 420px 420px; }
 @media (prefers-contrast: more) { body::before { display: none; } }
 
 /* Nothing plays and nothing is paused: no now-playing bar, and no room kept for it */
