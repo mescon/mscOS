@@ -84,7 +84,7 @@ class Spotify(SourcePlugin):
 
     # ---- what the core asks of a module
     def tasks(self) -> list:
-        return [self.soloist_loop(), self.stream_loop()]
+        return [self.soloist_loop(), self.stream_loop(), self._added_on_start()]
 
     async def status_fields(self) -> dict:
         return {"soloist": await so.soloist_info()}
@@ -135,6 +135,18 @@ class Spotify(SourcePlugin):
         os.replace(self.ADDED + ".tmp", self.ADDED)
         self.hub.persist(self.ADDED)
 
+    async def _added_on_start(self) -> None:
+        """A while after the panel starts, go on reading off the playlists where it was left:
+        it takes an hour or more for a large library, and should not wait for someone to open Music."""
+        await asyncio.sleep(120)
+        if not self.web.signed_in() or self.web.asked()["wait"]:
+            return
+        try:
+            d = await self.web.library()
+        except webapi.WebApiError:
+            return
+        self.read_added([p for p in d["playlists"] if p.get("owner_id") == d["me"]])
+
     def read_added(self, own: list[dict]) -> int:
         """Start reading off the playlists that are new or have changed; how many there are."""
         known = self.added()
@@ -156,8 +168,9 @@ class Spotify(SourcePlugin):
                         break
                     known[pid] = {"snap": snap, "added": known.get(pid, {}).get("added", "")}
                 n += 1
-                if n % 40 == 0:
+                if n % 10 == 0:               # (kept often: a restart of the panel loses no more than these)
                     self._added_save()
+                if n % 40 == 0:
                     await self.hub.broadcast({"type": "spotify_added"})
                 await asyncio.sleep(12)        # (very slowly, two or three in a half minute: Spotify allows an app like this one little)
         finally:
