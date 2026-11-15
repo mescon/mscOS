@@ -450,6 +450,10 @@ class Spotify(SourcePlugin):
                     self._was_active = None  # the first auth_state only records the current state
                     self._playing_known = False  # likewise the first playback_state
                     await ws.send(json.dumps({"type": "command", "command": "get_auth_state"}))
+                    # what plays and what comes next, asked for here: after a restart of the panel
+                    # in the middle of a track nothing would say so until a page was opened
+                    for c in ("get_state", "get_queue"):
+                        await ws.send(json.dumps({"type": "command", "command": c}))
                     async for raw in ws:
                         ev = json.loads(raw)
                         if ev.get("type") in ("error", "command_result") and self._cmd_reply and not self._cmd_reply.done():
