@@ -4,7 +4,7 @@ await initI18n();  // before anything renders: texts below are looked up as they
 import { maybeSetup } from "./setup.js";
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
-const S = { status: {}, xruns: [], panels: {}, opts: null, settings: {}, access: { configured: true, logged_in: false } };
+const S = { status: {}, xruns: [], stops: [], panels: {}, opts: null, settings: {}, access: { configured: true, logged_in: false } };
 
 // ------------------------------------------------------------------ formatting
 const dec = (n, d = 1) => Number(n).toFixed(d).replace(".", decSep());
@@ -430,7 +430,7 @@ async function handle(m) {
 function handleMsg(m) {
   switch (m.type) {
     case "hello":
-      Object.assign(S, { status: m.status || {}, xruns: m.xruns || [], panels: m.panels || {}, settings: m.settings || {}, features: m.features || {}, names: m.names || {}, now: m.now || null });
+      Object.assign(S, { status: m.status || {}, xruns: m.xruns || [], stops: m.stops || [], panels: m.panels || {}, settings: m.settings || {}, features: m.features || {}, names: m.names || {}, now: m.now || null });
       AMP = m.amp || null;
       pagesDo("hello", m);
       renderFeatures(); renderAll(); break;
@@ -441,7 +441,8 @@ function handleMsg(m) {
     case "amp": AMP = m.amp; renderAmp(); break;
     case "job": jobEvent(m); break;
     case "settings": S.settings = { ...S.settings, ...m.settings }; if (m.features) { S.features = m.features; renderFeatures(); } if (m.names) { S.names = m.names; renderNames(); } renderSettings(); renderPlay(); renderSignal(); break;
-    case "history_cleared": S.xruns = []; renderSpark(); renderSignal(); break;
+    case "stop": S.stops.push(m.stop); if (S.stops.length > 200) S.stops.shift(); renderSpark(); break;
+    case "history_cleared": S.xruns = []; S.stops = []; renderSpark(); renderSignal(); break;
   }
 }
 const DK = { play: "M9 6.5v11l9-5.5z", pause: "M8.5 6.5h2.2v11H8.5zM13.3 6.5h2.2v11h-2.2z" };
@@ -777,7 +778,23 @@ function renderSpark() {
   if (direct) $("#spark-sum").textContent = (direct === played
     ? tr`${Math.round(played / 2)} minuters uppspelning.`
     : $("#spark-sum").textContent) + " " + tr`Under ${Math.round(direct / 2)} av minuterna spelade källan direkt till DAC:en (Roon, HQPlayer, UPnP). Då går ljudet förbi PipeWire och enheten kan inte räkna avbrott.`;
-  fv("drop", !played ? tr("Ingen uppspelning") : total ? tr`${total} vid DAC:en` : direct === played ? tr("Räknas inte") : tr("Inga"), total > 0);
+  const waits = S.stops.filter((s) => s.kind === "wait" && !s.early && s.t > now - span).length;
+  fv("drop", !played ? tr("Ingen uppspelning") : total ? tr`${total} vid DAC:en` : waits === 1 ? tr("1 uppehåll") : waits ? tr`${waits} uppehåll` : direct === played ? tr("Räknas inte") : tr("Inga"), total > 0 || waits > 0);
+  renderStops();
+}
+// each time the music stopped by itself, the latest first: when, how long, during which track
+function renderStops() {
+  const el = $("#stops"), list = S.stops.slice(-60).reverse();
+  el.hidden = !list.length; if (!list.length) return;
+  const day = new Date().toDateString(), loc = LANG === "sv" ? "sv-SE" : "en-GB";
+  const when = (t) => { const d = new Date(t * 1000); return (d.toDateString() === day ? "" : d.toLocaleDateString(loc, { day: "numeric", month: "short" }) + " ") + clock(t); };
+  const what = (s) => {
+    const ti = s.title ? `<i>${esc(s.title)}</i>` : "";
+    if (s.kind === "dac") return ti ? tr`${s.n} avbrott vid DAC:en under ${ti}.` : tr`${s.n} avbrott vid DAC:en.`;
+    if (s.early) return ti ? tr`Musiken dröjde ${s.secs} s när ${ti} skulle börja.` : tr`Musiken dröjde ${s.secs} s när en låt skulle börja.`;
+    return ti ? tr`Musiken stannade i ${s.secs} s mitt i ${ti}.` : tr`Musiken stannade i ${s.secs} s mitt i en låt.`;
+  };
+  el.innerHTML = list.map((s) => `<li${s.kind === "dac" ? ' class="dac"' : ""}><time>${when(s.t)}</time><span>${what(s)}</span></li>`).join("");
 }
 window.addEventListener("resize", renderSpark);
 

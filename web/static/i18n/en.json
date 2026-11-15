@@ -637,5 +637,13 @@
  "Katalogen gick inte att bekräfta som mscOS-projektets egen. Inget hämtades.": "The catalogue could not be confirmed as the mscOS project's own. Nothing was downloaded.",
  "mscOS {0} finns men är inte klar att hämta än. Du har {1}. Försök igen senare.": "mscOS {0} exists but is not ready to download yet. You have {1}. Try again later.",
  "Katalogen är äldre än den enheten redan har godkänt. Inget hämtades.": "The catalogue is older than one this device has already accepted. Nothing was downloaded.",
- "Modulen på enheten är nyare än katalogens. Inget ändrades.": "The module on the device is newer than the catalogue's. Nothing was changed."
+ "Modulen på enheten är nyare än katalogens. Inget ändrades.": "The module on the device is newer than the catalogue's. Nothing was changed.",
+ "{0} uppehåll": "{0} stops",
+ "1 uppehåll": "1 stop",
+ "{0} avbrott vid DAC:en under {1}.": "{0} dropouts at the DAC during {1}.",
+ "{0} avbrott vid DAC:en.": "{0} dropouts at the DAC.",
+ "Musiken dröjde {0} s när {1} skulle börja.": "The music took {0} s to start {1}.",
+ "Musiken dröjde {0} s när en låt skulle börja.": "The music took {0} s to start a track.",
+ "Musiken stannade i {0} s mitt i {1}.": "The music stopped for {0} s in the middle of {1}.",
+ "Musiken stannade i {0} s mitt i en låt.": "The music stopped for {0} s in the middle of a track."
 }

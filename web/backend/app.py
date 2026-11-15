@@ -133,6 +133,7 @@ class Hub:
         self.status: dict = {}
         self.xruns = collections.deque(maxlen=24 * 60 * 2)  # 30 s samples, 24 h
         self.last_err: dict = {}
+        self.stops = collections.deque(maxlen=200)  # each time the music stopped by itself: when, how long, during what
         self.jobs: dict[str, dict] = {}
         self.saved_stats: dict = {}  # the stats file as read, for the modules that keep state in it
         self.settings: dict = {"alerts": True, "leds": True, "net_speed": 100, "spotify_vol_to_amp": True,
@@ -421,6 +422,7 @@ class Hub:
                 d = json.load(f)
             self.saved_stats = d
             self.xruns.extend(d.get("xruns", []))
+            self.stops.extend(s for s in d.get("stops", []) if isinstance(s, dict))
             self.alert_sent.update(d.get("alert_sent", {}))
             self.clock.extend(r for r in d.get("clock", []) if len(r) == 5)
             self.supply.extend(d.get("supply", []))
@@ -446,7 +448,7 @@ class Hub:
             d = {}
             for p in self.plugins.values():  # what the modules keep (the verification log, ...)
                 d.update(p.save_state())
-            d.update({"xruns": list(self.xruns), "alert_sent": self.alert_sent, "clock": list(self.clock),
+            d.update({"xruns": list(self.xruns), "stops": list(self.stops), "alert_sent": self.alert_sent, "clock": list(self.clock),
                       "supply": list(self.supply)})
             json.dump(d, f)
         os.replace(tmp, os.path.join(STATE_DIR, "stats.json"))
@@ -593,10 +595,22 @@ class Hub:
         # Soloist (re)starts a stream or changes volume; recordings of the sink show no gaps then.
         n = point["dac"]
         if playing and n:
+            self.note_stop("dac", n=n, title=((self.source.now_playing() if self.source else None) or {}).get("title"))
             await self.alert("dropouts", T("Avbrott i ljudet"),
                              T("{n} avbrott under uppspelning kl {time}. Se avbrottshistoriken i panelen.",
                                n=n, time=time.strftime("%H:%M")),
                              cooldown=3600)
+
+    def note_stop(self, kind: str, t: float | None = None, secs: float = 0, n: int = 0, title=None, early=False) -> None:
+        """The music stopped by itself. kind "wait": the source had no music to give for `secs`
+        (early: as a track began, where a short wait is ordinary); "dac": `n` gaps at the DAC.
+        The title is kept only where the listening history is."""
+        keep = self.settings.get("listen_history", True)
+        ev = {"t": int(t or time.time()), "kind": kind, "secs": round(secs), "n": int(n),
+              "title": " ".join(str(title or "").split())[:200] if keep else "", "early": bool(early)}
+        self.stops.append(ev)
+        log.info("music stopped by itself: %s %s s, %s gaps%s", kind, ev["secs"], ev["n"], ", as a track began" if early else "")
+        asyncio.ensure_future(self.broadcast({"type": "stop", "stop": ev}))
 
     # ---- alerts, delivered by the modules that are a transport (Home Assistant, ...)
     def can_alert(self) -> bool:
@@ -720,7 +734,7 @@ async def ws_handler(request):
     await ws.prepare(request)
     hub.clients.add(ws)
     await ws.send_str(json.dumps({
-        "type": "hello", "status": hub.status, "xruns": list(hub.xruns)[-2880:],
+        "type": "hello", "status": hub.status, "xruns": list(hub.xruns)[-2880:], "stops": list(hub.stops),
         "features": hub.features(), "names": hub.names(), **{k: v for p in hub.plugins.values() for k, v in p.hello().items()},
         "now": hub.source.now_playing() if hub.source else None, "panels": hub.panels(),
         "settings": {**hub.settings, "alerts_configured": hub.can_alert()},
@@ -1361,6 +1375,7 @@ async def tests_clear(request):
     for p in hub.plugins.values():
         p.clear_history()
     hub.xruns.clear()
+    hub.stops.clear()
     await asyncio.get_running_loop().run_in_executor(None, hub.save)
     await hub.broadcast({"type": "history_cleared"})
     return ok()

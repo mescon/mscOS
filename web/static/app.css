@@ -213,6 +213,10 @@ select { appearance: none; padding-right: 32px; background-image: linear-gradien
 .glass { background: var(--glass); border-radius: 2px; box-shadow: 0 0 0 1px rgba(0, 0, 0, .5), inset 0 6px 16px rgba(0, 0, 0, .6); }
 .chart { padding: 12px 12px 8px; }
 #spark { width: 100%; height: 72px; display: block; }
+.stops { list-style: none; padding: 0; margin: 14px 0 4px; max-height: 19em; overflow-y: auto; }
+.stops li { display: grid; grid-template-columns: 6.2em minmax(0, 1fr); gap: 12px; align-items: baseline; padding: 8px 0; border-top: 1px solid var(--hair); font-size: .875rem; }
+.stops time { font-size: .8125rem; color: var(--engraved); font-variant-numeric: tabular-nums; }
+.stops .dac { color: var(--red); }
 .chart-axis { display: flex; justify-content: space-between; font-size: .6875rem; color: var(--engraved); margin-top: 6px; }
 
 /* ------------------------------------------------------------ optimisation ledger: instrument first, detail on demand */

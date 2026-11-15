@@ -126,3 +126,37 @@ class NewInstallation(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Stops(unittest.IsolatedAsyncioTestCase):
+    """Each time the music stopped by itself is written down: when, how long, during what."""
+
+    async def test_a_wait_that_was_heard_is_kept(self):
+        import time
+        cls = panel.pluginlib.discover()["spotify"]
+        p = cls.__new__(cls)
+        p.hub, p.auth, p._wait, p._track_t = panel.hub, {"is_active": True}, None, 0.0
+        p.playback = {"item": {"decorations": {"identity": {"name": "A  song"}}}}
+        panel.hub.stops.clear()
+        p._note_wait("playing", "buffering")
+        p._note_wait("buffering", "playing")      # over at once: how tracks begin
+        self.assertEqual(list(panel.hub.stops), [])
+        p._note_wait("playing", "buffering")
+        p._wait = (time.time() - 19, p._wait[1])
+        p._note_wait("buffering", "playing")
+        (s,) = panel.hub.stops
+        self.assertEqual((s["kind"], s["secs"], s["title"], s["early"]), ("wait", 19, "A song", False))
+        p._note_wait("paused", "buffering")                                              # starting from a pause: as a track begins
+        p._wait = (time.time() - 3, p._wait[1])
+        p._note_wait("buffering", "playing")
+        self.assertTrue(panel.hub.stops[-1]["early"])
+        p.auth = {"is_active": False}                                                    # another device plays: not ours to count
+        p._note_wait("playing", "buffering")
+        self.assertIsNone(p._wait)
+        panel.hub.settings["listen_history"] = False                                     # no titles where no history is kept
+        try:
+            panel.hub.note_stop("dac", n=3, title="A song")
+            self.assertEqual((panel.hub.stops[-1]["n"], panel.hub.stops[-1]["title"]), (3, ""))
+        finally:
+            panel.hub.settings["listen_history"] = True
+            panel.hub.stops.clear()

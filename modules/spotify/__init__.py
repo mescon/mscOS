@@ -212,6 +212,8 @@ class Spotify(SourcePlugin):
 
     def lost_dac(self) -> None:
         self.playback, self.queue = {}, {}
+        self._wait = None       # (since, as a track began): Soloist is waiting for music right now
+        self._track_t = 0.0     # when the track last changed
 
     def play_began(self) -> None:
         asyncio.ensure_future(self.measure_track_quality())
@@ -463,6 +465,7 @@ class Spotify(SourcePlugin):
                 pass
             self.soloist_ws = None
             self.auth = {}
+            self._wait = None
             await self.hub.broadcast({"type": "soloist", "event": {"type": "disconnected"}})
             await asyncio.sleep(3)
 
@@ -478,7 +481,11 @@ class Spotify(SourcePlugin):
             asyncio.ensure_future(self.measure_track_quality())
             self.playback["item"] = ev.get("item")
             self.note_played(ev.get("item"))
+            self._track_t = time.time()
+            if self._wait:
+                self._wait = (self._wait[0], True)
         elif t == "playback_changed":
+            self._note_wait(self.playback.get("status"), ev.get("status"))
             self.playback["status"] = ev.get("status")
         elif t == "volume_changed":
             self.playback["volume"] = ev.get("volume")
@@ -491,6 +498,21 @@ class Spotify(SourcePlugin):
             self.queue = ev
         elif t == "device_changed":
             self.auth = {**self.auth, "is_active": ev.get("is_active"), "device_name": ev.get("device_name")}
+
+    WAIT_WORTH = 2.0  # seconds; shorter waits are how every track begins
+
+    def _note_wait(self, was, now_) -> None:
+        """Soloist says "buffering" when it has no music to give. Time it, and tell the device's
+        list of stops when it took long enough to be heard."""
+        if now_ == "buffering" and was != "buffering":
+            if self.auth.get("is_active"):
+                self._wait = (time.time(), was != "playing" or time.time() - self._track_t < 5)
+        elif self._wait and now_ != "buffering":
+            (since, early), self._wait = self._wait, None
+            secs = time.time() - since
+            if secs >= self.WAIT_WORTH:
+                ident = (((self.playback.get("item") or {}).get("decorations") or {}).get("identity") or {})
+                self.hub.note_stop("wait", t=since, secs=secs, title=ident.get("name"), early=early)
 
     async def soloist_cmd(self, msg: dict, wait: float = 0.0) -> dict | None:
         """Send a command. With wait, return Soloist's error or command_result if one arrives
