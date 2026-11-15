@@ -2,6 +2,8 @@
 
 *by vivajAcoustics*
 
+An overview with pictures: <https://mescon.github.io/mscOS/>
+
 mscOS ("music OS") turns a small computer, or a streamer whose maker no longer updates it,
 into a bit-perfect network music player for a USB DAC. It brings Spotify Lossless, Roon,
 HQPlayer and UPnP to hardware you already own, and it is set up and watched from a web
