@@ -46,6 +46,10 @@ jobs:
     env:
       HAVE_KEY: ${{ secrets.APT_GPG_KEY != '' }}
     steps:
+      - uses: actions/checkout@v4
+        if: env.HAVE_KEY == 'true'
+        with:
+          path: src
       - uses: actions/download-artifact@v4
         if: env.HAVE_KEY == 'true'
         with:
@@ -64,6 +68,8 @@ jobs:
           reprepro -b repo includedeb trixie debs/*.deb
           gpg --export "$KEYID" > repo/mscos-archive-keyring.pgp
           rm -rf repo/conf repo/db
+          # the product page shares GitHub Pages with the repository (see site.yml)
+          cp -r src/site/. repo/ && rm -f repo/preview.py
       - uses: actions/upload-pages-artifact@v3
         if: env.HAVE_KEY == 'true'
         with:

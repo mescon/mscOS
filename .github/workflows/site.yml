@@ -1,0 +1,41 @@
+# Publishes the product page (site/) to GitHub Pages.
+# Pages holds one thing at a time. Once the apt repository is published there too (the
+# APT_GPG_KEY secret is set, see packages.yml), the page goes out with each release instead,
+# next to the repository: a deploy from here would take the repository away.
+name: site
+on:
+  push:
+    branches: [main]
+    paths: ["site/**", ".github/workflows/site.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      HAVE_APT: ${{ secrets.APT_GPG_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.HAVE_APT != 'true'
+      - name: Leave out what is only for previews
+        if: env.HAVE_APT != 'true'
+        run: rm -f site/preview.py
+      - uses: actions/upload-pages-artifact@v3
+        if: env.HAVE_APT != 'true'
+        with:
+          path: site
+      - uses: actions/deploy-pages@v4
+        if: env.HAVE_APT != 'true'
+        id: deploy

@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mscOS: Spotify Lossless, bit-perfect, on the streamer you already own</title>
+<meta name="description" content="mscOS turns a small computer into an audiophile network streamer: bit-perfect Spotify Lossless, Roon, HQPlayer, Qobuz and Tidal to your USB DAC, in up to 24-bit FLAC and native DSD, measured on your own system.">
+<meta name="color-scheme" content="dark">
+<link rel="preload" href="fonts/cormorant-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/jost-wght.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+  /* Layout: one column of sections on the panel's own dark faceplate; text on one side and a
+     screenshot in a plain frame on the other, changing sides down the page. */
+  @font-face { font-family: "Jost"; src: url("fonts/jost-wght.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+  @font-face { font-family: "Cormorant"; src: url("fonts/cormorant-wght.woff2") format("woff2"); font-weight: 300 700; font-display: swap; }
+  @font-face { font-family: "Cormorant"; src: url("fonts/cormorant-wght-italic.woff2") format("woff2"); font-weight: 300 700; font-style: italic; font-display: swap; }
+  :root {
+    color-scheme: dark;
+    --chassis: #121315; --plate: #1a1c1f; --ink: #d9d6cf; --bright: #f1eee7; --engraved: #8f8c85;
+    --hair: rgba(207, 204, 196, .13); --line: rgba(207, 204, 196, .3); --red: #e3262f;
+    --sans: "Jost", "Futura", "Avenir Next", system-ui, sans-serif;
+    --serif: "Cormorant", "Cormorant Garamond", "Garamond", Georgia, serif;
+    --wide: 1160px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--chassis); color: var(--ink); font-family: var(--sans); font-size: 1.0625rem; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  /* the same film grain as the panel, over the whole frame */
+  body::before { content: ""; position: fixed; inset: 0; z-index: 50; pointer-events: none; opacity: .3; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='420'%3E%3Cfilter id='n' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.62' numOctaves='3' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeGaussianBlur stdDeviation='.45'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='2.2' intercept='-.6'/%3E%3CfeFuncG type='linear' slope='2.2' intercept='-.6'/%3E%3CfeFuncB type='linear' slope='2.2' intercept='-.6'/%3E%3CfeFuncA type='linear' slope='0' intercept='1'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 420px 420px; }
+  @media (prefers-contrast: more) { body::before { display: none; } }
+  a { color: var(--bright); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  a:focus-visible, .btn:focus-visible { outline: 2px solid #8fb2ff; outline-offset: 3px; }
+  img { max-width: 100%; height: auto; display: block; }
+  .wrap { max-width: var(--wide); margin: 0 auto; padding-inline: max(20px, env(safe-area-inset-left, 0px)) max(20px, env(safe-area-inset-right, 0px)); }
+
+  header.top { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding-block: 22px; }
+  .mark { font-size: 1.5rem; font-weight: 500; letter-spacing: .01em; color: var(--bright); text-decoration: none; }
+  .mark small { display: block; font-family: var(--serif); font-style: italic; font-size: .95rem; font-weight: 400; color: var(--engraved); letter-spacing: 0; }
+  nav a { margin-left: 22px; font-size: .9375rem; color: var(--ink); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+
+  h1, h2, h3 { font-family: var(--serif); font-weight: 500; color: var(--bright); text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(2.5rem, 6.4vw, 4.6rem); line-height: 1.02; letter-spacing: -.01em; max-width: 20ch; }
+  h2 { font-size: clamp(1.9rem, 4vw, 2.9rem); line-height: 1.08; max-width: 18ch; }
+  h3 { font-size: 1.45rem; line-height: 1.2; }
+  p { margin: 0; max-width: 62ch; }
+  .lead { font-size: 1.25rem; line-height: 1.5; color: var(--ink); max-width: 46ch; }
+  .fine { font-size: .9375rem; color: var(--engraved); }
+
+  .hero { padding-block: clamp(28px, 6vw, 72px) clamp(40px, 7vw, 90px); }
+  .hero .lead { margin-top: 24px; }
+  .acts { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+  .btn { display: inline-flex; align-items: center; min-height: 50px; padding: 0 22px; border: 1px solid var(--line); border-radius: 3px; color: var(--bright); text-decoration: none; font-size: 1rem; }
+  .btn.primary { background: var(--bright); color: #17181b; border-color: var(--bright); font-weight: 500; }
+  .btn:hover { border-color: var(--bright); }
+  .hero .fine { margin-top: 18px; }
+  .stage { position: relative; margin-top: clamp(36px, 6vw, 70px); }
+  .shot { border: 1px solid var(--hair); border-radius: 8px; overflow: hidden; background: var(--plate); box-shadow: 0 40px 80px -40px #000; }
+  .shot.phone { border-radius: 26px; border: 6px solid #26282c; max-width: 300px; }
+  .stage .shot.wide { width: 86%; }
+  .stage .shot.phone { position: absolute; right: 0; bottom: -34px; width: 23%; min-width: 150px; }
+
+  section { padding-block: clamp(56px, 9vw, 120px); border-top: 1px solid var(--hair); }
+  .split { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: clamp(30px, 6vw, 90px); align-items: center; }
+  .split.flip { grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); }
+  .split .shot.phone { margin-inline: auto; }
+  .copy { display: grid; gap: 20px; }
+  .copy ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 14px; max-width: 58ch; }
+  .copy li { padding-left: 22px; position: relative; }
+  .copy li::before { content: ""; position: absolute; left: 0; top: .72em; width: 9px; height: 1px; background: var(--red); }
+
+  .sources { margin: 34px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 0 44px; }
+  .sources div { padding: 20px 0; border-top: 1px solid var(--hair); }
+  .sources dt { font-family: var(--serif); font-size: 1.45rem; color: var(--bright); }
+  .sources dd { margin: 4px 0 0; color: var(--engraved); }
+  .st { font-weight: 500; color: var(--ink); }
+  .st.ok { color: var(--bright); }
+  .st.ok::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--red); box-shadow: 0 0 10px var(--red); vertical-align: middle; }
+
+  /* how it is built: the path of the sound left to right, the panel above it, the system under it */
+  .built { margin-top: 38px; display: grid; gap: 14px; }
+  .row { display: grid; gap: 10px; align-items: stretch; }
+  .row.path { grid-template-columns: 1.6fr auto 1.2fr auto .7fr auto 1fr; }
+  .box { border: 1px solid var(--line); border-radius: 3px; padding: 14px 16px; background: var(--plate); min-width: 0; }
+  .box b { display: block; font-weight: 500; color: var(--bright); }
+  .box span { display: block; font-size: .875rem; color: var(--engraved); line-height: 1.4; }
+  .box.lit { border-color: var(--red); }
+  .arrow { align-self: center; color: var(--engraved); font-size: 1.2rem; }
+  .row.two { grid-template-columns: 1fr 1fr; }
+  .cap { font-size: .8125rem; letter-spacing: .06em; text-transform: uppercase; color: var(--engraved); margin-top: 10px; }
+
+  .apart { margin-top: 36px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 34px 60px; }
+  .apart p { margin-top: 8px; color: var(--ink); }
+
+  .steps { margin: 36px 0 0; padding: 0; list-style: none; counter-reset: s; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 30px; }
+  .steps li { counter-increment: s; }
+  .steps li::before { content: counter(s); display: block; font-family: var(--serif); font-size: 2.6rem; line-height: 1; color: var(--red); margin-bottom: 8px; }
+  .steps code, p code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .9em; color: var(--bright); }
+  .phones { margin-top: 44px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(14px, 3vw, 36px); align-items: start; }
+  .phones figure { margin: 0; }
+  .phones figcaption { margin-top: 12px; font-size: .9375rem; color: var(--engraved); text-align: center; }
+  .phones .shot.phone { max-width: 100%; margin-inline: auto; }
+
+  footer { border-top: 1px solid var(--hair); padding-block: 40px 60px; color: var(--engraved); font-size: .9375rem; }
+  footer p + p { margin-top: 10px; }
+
+  @media (max-width: 820px) {
+    nav a:not(.keep) { display: none; }
+    .split, .split.flip { grid-template-columns: minmax(0, 1fr); }
+    .split.flip > :first-child { order: 2; }
+    .stage .shot.wide { width: 100%; }
+    .stage .shot.phone { position: static; width: 58%; margin: 20px auto 0; }
+    .row.path { grid-template-columns: minmax(0, 1fr); }
+    .arrow { justify-self: center; transform: rotate(90deg); }
+    .row.two { grid-template-columns: minmax(0, 1fr); }
+    .phones { grid-template-columns: minmax(0, 1fr); max-width: 300px; margin-inline: auto; }
+  }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <a class="mark" href="#top">mscOS <small>by vivajAcoustics</small></a>
+    <nav>
+      <a href="#devices">Devices</a><a href="#measures">Measured</a><a href="#sources">Sources</a><a href="#built">How it is built</a><a href="#start">Get started</a>
+      <a class="keep" href="https://github.com/mescon/mscOS">GitHub</a>
+    </nav>
+  </header>
+</div>
+
+<main id="top">
+  <div class="wrap hero">
+    <h1>Spotify Lossless, bit-perfect, on the streamer you already own.</h1>
+    <p class="lead">Your streamer may never get an update for Spotify Lossless. mscOS replaces its software and turns it into a current audiophile network player: Spotify Lossless, Roon, HQPlayer, Qobuz and Tidal reach your USB DAC bit for bit, in up to 24-bit FLAC and native DSD. Nothing resamples, mixes or scales the signal, and a control panel on your phone shows the measured result.</p>
+    <div class="acts">
+      <a class="btn primary" href="https://github.com/mescon/mscOS/blob/main/docs/INSTALL.md">Install mscOS</a>
+      <a class="btn" href="https://github.com/mescon/mscOS">Source on GitHub</a>
+    </div>
+    <p class="fine">The highest quality your DAC and your subscription can deliver. Open source, for any USB DAC.</p>
+    <div class="stage">
+      <div class="shot wide"><img src="img/listen-desktop.jpg" width="1366" height="860" alt="The Listen view on a computer: the sleeve, the track with a heart beside it, the measured format FLAC 24 bit 44.1 kHz, the transport and what plays next."></div>
+      <div class="shot phone"><img src="img/listen-phone.jpg" width="390" height="844" alt="The same Listen view on a phone."></div>
+    </div>
+  </div>
+
+  <section id="devices">
+    <div class="wrap">
+      <h2>A second life for a good streamer.</h2>
+      <p class="lead" style="margin-top:18px">The hardware in a well-made streamer does not age: a clean USB output and a quiet power supply stay good. The software does. mscOS runs from an SD card of its own. The maker's software stays untouched, and you can go back to it whenever you like.</p>
+      <dl class="sources devices">
+        <div><dt>SOtM sMS-200, sMS-200ultra</dt><dd><b class="st ok">Runs today.</b> In daily use on an sMS-200ultra, with Spotify Lossless and Roon.</dd></div>
+        <div><dt>SOtM sMS-200 Neo, sMS-200ultra Neo and SE</dt><dd><b class="st">To be confirmed.</b> Believed to use the same board as the sMS-200. Not tried yet.</dd></div>
+        <div><dt>Raspberry Pi 4 and 5, CM4 and CM5</dt><dd><b class="st">Not yet tested.</b> Also the streamers built around them. The image is made but has not been started on a device yet.</dd></div>
+        <div><dt>Mini PCs and Intel NUC</dt><dd><b class="st">Not yet tested.</b> Any x86-64 PC with UEFI, such as a NUC that ran Roon ROCK. The image starts in a virtual machine and has not been tried on a real PC yet.</dd></div>
+        <div><dt>Odroid C4 and N2+</dt><dd><b class="st">Planned.</b> Popular boards for DIY streamers.</dd></div>
+        <div><dt>Radxa Rock, Orange Pi 5, NanoPi</dt><dd><b class="st">Planned.</b> Strong enough to run HQPlayer on the device itself.</dd></div>
+      </dl>
+      <p class="fine" style="margin-top:22px">Streamers with a closed system, such as those from Lumin, Innuos and Sonore, cannot run other software without their maker's help. Do you have a streamer that boots from an SD card or USB? Tell the project which one.</p>
+    </div>
+  </section>
+
+  <section id="measures">
+    <div class="wrap split">
+      <div class="copy">
+        <h2>Bit-perfect, and proven on your own system.</h2>
+        <p>Every streamer says it is bit-perfect. mscOS records twenty seconds of exactly what goes to your DAC and checks, sample by sample, that the lossless stream arrived untouched. Each track is also measured as it starts, so you see whether it really is 16 or 24 bit.</p>
+        <ul>
+          <li>Sample rate, bit depth and gain, shown as measured.</li>
+          <li>A lamp for every stage of the signal path, from the source to the DAC.</li>
+          <li>Asynchronous USB: your DAC's own clock sets the pace, and the panel measures it.</li>
+          <li>Dropouts counted around the clock, with an alert to your phone if one occurs.</li>
+        </ul>
+      </div>
+      <div class="shot phone"><img src="img/signal-phone.jpg" width="390" height="668" loading="lazy" alt="The Signal view: 44.1 kHz, 16 bit, 0.0 dB, a chain of lamps from Spotify through Soloist, PipeWire and USB to the DAC, and rows for the signal path, optimizations, verification and the clock."></div>
+    </div>
+  </section>
+
+  <section id="sources">
+    <div class="wrap">
+      <h2>Every lossless source, one streamer.</h2>
+      <p class="lead" style="margin-top:18px">One source at a time has the DAC to itself, in exclusive mode where the player supports it.</p>
+      <dl class="sources">
+        <div><dt>Spotify Lossless</dt><dd>Lossless FLAC up to 24 bit, through Soloist, Spotify's own Connect player. It needs a Premium account and a personal key that you create at Spotify; the setup guide shows how.</dd></div>
+        <div><dt>Spotify Connect</dt><dd>For guests and for accounts without Lossless, at 320 kbit/s.</dd></div>
+        <div><dt>Roon</dt><dd>A Roon endpoint through Roon Bridge and RAAT, for the Roon server on your network. You can browse your Roon library in the panel too.</dd></div>
+        <div><dt>HQPlayer</dt><dd>A network audio adapter (NAA) for upsampled PCM and DSD from HQPlayer on another computer.</dd></div>
+        <div><dt>UPnP and OpenHome</dt><dd>Hi-res Qobuz, Tidal and your own files, from apps such as mconnect and BubbleUPnP.</dd></div>
+        <div><dt>Native DSD</dt><dd>DSD64 and DSD128 without conversion to PCM, for DACs that take raw DSD over USB.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section id="music">
+    <div class="wrap split flip">
+      <div class="shot phone"><img src="img/listen-phone.jpg" width="390" height="844" loading="lazy" alt="The Listen view on a phone: the sleeve, the track, artist and album, a heart, the progress and the transport, with the panel's five views along the bottom."></div>
+      <div class="copy">
+        <h2>Your library, in your hand.</h2>
+        <p>The panel runs as an app on your iPhone or Android phone, with no app store involved.</p>
+        <ul>
+          <li>Search Spotify or Roon. Open an artist and see the whole discography in release order, with the tracks under each album.</li>
+          <li>Your Spotify playlists, saved albums and liked tracks, sorted into folders of your own. The playlists you add to most come first.</li>
+          <li>Liner notes for what plays: the song, the album, the artist and who plays on it.</li>
+          <li>Lyrics that follow the music, line by line.</li>
+        </ul>
+        <p class="fine">Notes and lyrics come from Wikipedia, MusicBrainz, Discogs, Last.fm and LRCLIB. This is off until you turn it on, because the streamer then asks those services about what is playing.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="quiet">
+    <div class="wrap split">
+      <div class="copy">
+        <h2>A machine that does nothing but play.</h2>
+        <p>A general-purpose computer does a hundred things besides playing music. mscOS strips it down to one. A processor core is reserved for the audio and the DAC's USB traffic, the audio runs at real-time priority, the processor holds a fixed speed, and no background job runs while music plays.</p>
+        <p>The panel lists every one of these measures and checks each one live on your streamer.</p>
+      </div>
+      <div class="shot phone"><img src="img/quiet-phone.jpg" width="390" height="730" loading="lazy" alt="The list of optimizations: 17 of 17 active, with rows such as audio gets the highest priority, fixed processor speed and a processor core of its own for audio."></div>
+    </div>
+  </section>
+
+  <section id="modules">
+    <div class="wrap split flip">
+      <div class="shot phone"><img src="img/keys-phone.jpg" width="390" height="640" loading="lazy" alt="A key field in the panel with its guide open: five numbered steps for getting a Soloist developer key, with links to Spotify's pages."></div>
+      <div class="copy">
+        <h2>Volume where it belongs: in your amplifier.</h2>
+        <p>Digital volume costs resolution. If your amplifier can be controlled over the network, the volume slider in the Spotify app drives the amplifier's own volume, so the signal stays bit-perfect at every level.</p>
+        <ul>
+          <li>Volume, inputs and standby of a network-controlled amplifier.</li>
+          <li>An AV receiver that switches between music and television.</li>
+          <li>Alerts to your phone when the DAC disappears, a source stops or the sound drops out.</li>
+          <li>A listening diary at ListenBrainz.</li>
+        </ul>
+        <p>mscOS works with any USB DAC and needs none of these. Each one is an add-on module that you switch on in the panel, and you can write your own for your equipment.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="built">
+    <div class="wrap">
+      <h2>How it is built.</h2>
+      <p class="lead" style="margin-top:18px">The players are their publishers' own programs. mscOS gives each one a clean, short path to your DAC.</p>
+      <div class="built" role="img" aria-label="Diagram. The panel on your phone talks to the panel on the device, which runs the modules. A player (Soloist, go-librespot, Roon Bridge, NAA or MPD) sends sound through PipeWire, or straight past it, over USB to your DAC. Underneath is Debian 13 with the mscOS packages.">
+        <div class="row two">
+          <div class="box"><b>The panel on your phone</b><span>What plays, your library, the signal path and your amplifier. In English and Swedish.</span></div>
+          <div class="box"><b>On the streamer</b><span>Measures the signal, runs the modules and keeps your account keys on the streamer.</span></div>
+        </div>
+        <p class="cap">The path of the sound</p>
+        <div class="row path">
+          <div class="box"><b>One player at a time</b><span>Soloist, go-librespot, Roon Bridge, HQPlayer NAA, or MPD for UPnP</span></div>
+          <div class="arrow" aria-hidden="true">→</div>
+          <div class="box"><b>PipeWire</b><span>Passes samples through unchanged: no mixer, no resampling. Roon, HQPlayer and UPnP go straight to the DAC.</span></div>
+          <div class="arrow" aria-hidden="true">→</div>
+          <div class="box"><b>USB</b><span>Asynchronous</span></div>
+          <div class="arrow" aria-hidden="true">→</div>
+          <div class="box lit"><b>Your DAC</b><span>Its own clock sets the pace</span></div>
+        </div>
+        <p class="cap">Underneath</p>
+        <div class="row two">
+          <div class="box"><b>Debian 13, tuned for audio</b><span>A board profile for each device, set up at first start.</span></div>
+          <div class="box"><b>A real-time kernel</b><span>Full preemption, a 1000 Hz tick and the native DSD driver.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="apart">
+    <div class="wrap">
+      <h2>What sets it apart.</h2>
+      <div class="apart">
+        <div><h3>Bit-perfect you can check</h3><p>Other streamers ask you to trust the word. mscOS compares what reaches your DAC with the lossless original and shows you the result.</p></div>
+        <div><h3>Works with what you already have</h3><p>Your USB DAC, and the Spotify, Roon, Qobuz or Tidal subscription you already pay for. A guide takes you through the setup in a few minutes.</p></div>
+        <div><h3>Free, with no subscription</h3><p>mscOS is open source and costs nothing. There is no account to create and nothing to renew.</p></div>
+        <div><h3>Private</h3><p>Your listening stays in your home. Nothing is reported anywhere unless you turn on a feature that needs it, and then the panel says what is shared and with whom.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="start">
+    <div class="wrap">
+      <h2>Get started.</h2>
+      <ol class="steps">
+        <li><p>Build the image for your device and write it to an SD card, or install the packages on a Debian 13 system you already run. There is no ready-made download yet.</p></li>
+        <li><p>Start the device on wired network and open <code>http://mscos.local</code> in a browser.</p></li>
+        <li><p>Follow the guide: language, a password, names, sources, amplifier, alerts.</p></li>
+        <li><p>Install the players you want from the panel; each is downloaded from its publisher. Enter the keys for your own accounts, and add the panel to your phone's home screen. The panel lists what is left to do.</p></li>
+      </ol>
+      <div class="phones">
+        <figure><div class="shot phone"><img src="img/guide-phone.jpg" width="390" height="620" loading="lazy" alt="The first step of the guide: Welcome, with a choice of Swedish or English."></div><figcaption>The guide at first start</figcaption></figure>
+        <figure><div class="shot phone"><img src="img/sources-phone.jpg" width="390" height="844" loading="lazy" alt="The guide's step for choosing sources, with Spotify Lossless and Roon turned on."></div><figcaption>Choosing sources</figcaption></figure>
+        <figure><div class="shot phone"><img src="img/start-phone.jpg" width="390" height="470" loading="lazy" alt="The list of what is left to do after the guide."></div><figcaption>What is left to do</figcaption></figure>
+      </div>
+      <div class="acts" style="margin-top:44px">
+        <a class="btn primary" href="https://github.com/mescon/mscOS/blob/main/docs/INSTALL.md">The full install guide</a>
+        <a class="btn" href="https://github.com/mescon/mscOS/blob/main/docs/MODULES.md">Writing a module</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="status">
+    <div class="wrap copy">
+      <h2>Where it stands.</h2>
+      <p>mscOS runs every day on one SOtM sMS-200ultra. The images for Raspberry Pi, x86-64 PCs and arm64 boards are made, and the PC image starts in a virtual machine, but none of them has been started on real hardware yet.</p>
+      <p>If you try one, the project would like to hear how it went. The <a href="https://github.com/mescon/mscOS#status">status table</a> in the README says what is tested and on what.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>mscOS by vivajAcoustics. MIT licence. The kernel patch for native DSD is GPL-2.0-or-later. The typefaces Jost and Cormorant are under the SIL Open Font License.</p>
+    <p>Spotify, Roon, HQPlayer, Qobuz, Tidal, SOtM, Raspberry Pi, Intel, Odroid, Radxa, Orange Pi, NanoPi, Lumin, Innuos and Sonore are trademarks of their owners. mscOS is not affiliated with or endorsed by any of them. The music in the screenshots is invented.</p>
+  </div>
+</footer>
+</body>
+</html>
