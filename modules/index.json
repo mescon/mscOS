@@ -1,6 +1,6 @@
 {
  "format": 1,
- "serial": 98,
+ "serial": 99,
  "modules": [
   {
    "id": "about",
@@ -369,7 +369,7 @@
   },
   {
    "id": "spotify",
-   "version": "1.19.6",
+   "version": "1.19.7",
    "kind": "source",
    "name": {
     "sv": "Spotify Lossless (Soloist)",
@@ -392,12 +392,12 @@
     },
     {
      "path": "install.sh",
-     "sha256": "24e0e1bd210a22cd9869f487387f3b6d691f7e56d123b36c0b7ffbf2e7b33f43",
+     "sha256": "32a75e7251e8a8dbe7b5099cfbc8a321135fbfef1461cc308bfc7c66478f6c1e",
      "exec": true
     },
     {
      "path": "module.json",
-     "sha256": "4953cb7d86f27bc2bcbb90c8e19483025f10113a53be1de02a36bba8ac2b42b0",
+     "sha256": "dc6b6d3f742df604d5b9ccc4c27f6a4fa267f52a866fdc8210154f6b49efd433",
      "exec": false
     },
     {
@@ -437,7 +437,7 @@
     },
     {
      "path": "soloist.service",
-     "sha256": "4583dae40f554801041ef02a52ad2a7f82174e3b27e139600a8af3765f8a7ebd",
+     "sha256": "19ec68bd77dcd1aea2889880d9c104fc226cc07a0c328daf364e5ca7f8843f0f",
      "exec": false
     },
     {

@@ -17,6 +17,11 @@ install -m 755 "$HERE/soloist-update" /usr/local/sbin/soloist-update
 if ! run_user test -e "$USER_UNITS/soloist.service"; then  # keep the device name of an existing install
     sed "s|@DEVICE_NAME@|$DEVICE_NAME|" "$HERE/soloist.service" | install_user_unit - soloist.service
 fi
+# Installs from before had a cache limit that let the RAM disk fill up (see soloist.service).
+if run_user grep -q -- '--cache-size 300' "$USER_UNITS/soloist.service"; then
+    run_user sed -i 's/--cache-size 300/--cache-size 150/' "$USER_UNITS/soloist.service"
+    run_user systemctl --user daemon-reload
+fi
 install -m 755 "$HERE/soloist-rt" /usr/local/bin/soloist-rt
 install_user_unit "$HERE/soloist-rt.service"
 install -m 644 "$HERE/soloist-update.service" "$HERE/soloist-update.timer" /etc/systemd/system/
