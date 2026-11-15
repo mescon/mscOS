@@ -157,6 +157,12 @@ class Stops(unittest.IsolatedAsyncioTestCase):
         try:
             panel.hub.note_stop("dac", n=3, title="A song")
             self.assertEqual((panel.hub.stops[-1]["n"], panel.hub.stops[-1]["title"]), (3, ""))
+            panel.hub.settings["listen_history"] = True
+            panel.hub.note_stop("wait", secs=5, title="A song")
+            self.assertEqual(panel.hub.stops[-1]["title"], "A song")
+            panel.hub.forget_listened()                                                  # the history goes: so do the names here
+            self.assertEqual({s["title"] for s in panel.hub.stops}, {""})
+            self.assertEqual(len(panel.hub.stops), 4, "the stops themselves stay")
         finally:
             panel.hub.settings["listen_history"] = True
             panel.hub.stops.clear()

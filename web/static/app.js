@@ -441,6 +441,7 @@ function handleMsg(m) {
     case "amp": AMP = m.amp; renderAmp(); break;
     case "job": jobEvent(m); break;
     case "settings": S.settings = { ...S.settings, ...m.settings }; if (m.features) { S.features = m.features; renderFeatures(); } if (m.names) { S.names = m.names; renderNames(); } renderSettings(); renderPlay(); renderSignal(); break;
+    case "stops": S.stops = m.stops || []; renderSpark(); break;
     case "stop": S.stops.push(m.stop); if (S.stops.length > 200) S.stops.shift(); renderSpark(); break;
     case "history_cleared": S.xruns = []; S.stops = []; renderSpark(); renderSignal(); break;
   }

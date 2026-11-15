@@ -301,6 +301,14 @@ class Hub:
             forget = getattr(p, "forget_played", None)
             if forget:
                 forget()
+        # the list of stops names tracks too: the names go with the history, the stops stay
+        if any(s.get("title") for s in self.stops):
+            for s in self.stops:
+                s["title"] = ""
+            with contextlib.suppress(OSError):
+                self.save()
+            with contextlib.suppress(RuntimeError):  # (no loop: at start, or in a test)
+                asyncio.ensure_future(self.broadcast({"type": "stops", "stops": list(self.stops)}))
 
     def source_changed(self, plugin) -> None:
         """A source module reports new state (what plays): tell the panel, note play starts."""
