@@ -212,8 +212,7 @@ class Spotify(SourcePlugin):
 
     def lost_dac(self) -> None:
         self.playback, self.queue = {}, {}
-        self._wait = None       # (since, as a track began): Soloist is waiting for music right now
-        self._track_t = 0.0     # when the track last changed
+        self._wait = None
 
     def play_began(self) -> None:
         asyncio.ensure_future(self.measure_track_quality())
@@ -458,8 +457,11 @@ class Spotify(SourcePlugin):
                         if ev.get("type") in ("device_changed", "playback_changed"):
                             log.info("soloist %s: active=%s status=%s", ev["type"], ev.get("is_active", self.auth.get("is_active")),
                                      ev.get("status", self.playback.get("status")))
-                        self._apply_soloist(ev)
-                        self._on_playback_change()
+                        try:
+                            self._apply_soloist(ev)
+                            self._on_playback_change()
+                        except Exception:  # one event that cannot be handled must not make the panel deaf to the rest
+                            log.exception("soloist event %s", ev.get("type"))
                         await self.hub.broadcast({"type": "soloist", "event": ev})
             except (OSError, websockets.WebSocketException, asyncio.TimeoutError):
                 pass
@@ -500,6 +502,8 @@ class Spotify(SourcePlugin):
             self.auth = {**self.auth, "is_active": ev.get("is_active"), "device_name": ev.get("device_name")}
 
     WAIT_WORTH = 2.0  # seconds; shorter waits are how every track begins
+    _wait = None       # (since, as a track began): Soloist is waiting for music right now
+    _track_t = 0.0     # when the track last changed
 
     def _note_wait(self, was, now_) -> None:
         """Soloist says "buffering" when it has no music to give. Time it, and tell the device's

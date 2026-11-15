@@ -135,9 +135,10 @@ class Stops(unittest.IsolatedAsyncioTestCase):
         import time
         cls = panel.pluginlib.discover()["spotify"]
         p = cls.__new__(cls)
-        p.hub, p.auth, p._wait, p._track_t = panel.hub, {"is_active": True}, None, 0.0
+        p.hub, p.auth = panel.hub, {"is_active": True}   # nothing else set: a player that has only just started
         p.playback = {"item": {"decorations": {"identity": {"name": "A  song"}}}}
         panel.hub.stops.clear()
+        p._note_wait("paused", "playing")                                              # the first event after a start
         p._note_wait("playing", "buffering")
         p._note_wait("buffering", "playing")      # over at once: how tracks begin
         self.assertEqual(list(panel.hub.stops), [])
