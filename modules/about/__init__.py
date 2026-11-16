@@ -3,7 +3,11 @@ and the song that is playing, shown under the sleeve in the Listen view.
 
 The device asks those three services by the names of what is playing, which tells them what
 is listened to here: that is why this is a module to switch on, and off by default. Answers
-are kept on the device, so each artist, album and song is asked about once."""
+are kept on the device, so each artist, album and song is asked about once.
+
+The asking is done as the music begins, and for the track that comes next, without waiting for
+anyone to look: MusicBrainz takes one question a second and a new album takes three, so asked
+for only when the page opens the notes would be seconds late."""
 from __future__ import annotations
 
 import asyncio
@@ -24,14 +28,14 @@ from . import lookup
 
 log = logging.getLogger("about")
 _KEEPING = threading.Lock()
-KEEP, KEEP_EMPTY, MOST = 60 * 86400, 2 * 86400, 600   # seconds found / not found is kept; files
+KEEP, KEEP_EMPTY, MOST = 60 * 86400, 2 * 86400, 2000   # seconds found / not found is kept; files
 
 
 class About(Plugin):
     id = "about"
     name = {"sv": "Om musiken", "en": "About the music"}
-    description = {"sv": "Text om artisten, albumet och låten som spelas, vilka som medverkar, och låttexten i takt med musiken. Ett omslag när spelaren saknar ett. Från Wikipedia, MusicBrainz, Cover Art Archive, Wikidata, Discogs, Last.fm och LRCLIB. Enheten frågar de tjänsterna om det som spelas.",
-                   "en": "Notes on the artist, the album and the song that is playing, who plays on it, and the lyrics in time with the music. A sleeve when the player has none. From Wikipedia, MusicBrainz, the Cover Art Archive, Wikidata, Discogs, Last.fm and LRCLIB. The device asks those services about what is playing."}
+    description = {"sv": "Text om artisten, albumet och låten som spelas, vilka som medverkar, och låttexten i takt med musiken. Ett omslag när spelaren saknar ett. Från Wikipedia, MusicBrainz, Cover Art Archive, Wikidata, Discogs, Last.fm och LRCLIB. Enheten frågar de tjänsterna om det som spelas och om nästa låt i kön, också när ingen har panelen öppen.",
+                   "en": "Notes on the artist, the album and the song that is playing, who plays on it, and the lyrics in time with the music. A sleeve when the player has none. From Wikipedia, MusicBrainz, the Cover Art Archive, Wikidata, Discogs, Last.fm and LRCLIB. The device asks those services about what is playing and about the next track in the queue, also when nobody has the panel open."}
     defaults = {"about_lyrics": False}
     options = ({"key": "about_lyrics", "type": "toggle", "label": {"sv": "Visa låttexten", "en": "Show the lyrics"},
                 "help": {"sv": "Texten hämtas från LRCLIB, en öppen databas som användare fyller på, och följer med i musiken när den är tidssatt.",
@@ -59,6 +63,9 @@ class About(Plugin):
         self.dir = os.path.join(collect.STATE_DIR, "about")
         self.http: ClientSession | None = None
         self.busy: dict[str, asyncio.Task] = {}
+        self.lang = ""                 # the language the page last asked in: what is looked up ahead
+        self.ahead: list[tuple] = []   # the tracks already looked up ahead, the latest last
+        self.ahead_hold = 0.0          # no looking ahead before this time: a service did not answer
 
     # ---- kept answers
     def _file(self, kind: str, *names: str) -> str:
@@ -175,6 +182,47 @@ class About(Plugin):
                 out.setdefault(k, None)
         return out
 
+    # ---- ahead of the page: what plays, and what comes next
+    def tasks(self) -> list:
+        return [self._ahead()]
+
+    async def _ahead(self):
+        while True:
+            await asyncio.sleep(3)
+            try:
+                await self.look_ahead()
+            except Exception:  # noqa: BLE001 - the notes must never get in the way of anything
+                log.exception("looking ahead")
+
+    async def look_ahead(self) -> None:
+        """Ask about the track that plays here and then the one after it, each once, so that
+        the answers are kept by the time the page wants them. Only while music plays."""
+        src = self.hub.source
+        now = src.now_playing() if src else None
+        if not now or not now.get("playing") or time.monotonic() < self.ahead_hold:
+            return
+        for t in (now, src.next_playing()):
+            if not t:
+                continue
+            artist, album, title = (" ".join(str(t.get(k) or "").split())[:200] for k in ("artist", "album", "title"))   # as the page's questions are read
+            m = re.fullmatch(r"spotify:artist:([A-Za-z0-9]{22})", str(t.get("artist_uri") or ""))
+            lang = self.lang or (self.hub.settings.get("language") if self.hub.settings.get("language") in ("sv", "en") else "en")
+            key = (artist, album, title, lang, bool(self.hub.settings.get("about_lyrics")))
+            if not artist or not title or key in self.ahead:
+                continue
+            out = await self.about(artist, album, title, lang, m.group(1) if m else "")
+            if self.hub.settings.get("about_lyrics"):
+                try:
+                    dur = int(t.get("duration_ms") or 0)
+                    await self.lyrics(re.split(r", | / ", artist)[0], title, album, dur if 0 <= dur < 4 * 3600 * 1000 else 0)
+                except Exception as e:  # noqa: BLE001
+                    log.warning("words ahead: %r", e)
+            if out.get("unavailable"):          # a service did not answer: asked again in a minute
+                self.ahead_hold = time.monotonic() + 60
+            else:
+                self.ahead = (self.ahead + [key])[-12:]
+            return                              # one track at a look: what plays now goes before what comes next
+
     async def lyrics(self, artist: str, title: str, album: str, duration_ms: int) -> dict:
         if self.http is None:
             self.http = ClientSession(timeout=ClientTimeout(total=15))
@@ -215,6 +263,7 @@ class About(Plugin):
             part = str(b.get("part") or "")
             if part not in ("", "artist", "album", "track"):
                 raise web.HTTPBadRequest()
+            self.lang = lang
             return web.json_response(await self.about(artist, album, title, lang, m.group(1) if m else "", part))
 
         @routes.post("/api/about/years")

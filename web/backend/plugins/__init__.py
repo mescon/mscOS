@@ -291,7 +291,13 @@ class SourcePlugin(Plugin):
     def now_playing(self) -> dict | None:
         """What plays, for the panel: title, artist, album, image, playing, duration_ms,
         position_ms with position_ts (when it was read, epoch seconds), codec, bitrate,
-        shuffle, repeat (off | context | track). None: not known."""
+        shuffle, repeat (off | context | track). None: not known. A player that has an id of
+        its own for the artist may add it (artist_uri: "spotify:artist:<id>")."""
+        return None
+
+    def next_playing(self) -> dict | None:
+        """The track that comes after this one, when the player says: title, artist, album
+        (and artist_uri, duration_ms where known). None: not known."""
         return None
 
     async def state(self) -> dict:

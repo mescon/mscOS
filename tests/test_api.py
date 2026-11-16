@@ -128,6 +128,49 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class Ahead(unittest.IsolatedAsyncioTestCase):
+    """The notes on the music are asked for as it begins, and for the next track, before the page asks."""
+
+    async def test_what_plays_and_what_comes_next_are_looked_up_once(self):
+        cls = panel.pluginlib.discover()["about"]
+        p = cls.__new__(cls)
+        asked, words, answer = [], [], {}
+
+        class Player:
+            now = {"title": "A  song", "artist": "Someone, Other", "album": "An album", "playing": True,
+                   "artist_uri": "spotify:artist:" + "a" * 22, "duration_ms": 1000}
+            nxt = {"title": "The next", "artist": "Someone", "album": "An album"}
+            def now_playing(self): return self.now
+            def next_playing(self): return self.nxt
+
+        class Hub:
+            source, settings = Player(), {"language": "sv", "about_lyrics": True}
+
+        async def about(*a):
+            asked.append(a)
+            return dict(answer)
+
+        async def lyrics(*a):
+            words.append(a)
+        p.hub, p.lang, p.ahead, p.ahead_hold, p.about, p.lyrics = Hub, "", [], 0.0, about, lyrics
+        for _ in range(4):
+            await p.look_ahead()
+        self.assertEqual(asked, [("Someone, Other", "An album", "A song", "sv", "a" * 22), ("Someone", "An album", "The next", "sv", "")])
+        self.assertEqual(words, [("Someone", "A song", "An album", 1000), ("Someone", "The next", "An album", 0)])
+        Hub.source.now = {**Player.now, "title": "Another", "playing": False}      # nothing plays: nothing is asked
+        await p.look_ahead()
+        self.assertEqual(len(asked), 2)
+        Hub.source.now["playing"] = True
+        answer["unavailable"] = True                                               # a service is down: not again at once
+        await p.look_ahead()
+        await p.look_ahead()
+        self.assertEqual(len(asked), 3)
+        p.ahead_hold, answer = 0.0, {}
+        await p.look_ahead()
+        self.assertEqual(asked[-1][2], "Another")
+        self.assertEqual(len(asked), 4)
+
+
 class Stops(unittest.IsolatedAsyncioTestCase):
     """Each time the music stopped by itself is written down: when, how long, during what."""
 

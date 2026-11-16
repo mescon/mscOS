@@ -1,23 +1,23 @@
 {
  "format": 1,
- "serial": 103,
+ "serial": 104,
  "modules": [
   {
    "id": "about",
-   "version": "1.11.3",
+   "version": "1.12.0",
    "kind": "integration",
    "name": {
     "sv": "Om musiken",
     "en": "About the music"
    },
    "description": {
-    "sv": "Text om artisten, albumet och låten som spelas, vilka som medverkar, och låttexten i takt med musiken. Ett omslag när spelaren saknar ett. Från Wikipedia, MusicBrainz, Cover Art Archive, Wikidata, Discogs, Last.fm och LRCLIB. Enheten frågar de tjänsterna om det som spelas.",
-    "en": "Notes on the artist, the album and the song that is playing, who plays on it, and the lyrics in time with the music. A sleeve when the player has none. From Wikipedia, MusicBrainz, the Cover Art Archive, Wikidata, Discogs, Last.fm and LRCLIB. The device asks those services about what is playing."
+    "sv": "Text om artisten, albumet och låten som spelas, vilka som medverkar, och låttexten i takt med musiken. Ett omslag när spelaren saknar ett. Från Wikipedia, MusicBrainz, Cover Art Archive, Wikidata, Discogs, Last.fm och LRCLIB. Enheten frågar de tjänsterna om det som spelas och om nästa låt i kön, också när ingen har panelen öppen.",
+    "en": "Notes on the artist, the album and the song that is playing, who plays on it, and the lyrics in time with the music. A sleeve when the player has none. From Wikipedia, MusicBrainz, the Cover Art Archive, Wikidata, Discogs, Last.fm and LRCLIB. The device asks those services about what is playing and about the next track in the queue, also when nobody has the panel open."
    },
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "caf836d5d067ae4ecc0597787e68149577f80cce608e1c36aa0c167bf7407678",
+     "sha256": "d585537d9b1f68b2299897999a80fd6ac7a7ed62e7772022da8f573deeb775ae",
      "exec": false
     },
     {
@@ -27,7 +27,7 @@
     },
     {
      "path": "module.json",
-     "sha256": "0a8c4f5cc6e996725a5b25bc721f6ce75e467359e845225a7099d740b9f0823b",
+     "sha256": "3d37d3a5fa29a27e7bdd6fa16d44b8299a9ea5279848a9f41921314d3ab4b0ba",
      "exec": false
     },
     {
@@ -369,7 +369,7 @@
   },
   {
    "id": "spotify",
-   "version": "1.19.10",
+   "version": "1.19.11",
    "kind": "source",
    "name": {
     "sv": "Spotify Lossless (Soloist)",
@@ -382,7 +382,7 @@
    "files": [
     {
      "path": "__init__.py",
-     "sha256": "12bc783d2feacad65d640b6e196b5dd92b0c6d555e630f9f617cd9e5e38caace",
+     "sha256": "0e9048d6051894298962c28f9095cff17584d879fcd25d422a96734d135b81e4",
      "exec": false
     },
     {
@@ -397,7 +397,7 @@
     },
     {
      "path": "module.json",
-     "sha256": "9d45906239a13e2611dfc8b35645ff24641e5d459b44017ffa63e9fd6aab75b5",
+     "sha256": "b059ab7464cf4f9b33290f4cd66487fafc8ecd61d2850c33eb89f1b0d3110e05",
      "exec": false
     },
     {

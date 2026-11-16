@@ -398,6 +398,21 @@ class Spotify(SourcePlugin):
     async def state(self) -> dict:
         return {"key_set": so.api_key_info()["set"]}
 
+    def next_playing(self) -> dict | None:
+        """The first track of the queue, when Soloist names it (the far end of the queue it
+        gives by address alone)."""
+        up = self.queue.get("upcoming") or []
+        it = (up[0].get("item") if up and isinstance(up[0], dict) else None) or {}
+        deco = it.get("decorations") or {}
+        name = lambda e: (((e or {}).get("decorations") or {}).get("identity") or {}).get("name") or ""  # noqa: E731
+        creators = deco.get("creators") or []
+        who = ", ".join(filter(None, (name(c.get("entity")) for c in creators)))
+        if not name(it) or not who:
+            return None
+        return {"title": name(it), "artist": who, "album": name((deco.get("parent") or {}).get("entity")),
+                "artist_uri": (creators[0].get("entity") or {}).get("uri") or "",
+                "duration_ms": (deco.get("playback") or {}).get("duration_ms")}
+
     async def version(self) -> str | None:
         v = ((self.hub.status.get("soloist") or {}).get("version") or "").replace("soloist ", "")
         return v.split(" ")[0] or None
@@ -406,7 +421,9 @@ class Spotify(SourcePlugin):
         s = self._ha_soloist()
         if not s["reachable"] or not s["title"]:
             return None
+        creators = (((self.playback.get("item") or {}).get("decorations") or {}).get("creators") or [{}])
         return {"title": s["title"], "artist": s["artist"], "album": s["album"], "image": s["image_url"], "uri": s["uri"],
+                "artist_uri": (creators[0].get("entity") or {}).get("uri") or "",
                 "playing": s["status"] == "playing", "duration_ms": s["duration_ms"], "position_ms": s["position_ms"],
                 "position_ts": s["position_ts"], "shuffle": bool(s["shuffle"]), "repeat": s["repeat"] or "off"}
 

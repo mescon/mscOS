@@ -114,6 +114,7 @@ A module needs no page of its own (it may bring page code, see below). The panel
 | `panel()` and `panel_action()` | a card of buttons, sliders and choices in the Controls view |
 | `amp_state()` and `amp_action()` (an `AmpPlugin`) | the volume dial, inputs, power and mute |
 | `now_playing()`, `transport` and `command()` (a `SourcePlugin`) | what plays, and the transport buttons |
+| `next_playing()` (a `SourcePlugin`) | the track that comes next, when the player says: other modules look it up ahead |
 | `notify()` and `can_notify()` | a way to deliver the core's alerts to a phone |
 
 A `secret` option (an address with a token, a key) is stored in a root-only file on the
