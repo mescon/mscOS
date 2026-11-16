@@ -1,10 +1,10 @@
 {
  "format": 1,
- "serial": 104,
+ "serial": 105,
  "modules": [
   {
    "id": "about",
-   "version": "1.12.0",
+   "version": "1.13.0",
    "kind": "integration",
    "name": {
     "sv": "Om musiken",
@@ -27,17 +27,17 @@
     },
     {
      "path": "module.json",
-     "sha256": "3d37d3a5fa29a27e7bdd6fa16d44b8299a9ea5279848a9f41921314d3ab4b0ba",
+     "sha256": "dd3f1eddb8d6593df525700fa80e4f84801e403a2b3c34ae1a30c9728a64b93c",
      "exec": false
     },
     {
      "path": "page.js",
-     "sha256": "214f0172e82cfe9c079d9f67cbc11f26957bf94e2d7e0774434472b438e832ac",
+     "sha256": "32efc3a2f25788b926ecc0cfd6dde1a6761dc328a7d817716299323f4198f7c7",
      "exec": false
     },
     {
      "path": "i18n/en.json",
-     "sha256": "23cad1a2273d75c386175fbc4cc83ac298c483f0f37383e36ad75bc7ea7bc3da",
+     "sha256": "bee9431c2e2095b7f010bf4a7ae3a72589d7ea366588b8f9201d7157d8fef8fe",
      "exec": false
     }
    ]

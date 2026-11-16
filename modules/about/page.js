@@ -8,6 +8,11 @@ export default function page(api) {
     <div class="ly-bg" aria-hidden="true"></div><div class="ly-shade" aria-hidden="true"></div>
     <div class="ly-top">
       <p class="ly-what" id="ly-what"><b></b><span></span></p>
+      <span class="ly-off" role="group" aria-label="${esc(tr("Textens tid"))}">
+        <button id="ly-early" aria-label="${esc(tr("Texten tidigare"))}">−</button>
+        <button id="ly-off0" aria-live="polite"></button>
+        <button id="ly-late" aria-label="${esc(tr("Texten senare"))}">+</button>
+      </span>
       <button class="ly-full" id="ly-full" aria-pressed="false" aria-label="${esc(tr("Helskärm"))}">
         <svg class="i-open" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 9.5v-5h5M19.5 9.5v-5h-5M4.5 14.5v5h5M19.5 14.5v5h-5"/></svg>
         <svg class="i-close" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>
@@ -39,13 +44,45 @@ export default function page(api) {
         -webkit-mask-image: linear-gradient(to bottom, transparent, #000 24%, #000 76%, transparent); mask-image: linear-gradient(to bottom, transparent, #000 24%, #000 76%, transparent); }
       .ly-track { list-style: none; margin: 0; padding: 0 20px; transition: transform .6s cubic-bezier(.4, 0, .2, 1); will-change: transform; }
       .ly-track li { padding: 5px 0; text-align: center; font-family: var(--serif); font-size: 1.3125rem; line-height: 1.25; opacity: 0; transform: scale(.82);
-        transition: opacity .6s cubic-bezier(.4, 0, .2, 1), transform .6s cubic-bezier(.4, 0, .2, 1), filter .6s; }
+        transition: opacity .6s cubic-bezier(.4, 0, .2, 1), transform .6s cubic-bezier(.4, 0, .2, 1), filter .6s, --u .6s cubic-bezier(.4, 0, .2, 1); }
       .ly-track li.d0 { opacity: 1; transform: none; font-weight: 500; }
       .ly-track li.d1 { opacity: .5; }
       .ly-track li.d2 { opacity: .2; filter: blur(1px); }
       .ly-track li:empty::before { content: "♪"; }
-      .ly-track li span { white-space: pre-wrap; transition: opacity .18s ease-out; }
-      .ly-track li.d0 span:not(.sung) { opacity: .42; }
+      /* each word fills from its left as it is sung: a word held long fills slowly */
+      .lyrics { --ly-c: var(--ink); }
+      .lyrics.full { --ly-c: #fff; }
+      /* (the words are drawn the same way on every line, sung or not, so that nothing changes
+         its way of being drawn as a line arrives; how faint the unsung part is (--u) goes from
+         none to half in step with the line's own brightening, and the two together stay even) */
+      @property --u { syntax: "<percentage>"; inherits: true; initial-value: 100%; }
+      .ly-track li { --u: 100%; }
+      .ly-track li.d0 { --u: 50%; }
+      .ly-track li span[data-ms] { white-space: pre-wrap; color: transparent; text-shadow: none; -webkit-background-clip: text; background-clip: text;
+        background-image: linear-gradient(90deg, var(--ly-c) var(--p, 0%), color-mix(in srgb, var(--ly-c) var(--u), transparent) var(--p, 0%)); }
+      /* a line without word times brightens in its last second before it is sung */
+      .ly-track li.d1.soon { opacity: .8; }
+      /* a wait before a line: three lights that go out one a second, the line begins as the last
+         one does; before them, on a long wait, a rule that runs out */
+      .ly-track li.gap { display: grid; justify-items: center; align-content: center; gap: 9px; min-height: 1.25em; }
+      .ly-track li.gap:empty { display: block; }
+      .gap > * { transition: opacity .3s; }
+      .gap:not(.d0) > * { opacity: 0; }                 /* only the wait that is on shows its lights */
+      .gap .dots { display: flex; gap: .5em; }
+      .gap .dots i { width: .34em; height: .34em; border-radius: 50%; box-shadow: inset 0 0 0 1px currentColor; opacity: .4; transition: background-color .12s, opacity .12s, transform .12s; }
+      .gap[data-lit="3"] .dots i, .gap[data-lit="2"] .dots i:nth-child(-n+2), .gap[data-lit="1"] .dots i:first-child { background: currentColor; opacity: 1; transform: scale(1.25); }
+      .gap .bar { display: block; width: min(9em, 60%); height: 1px; background: color-mix(in srgb, currentColor 22%, transparent); }
+      .gap .bar b { display: block; height: 100%; background: currentColor; transform-origin: left; }
+      .gap.short .bar { display: none; }
+      .ly-off { display: none; align-items: center; margin-right: auto; }
+      .lyrics.big .ly-off, .lyrics.full .ly-off { display: flex; }
+      .lyrics.plain .ly-off { display: none; }
+      .lyrics.full .ly-off { margin-right: 0; }
+      .ly-off button { appearance: none; min-width: 44px; height: 44px; padding: 0 6px; border: 0; background: none; color: var(--engraved); font: inherit; font-size: .8125rem; cursor: pointer; }
+      .ly-off button:hover { color: var(--ink); }
+      .ly-off #ly-early, .ly-off #ly-late { font-size: 1.25rem; }
+      .lyrics.full .ly-off button { color: rgba(255, 255, 255, .7); }
+      .lyrics.full .ly-off button:hover { color: #fff; }
       /* words without times: all of them, to read and scroll */
       .lyrics.plain .ly-stage { overflow-y: auto; height: 168px; -webkit-mask-image: none; mask-image: none; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
       .ly-note { position: relative; margin: 6px 0 0; font-size: .75rem; color: var(--engraved); }
@@ -55,7 +92,7 @@ export default function page(api) {
       .lyrics.plain .ly-track li { opacity: .85; transform: none; font-size: 1.125rem; padding: 3px 0; }
       .lyrics .from { font-size: .8125rem; color: var(--engraved); margin: 4px 0 0; text-align: center; }
       .lyrics .from a { color: inherit; text-underline-offset: 3px; }
-      @media (prefers-reduced-motion: reduce) { .ly-track, .ly-track li { transition: none; } }
+      @media (prefers-reduced-motion: reduce) { .ly-track, .ly-track li, .gap .dots i { transition: none; } }
       /* full screen: the sleeve behind, blurred, under half black, so that the words stand clear */
       .ly-bg, .ly-shade { display: none; }
       .lyrics.full { position: fixed; inset: 0; z-index: 200; margin: 0; background: #000; color: #fff; display: flex; flex-direction: column; }
@@ -301,7 +338,7 @@ export default function page(api) {
   // the cards get their size when Listen is shown, when the window changes, when the type loads
   new ResizeObserver(measure).observe(cols);
   // ---- the words: the line that is sung now in the middle, the column moving under it
-  let words = null, wordsAt = -2, wordsFor = "";
+  let words = null, wordsAt = -2, wordsFor = "", rows = [], offset = 0;
   const track = lyr.querySelector("#ly-track"), stage = lyr.querySelector("#ly-stage");
   function lyDraw() {
     const w = words;
@@ -315,35 +352,108 @@ export default function page(api) {
     // where the words are from: LRCLIB, unless another module had them with their times
     const from = lyr.querySelector("#ly-from"), other = w.from && /^https:\/\//.test(w.from.url || "") ? w.from : null;
     from.textContent = other ? other.name : "LRCLIB"; from.href = other ? other.url : "https://lrclib.net/";
-    // where every word has its time, each word is its own piece, to light as it is sung
-    const line = (x, n) => { const ws = timed && w.words && w.words[n]; return ws && ws.length > 1 ? ws.map(([ms, t]) => `<span data-ms="${+ms}">${esc(t)}</span>`).join("") : esc(x); };
-    track.innerHTML = !timed && w.instrumental && !lines.join("").trim() ? `<li>${esc(tr("Instrumental"))}</li>` : lines.map((x, n) => `<li>${line(x, n)}</li>`).join("");
+    rows = timed ? rowsOf(w) : [];
+    // where every word has its time, each word is its own piece, to fill as it is sung
+    const line = (r) => (r.words ? r.words.map((x) => `<span data-ms="${x.at}">${esc(x.text)}</span>`).join("") : esc(r.text));
+    const wait = (r) => (r.out ? '<li class="gap"></li>'
+      : `<li class="gap${r.end - r.at < LONG ? " short" : ""}" aria-hidden="true"><span class="bar"><b></b></span><span class="dots"><i></i><i></i><i></i></span></li>`);
+    track.innerHTML = timed ? rows.map((r) => (r.gap ? wait(r) : `<li>${line(r)}</li>`)).join("")
+      : w.instrumental && !lines.join("").trim() ? `<li>${esc(tr("Instrumental"))}</li>` : lines.map((x) => `<li>${esc(x)}</li>`).join("");
+    rows.forEach((r, n) => { r.el = track.children[n]; if (r.words) [...r.el.children].forEach((el, k) => { r.words[k].el = el; }); });
     track.style.transform = "";
+    offset = offsets()[wordsFor] || 0; offShow();
     const t = api.track() || {};
     lyr.querySelector("#ly-what b").textContent = t.title || ""; lyr.querySelector("#ly-what span").textContent = t.artist || "";
     wordsAt = -2; lyTick();
   }
+  // What the column shows, in order: the lines, and a wait wherever the singing rests for a
+  // while (before the first line too). The sources say when a line or a word begins, never
+  // when it ends: a line's end is where its writer left an empty line, or else a guess from
+  // how long its words take.
+  const GAP = 4000, MARKED = 2000, LEAD = 3000, LONG = 10000;   // ms: a wait worth showing (told by an empty line: shorter); the lights; a wait long enough for the rule
+  function rowsOf(w) {
+    const s = w.synced, out = [];
+    let free = 0, marked = false;   // when the singing before was over, and whether an empty line said so
+    s.forEach(([at, text], n) => {
+      if (!String(text).trim()) { if (!marked) { free = at; marked = true; } return; }
+      if (at - free >= (marked ? MARKED : GAP)) out.push({ gap: true, at: free, end: at });
+      const next = n + 1 < s.length ? s[n + 1][0] : Infinity;
+      const ws = w.words && w.words[n] && w.words[n].length > 1 ? w.words[n] : null;
+      let end, parts = null;
+      if (ws) {
+        const d = ws.slice(1).map((x, k) => x[0] - ws[k][0]).sort((a, b) => a - b), last = Math.min(2500, Math.max(500, d[d.length >> 1] * 2));
+        end = Math.min(next, ws[ws.length - 1][0] + last);
+        parts = ws.map(([ms, t], k) => ({ at: +ms, end: k + 1 < ws.length ? +ws[k + 1][0] : end, text: t }));
+      } else end = Math.min(next, at + Math.min(6000, Math.max(1500, String(text).length * 90)));
+      out.push({ at, end, text, words: parts });
+      free = end; marked = false;
+    });
+    if (marked) out.push({ gap: true, out: true, at: free, end: Infinity });   // the music plays on after the last line
+    return out;
+  }
   // The line for this moment, and the column moved so that it stands in the middle of the stage.
+  let soon = null, fine = false, ticked = 0;
   function lyTick(force) {
     const w = words;
-    if (!w || lyr.hidden || !w.synced.length) return;
-    const pos = api.position() + 300;   // a little early: the line arrives as it is sung
+    if (!w || lyr.hidden || !w.synced.length) { fine = false; return; }
+    const at = api.position() + offset, pos = at + 300;   // a little early: the line arrives as it is sung
     let i = -1;
-    for (let n = 0; n < w.synced.length && w.synced[n][0] <= pos; n++) i = n;
-    // the words of the line that is sung, lit one by one
-    const now = track.children[i];
-    if (now && now.firstElementChild) for (const sp of now.children) sp.classList.toggle("sung", +sp.dataset.ms <= pos - 150);
+    for (let n = 0; n < rows.length && rows[n].at <= pos; n++) i = n;
+    const r = rows[i], next = rows[i + 1];
+    fine = !!(r && (r.words || (r.gap && !r.out)));       // something moves within the row: looked at for every frame
+    // the words of the line that is sung fill one by one
+    if (r && r.words) for (const x of r.words) {
+      const p = Math.round(Math.min(1, Math.max(0, (at + 150 - x.at) / Math.max(1, x.end - x.at))) * 100);
+      if (x.p !== p) { x.p = p; x.el.style.setProperty("--p", `${p}%`); }
+    }
+    // a wait: the rule runs out, then the three lights go out one a second
+    if (r && r.gap && !r.out) {
+      const left = r.end - at, lit = left <= LEAD ? Math.min(3, Math.max(1, Math.ceil(left / 1000))) : 0;
+      if (r.lit !== lit) { r.lit = lit; r.el.dataset.lit = lit; }
+      const bar = r.el.querySelector(".bar b");
+      if (bar) bar.style.transform = `scaleX(${Math.min(1, Math.max(0, (left - LEAD) / Math.max(1, r.end - r.at - LEAD))).toFixed(3)})`;
+    }
+    // the line that comes next brightens in its last second
+    const due = next && !next.gap && !next.words && next.at - pos < 1000 ? next.el : null;
+    if (due !== soon) { soon?.classList.remove("soon"); due?.classList.add("soon"); soon = due; }
     if (i === wordsAt && !force) return;
     wordsAt = i;
-    const at = Math.max(i, 0), li = track.children[at];
+    const li = track.children[Math.max(i, 0)];
     if (!li) return;
+    soon = null;
+    for (const x of rows) if (x.gap && x !== r && x.lit) { x.lit = 0; x.el.dataset.lit = 0; }   // a wait that is over shows no lights
     [...track.children].forEach((el, n) => {
       const d = Math.abs(n - i);
-      el.className = i < 0 ? (n === 0 ? "d1" : n === 1 ? "d2" : "") : d === 0 ? "d0" : d === 1 ? "d1" : d === 2 ? "d2" : "";
+      el.classList.remove("d0", "d1", "d2", "soon");
+      const c = i < 0 ? (n === 0 ? "d1" : n === 1 ? "d2" : "") : d === 0 ? "d0" : d === 1 ? "d1" : d === 2 ? "d2" : "";
+      if (c) el.classList.add(c);
     });
     track.style.transform = `translateY(${Math.round(stage.clientHeight / 2 - (li.offsetTop + li.offsetHeight / 2))}px)`;
   }
-  setInterval(lyTick, 80);
+  // every frame while something moves within the row (a word filling, the lights), else a dozen times a second
+  (function frame(t) { if (fine || t - ticked >= 80) { ticked = t; lyTick(); } requestAnimationFrame(frame); })(0);
+  setInterval(() => { if (document.hidden) lyTick(); }, 500);   // (no frames in a hidden page: the line still keeps up for when it shows again)
+  // The words a little earlier or later, for a text whose times are off: kept for each song, in this browser.
+  const offsets = () => { try { return JSON.parse(localStorage.getItem("about:lyrics-offset") || "{}") || {}; } catch { return {}; } };
+  function offShow() {
+    const v = api.dec(Math.abs(offset) / 1000, 1);
+    lyr.querySelector("#ly-off0").textContent = !offset ? tr("Texten i takt") : offset > 0 ? tr`Texten ${v} s tidigare` : tr`Texten ${v} s senare`;
+    lyr.querySelector("#ly-off0").title = offset ? tr("Tryck för att återställa") : "";
+  }
+  function offSet(ms) {
+    offset = Math.max(-5000, Math.min(5000, ms));
+    try {
+      const all = offsets();
+      if (offset) all[wordsFor] = offset; else delete all[wordsFor];
+      const keys = Object.keys(all);
+      for (const k of keys.slice(0, Math.max(0, keys.length - 300))) delete all[k];
+      localStorage.setItem("about:lyrics-offset", JSON.stringify(all));
+    } catch {}
+    offShow(); lyTick(true);
+  }
+  lyr.querySelector("#ly-early").addEventListener("click", () => offSet(offset + 100));
+  lyr.querySelector("#ly-late").addEventListener("click", () => offSet(offset - 100));
+  lyr.querySelector("#ly-off0").addEventListener("click", () => offSet(0));
   addEventListener("resize", () => lyTick(true));
   // Full screen: this same part over the whole page, the sleeve behind it. (The browser's own
   // full screen too, where it is allowed; without it the part still covers the page.)

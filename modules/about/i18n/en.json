@@ -34,5 +34,12 @@
  "Låttext, tryck för att förstora": "Lyrics, press to enlarge",
  "Låttext, tryck för att förminska": "Lyrics, press to make smaller",
  "Hämtar…": "Fetching…",
- "Texten har inga tider, så den följer inte musiken. Bläddra i den själv.": "These lyrics have no times, so they do not follow the music. Scroll through them yourself."
+ "Texten har inga tider, så den följer inte musiken. Bläddra i den själv.": "These lyrics have no times, so they do not follow the music. Scroll through them yourself.",
+ "Textens tid": "Timing of the lyrics",
+ "Texten tidigare": "Lyrics earlier",
+ "Texten senare": "Lyrics later",
+ "Texten i takt": "Lyrics in time",
+ "Texten {0} s tidigare": "Lyrics {0} s earlier",
+ "Texten {0} s senare": "Lyrics {0} s later",
+ "Tryck för att återställa": "Press to reset"
 }
