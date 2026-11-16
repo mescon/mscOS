@@ -297,6 +297,12 @@ document.addEventListener("click", (e) => {
   if (routeNow().view !== "v-music") go("v-music");     // (from within Music the way back leads to where one was)
   find(d.go, { artist: d.artist, album: d.album, artist_id: d.artistId, album_id: d.albumId });
 }, true);
+let pagesDue = false;
+function pagesSoon() {
+  if (pagesDue) return;
+  pagesDue = true;
+  queueMicrotask(() => { pagesDue = false; pagesDo("render"); });
+}
 function pageApi(id) {
   return { $, $$, S, tr, esc, dec, khz, fmtWord, fmtTime, clock, stamp, post, toast, fv, loc, MARK,
     outName, srcId, srcState, sigWord, usbStage,
@@ -316,7 +322,9 @@ function pageApi(id) {
     position: () => posNow(), duration: () => durOf(), playing: () => isPlaying(),
     // what is playing, whichever source plays it: {title, artist, album} or null
     track: () => nowTrack(),
-    render: () => { renderPlay(); renderSignal(); renderSysHead(); },
+    // (the other modules draw again too: what one module has just learned, the track's artist
+    // say, is what another was waiting for. Once for a burst of calls, after the caller is done.)
+    render: () => { renderPlay(); renderSignal(); renderSysHead(); pagesSoon(); },
     // put markup of the module's own on the page: "notice", "play" and "about" (Listen), "signal" (Signal), "music" (Music)
     slot(where, html) {
       const mark = $(`#slot-${where}`), t = document.createElement("template");

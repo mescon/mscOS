@@ -148,7 +148,7 @@ export default function page(api) {
   // the source last chosen is the one shown first where it has something to say
   const liked = () => { try { return localStorage.getItem("about:source") || ""; } catch { return ""; } };
   const safe = (u) => (/^https:\/\/[^\s"<>]+$/.test(u || "") ? u : "");   // (it goes into an attribute through esc())
-  let key = "", timer = 0;
+  let key = "", timer = 0, asked = false;
   const open = new Set();   // the cards the reader opened stay open from track to track
 
   const paras = (t) => String(t || "").split(/\n+/).filter((p) => p.trim()).map((p) => `<p>${esc(p.trim())}</p>`).join("");
@@ -457,7 +457,10 @@ export default function page(api) {
       if (!ok) { box.hidden = true; cols.innerHTML = ""; links(); words = null; lyr.hidden = true; return; }
       if (wordsFor !== k) { words = null; lyr.hidden = true; }   // another track: its words are not these
       drawWaiting(t);
-      timer = setTimeout(() => ask({ title: t.title, artist: t.artist, album: t.album || "", artist_uri: t.artist_uri || "" }, k), 400);  // (a breath: not for every track skipped past)
+      // a breath before asking, so as not to ask for every track skipped past: but not for the
+      // first track the page shows, which nobody is skipping
+      timer = setTimeout(() => ask({ title: t.title, artist: t.artist, album: t.album || "", artist_uri: t.artist_uri || "" }, k), asked ? 400 : 0);
+      asked = true;
     },
   };
 }
