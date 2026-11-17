@@ -496,6 +496,7 @@ class Spotify(SourcePlugin):
         t = ev.get("type")
         if t == "auth_state":
             self.auth = ev
+            self._note_if_here()
         elif t == "playback_state":
             self.playback = ev
             if ev.get("status") == "playing":   # already playing when the panel (re)connected
@@ -521,6 +522,12 @@ class Spotify(SourcePlugin):
             self.queue = ev
         elif t == "device_changed":
             self.auth = {**self.auth, "is_active": ev.get("is_active"), "device_name": ev.get("device_name")}
+            self._note_if_here()
+
+    def _note_if_here(self) -> None:
+        """This device was just said to be the one that plays: what plays belongs in the history."""
+        if self.auth.get("is_active") is True and self.playback.get("status") == "playing":
+            self.note_played(self.playback.get("item"))
 
     WAIT_WORTH = 2.0  # seconds; shorter waits are how every track begins
     _wait = None       # (since, as a track began): Soloist is waiting for music right now
@@ -646,8 +653,8 @@ class Spotify(SourcePlugin):
             deco = lambda e: (e or {}).get("decorations") or {}   # noqa: E731
             name = lambda e: (deco(e).get("identity") or {}).get("name") or ""   # noqa: E731
             uri = (item or {}).get("uri") or ""
-            if not SPOTIFY_URI.fullmatch(uri) or self.auth.get("is_active") is False or not self.hub.settings.get("listen_history", True):
-                return
+            if not SPOTIFY_URI.fullmatch(uri) or self.auth.get("is_active") is not True or not self.hub.settings.get("listen_history", True):
+                return   # only what plays on this device: not what the account plays elsewhere, nor while that is unknown
             who = ", ".join(name(c.get("entity")) for c in (deco(item).get("creators") or [])[:6] if name(c.get("entity")))
             self.hub.note_listened(self.id, name(item), who, name((deco(item).get("parent") or {}).get("entity")),
                                    (deco(item).get("playback") or {}).get("duration_ms"))

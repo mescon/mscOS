@@ -210,3 +210,26 @@ class Stops(unittest.IsolatedAsyncioTestCase):
         finally:
             panel.hub.settings["listen_history"] = True
             panel.hub.stops.clear()
+
+
+class Played(unittest.IsolatedAsyncioTestCase):
+    """The history holds what played on this device, not what the account played elsewhere."""
+
+    async def test_only_what_plays_here_is_kept(self):
+        import os
+        import tempfile
+        cls = panel.pluginlib.discover()["spotify"]
+        p = cls.__new__(cls)
+        p.hub, p.id, p._played = panel.hub, "spotify", []
+        p.HISTORY = os.path.join(tempfile.mkdtemp(), "h.json")
+        item = lambda n: {"uri": "spotify:track:" + n * 22, "decorations": {"identity": {"name": "Song " + n}}}   # noqa: E731
+        for auth in ({}, {"is_active": False}, {"is_active": None}):   # unknown, elsewhere, unknown
+            p.auth = auth
+            p.note_played(item("a"))
+        self.assertEqual(p._played, [])
+        p.playback = {"status": "playing", "item": item("b")}
+        p._apply_soloist({"type": "device_changed", "is_active": True, "device_name": "x"})   # the music was moved here
+        self.assertEqual([e["title"] for e in p._played], ["Song b"])
+        p._apply_soloist({"type": "device_changed", "is_active": False, "device_name": "y"})  # and away again
+        p.note_played(item("c"))
+        self.assertEqual([e["title"] for e in p._played], ["Song b"])
