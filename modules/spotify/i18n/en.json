@@ -106,6 +106,8 @@
  "Spotify hittar inget på \"{0}\".": "Spotify finds nothing for \"{0}\".",
  "Sök i Spotify ovan. Här under samlas det som spelas på enheten, att spela igen.": "Search Spotify above. What is played on the device gathers below, to play again.",
  "Senast spelat": "Recently played",
+ "Visa fler ({0} till)": "Show more ({0} left)",
+ "i går {0}": "yesterday {0}",
  "Tillbaka": "Back",
  "Hämtar…": "Fetching…",
  "Spotify svarar inte.": "Spotify does not answer.",

@@ -136,6 +136,8 @@ export default function page(api) {
         .m-back { appearance: none; display: inline-flex; align-items: center; gap: 4px; min-height: 44px; margin: 10px 0 0 -6px; padding: 0 8px 0 0; border: 0; background: none;
           color: var(--engraved); font: inherit; font-size: .875rem; cursor: pointer; }
         .m-back:hover { color: var(--ink); }
+        .m-more { appearance: none; display: block; min-height: 44px; margin: 12px 0 0; padding: 0 16px; border: 1px solid var(--hair); border-radius: 2px; background: none; color: var(--engraved); font: inherit; font-size: .875rem; cursor: pointer; }
+        .m-more:hover { color: var(--ink); border-color: var(--btn-line); }
         .m-back svg { width: 18px; height: 18px; }
         .m-lib { display: grid; grid-template-columns: minmax(190px, 250px) minmax(0, 1fr); gap: 34px; align-items: start; margin-top: 22px; }
         .m-pane > h3:first-child, .m-pane > .m-lead:first-child { margin-top: 0; }
@@ -236,15 +238,28 @@ export default function page(api) {
     `<li><button ${M.search ? `data-artist="${esc(a.id || idOf(a.uri))}"` : `data-play="${esc(a.uri)}"`} data-name="${esc(a.name)}">${a.cover ? img(a.cover) : ""}${esc(a.name)}</button></li>`).join("")}</ul>`;
   // how many listen to a track, in words: "1,8 milj.", "650 tusen"
   const many = (n) => (n >= 1e6 ? tr`${api.dec(n / 1e6, 1)} milj.` : n >= 1e3 ? tr`${Math.round(n / 1e3)} tusen` : String(n));
+  // when something was played, as one says it: "21:14" today, "i går 21:14", then the date
+  const when = (t) => {
+    const d = new Date(t * 1000), now = new Date(), days = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 864e5);
+    if (days <= 0) return api.clock(t);
+    if (days === 1) return tr`i går ${api.clock(t)}`;
+    return d.toLocaleDateString(api.lang() === "sv" ? "sv-SE" : "en-GB", d.getFullYear() === now.getFullYear() ? { day: "numeric", month: "short" } : { day: "numeric", month: "short", year: "numeric" });
+  };
   const trackList = (tracks, numbered) => `<ol class="m-tracks">${tracks.map((t) =>
     `<li><button class="go" data-play="${esc(t.uri)}" data-name="${esc(t.name)}">${numbered ? `<span class="n">${esc(t.n ?? "")}</span>` : img(t.cover)}<span><b>${esc(t.name)}</b><span>${[t.listeners ? "" : artistLinks(t.artist, t.artists), numbered ? "" : albumLink(t.album, t.artist, t.album_id), t.listeners ? esc(tr`${many(t.listeners)} lyssnare`) : ""].filter(Boolean).join(" · ")}</span></span></button>
-       ${t.duration_ms ? `<span class="len">${esc(api.fmtTime(t.duration_ms))}</span>` : ""}<button class="q" data-queue="${esc(t.uri)}" data-name="${esc(t.name)}">${esc(tr("Kö"))}</button></li>`).join("")}</ol>`;
+       ${t.duration_ms ? `<span class="len">${esc(api.fmtTime(t.duration_ms))}</span>` : t.t ? `<span class="len" title="${esc(api.stamp(t.t))}">${esc(when(t.t))}</span>` : ""}<button class="q" data-queue="${esc(t.uri)}" data-name="${esc(t.name)}">${esc(tr("Kö"))}</button></li>`).join("")}</ol>`;
   const playlistList = (lists) => `<ul class="m-albums">${lists.map((p) =>
     `<li><button data-playlist="${esc(p.id || idOf(p.uri))}" data-name="${esc(p.name)}">${img(p.cover)}<b>${esc(p.name)}</b><span>${esc([p.owner, p.count != null ? tr`${p.count} låtar` : ""].filter(Boolean).join(" · "))}</span></button></li>`).join("")}</ul>`;
-  const sections = (d, few) => (d.albums.length ? `<h3>${esc(tr("Album"))}</h3>${albumList(d.albums.slice(0, few))}` : "")
-    + (d.artists.length ? `<h3>${esc(tr("Artister"))}</h3>${artistList(d.artists.slice(0, few))}` : "")
-    + ((d.playlists || []).length ? `<h3>${esc(tr("Spellistor"))}</h3>${playlistList(d.playlists.slice(0, few))}` : "")
-    + (d.tracks.length ? `<h3>${esc(tr("Låtar"))}</h3>${trackList(d.tracks.slice(0, few * 2))}` : "");
+  // What was played is shown a dozen at a time: the latest, and the rest when it is asked for.
+  const FIRST = 12, shown = { albums: FIRST, artists: FIRST, tracks: FIRST };
+  const moreBtn = (k, left) => (left > 0 ? `<button class="m-more" data-more="${k}">${esc(tr`Visa fler (${left} till)`)}</button>` : "");
+  const sections = (d, few, grow) => {
+    const n = (k, plain) => (grow ? shown[k] : plain), more = (k) => (grow ? moreBtn(k, d[k].length - shown[k]) : "");
+    return (d.albums.length ? `<h3>${esc(tr("Album"))}</h3>${albumList(d.albums.slice(0, n("albums", few)))}${more("albums")}` : "")
+      + (d.artists.length ? `<h3>${esc(tr("Artister"))}</h3>${artistList(d.artists.slice(0, n("artists", few)))}${more("artists")}` : "")
+      + ((d.playlists || []).length ? `<h3>${esc(tr("Spellistor"))}</h3>${playlistList(d.playlists.slice(0, few))}` : "")
+      + (d.tracks.length ? `<h3>${esc(tr("Låtar"))}</h3>${trackList(d.tracks.slice(0, n("tracks", few * 2)))}${more("tracks")}` : "");
+  };
 
   let found = null, findSeq = 0, findTimer = 0, page = null;   // the search's answer; the album or artist that is open
   function drawMusic() {
@@ -278,7 +293,7 @@ export default function page(api) {
       artists: played.artists.filter((x) => hit(x.name)) };
     if (!played.tracks.length) { put(`<p class="none">${esc(M.search ? tr("Sök i Spotify ovan. Här under samlas det som spelas på enheten, att spela igen.") : tr("Här samlas det som spelas på enheten: album, låtar och artister, att spela igen. Starta något i Spotify-appen, eller klistra in en Spotify-länk ovan."))}</p>`); return; }
     if (!mine.albums.length && !mine.tracks.length && !mine.artists.length) { out.innerHTML = link ? "" : `<p class="none">${esc(tr("Inget av det du spelat heter så. För att söka i hela Spotify anger du ett Client ID under System, Moduler, Spotify Lossless. Klistra in en Spotify-länk för att spela något nytt."))}</p>`; return; }
-    put((M.search && !words.length ? `<p class="m-lead">${esc(tr("Senast spelat"))}</p>` : "") + sections(mine, words.length ? 60 : 18));
+    put((M.search && !words.length ? `<p class="m-lead">${esc(tr("Senast spelat"))}</p>` : "") + sections(mine, 60, !words.length));
   }
   function pageHtml(pg) {
     const d = pg.data, back = `<button class="m-back" data-back="1"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 6-6 6 6 6"/></svg>${esc(tr("Tillbaka"))}</button>`;
@@ -495,6 +510,8 @@ export default function page(api) {
     if (sv) { sv.disabled = true; setLiked(sv.dataset.save, sv.getAttribute("aria-pressed") !== "true", sv.dataset.name || tr("Albumet")); return; }
     const as = e.target.closest("[data-disc-as]");
     if (as) { try { localStorage.setItem("sp-disc", as.dataset.discAs); } catch {} drawMusic(); return; }
+    const mo = e.target.closest("[data-more]");
+    if (mo) { shown[mo.dataset.more] += 24; drawMusic(); return; }
     const b = e.target.closest("[data-play], [data-queue], [data-album], [data-artist], [data-playlist], [data-back]"); if (!b) return;
     if (b.dataset.back) api.back("v-music");
     else if (b.dataset.album) openPage("album", b.dataset.album);
